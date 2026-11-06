@@ -1,0 +1,14 @@
+# Game data never enters the repository.
+*.bin
+*.cue
+*.7z
+*.iso
+*.img
+*.sav
+data/
+saves/
+# Build output
+build/
+out/
+# Local config with disc paths
+mrbones.ini
