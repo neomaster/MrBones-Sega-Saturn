@@ -9,6 +9,41 @@
 
 #define CHECK(c) do { if (!(c)) { printf("FAIL %d: %s\n", __LINE__, #c); return 1; } } while (0)
 
+/* Disc-less: an estimated floor is walkable, an authored one is left alone. */
+static int test_floor_slope(void) {
+    static uint8_t til[640u * 256u];
+    const uint8_t acdb[10] = {0x02, 0x80, 0x01, 0x00, 0x00, 0x08, 0x00, 0x08, 0x00, 0x00};
+    const uint8_t amap[8] = {0x00, 0x64, 0x00, 0x64, 0x00, 0x65, 0x00, 0xC8}; /* (100,100) (101,200) */
+    scrl_map map;
+    unsigned x, lo = 255, hi = 0, seed = 12345u;
+    for (x = 0; x < sizeof til; x++) {
+        seed = seed * 1103515245u + 12345u;
+        til[x] = (uint8_t)(seed >> 16); /* density noise: neighbouring columns differ wildly */
+    }
+    CHECK(scrl_map_init(&map, acdb, sizeof acdb, til, sizeof til, NULL, 0, NULL, 0, NULL, 0, NULL,
+                        0, NULL, 0, NULL, 0, NULL, 0) == 0);
+    CHECK(map.has_amap == 0);
+    scrl_map_build_collision(&map, 640);
+    CHECK(map.strip_w == 640);
+    for (x = 0; x < map.strip_w; x++) {
+        if (map.floor_py[x] < lo) lo = map.floor_py[x];
+        if (map.floor_py[x] > hi) hi = map.floor_py[x];
+        if (x > 0) {
+            int d = (int)map.floor_py[x] - (int)map.floor_py[x - 1];
+            CHECK(d >= -SCRL_FLOOR_MAX_SLOPE && d <= SCRL_FLOOR_MAX_SLOPE);
+        }
+    }
+    CHECK(lo >= 140u && hi <= 210u); /* still inside the estimator's range */
+    CHECK(hi > lo); /* and not flattened to nothing */
+
+    CHECK(scrl_map_init(&map, acdb, sizeof acdb, til, sizeof til, NULL, 0, NULL, 0, NULL, 0, NULL,
+                        0, NULL, 0, NULL, 0, amap, sizeof amap) == 0);
+    CHECK(map.has_amap == 1);
+    scrl_map_build_collision(&map, 640);
+    CHECK(map.floor_py[100] == 100 && map.floor_py[101] == 200); /* authored cliff intact */
+    return 0;
+}
+
 int main(void) {
     const char *d1 = getenv("MB_DISC1");
     const char *man = getenv("MB_MANIFEST");
@@ -26,6 +61,8 @@ int main(void) {
     uint8_t *strip;
     unsigned i;
 
+    if (test_floor_slope()) return 1;
+    printf("OK scrl_map floor slope (synthetic)\n");
     if (!d1 || !man) {
         printf("SKIP scrl_map\n");
         return 0;

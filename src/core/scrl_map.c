@@ -201,19 +201,14 @@ void scrl_map_build_collision(scrl_map *m, unsigned strip_w) {
     /*
      * An estimated floor is not terrain: the density estimate jumps by tens of rows
      * between neighbouring columns, which a physical actor reads as cliffs and pits it
-     * can never leave. Bound the slope in both directions (forward then backward pass,
-     * so every neighbouring pair ends within SCRL_FLOOR_MAX_SLOPE).
+     * can never leave. Limit the slew rate: each column ends within SCRL_FLOOR_MAX_SLOPE
+     * of the (already limited) one before it, so every neighbouring pair does. One pass
+     * is enough; a pass back would find nothing left to change.
      */
     if (!m->has_amap && strip_w >= 2) {
         for (x = 1; x < strip_w; x++) {
             int lo = (int)m->floor_py[x - 1] - SCRL_FLOOR_MAX_SLOPE;
             int hi = (int)m->floor_py[x - 1] + SCRL_FLOOR_MAX_SLOPE;
-            int v = m->floor_py[x];
-            m->floor_py[x] = (uint8_t)(v < lo ? lo : (v > hi ? hi : v));
-        }
-        for (x = strip_w - 1; x-- > 0;) {
-            int lo = (int)m->floor_py[x + 1] - SCRL_FLOOR_MAX_SLOPE;
-            int hi = (int)m->floor_py[x + 1] + SCRL_FLOOR_MAX_SLOPE;
             int v = m->floor_py[x];
             m->floor_py[x] = (uint8_t)(v < lo ? lo : (v > hi ? hi : v));
         }
