@@ -131,7 +131,8 @@ static unsigned le32(const uint8_t *p) {
            ((unsigned)p[3] << 24);
 }
 
-static int validate_avi_streams(duck_avi *avi, const uint8_t *buf, size_t size) {
+static int validate_avi_streams(duck_avi *avi, const uint8_t *buf, size_t size,
+                                uint64_t *audio_bytes_expected, unsigned *video_frames_expected) {
     size_t pos = 12;
     unsigned streams = 0;
     int video = 0;
@@ -163,6 +164,8 @@ static int validate_avi_streams(duck_avi *avi, const uint8_t *buf, size_t size) 
                     if (streams == 0 && !memcmp(hdr, "vidsDUCK", 8) &&
                         flen >= 40 && !memcmp(fmt + 16, "DUCK", 4)) {
                         video = 1;
+                        if (hlen >= 48 && !le32(hdr + 44))
+                            *video_frames_expected = le32(hdr + 32);
                         if (hlen >= 28 && le32(hdr + 20) && le32(hdr + 24) &&
                             (uint64_t)le32(hdr + 20) * 1000000u >= le32(hdr + 24)) {
                             avi->frame_scale = le32(hdr + 20);
@@ -179,6 +182,8 @@ static int validate_avi_streams(duck_avi *avi, const uint8_t *buf, size_t size) 
                         avi->pcm_channels = le16(fmt + 2);
                         avi->pcm_rate = le32(fmt + 4);
                         avi->audio_block_align = le16(fmt + 12);
+                        if (hlen >= 48)
+                            *audio_bytes_expected = (uint64_t)le32(hdr + 32) * le32(hdr + 44);
                     } else return -1;
                     streams++;
                 }
@@ -300,7 +305,8 @@ static int add_frame(duck_avi *avi, const uint8_t *data, unsigned size,
     return 0;
 }
 
-static int ingest_rec_list(duck_avi *avi, const uint8_t *base, size_t end) {
+static int ingest_rec_list(duck_avi *avi, const uint8_t *base, size_t end,
+                           uint64_t *audio_bytes_seen) {
     size_t i = 0;
     unsigned first = avi->frame_count, pcm_off = 0, pcm_sz = 0;
 
@@ -317,6 +323,7 @@ static int ingest_rec_list(duck_avi *avi, const uint8_t *base, size_t end) {
             pcm_off = (unsigned)(p + 8 - avi->blob);
             pcm_sz = szc;
             if (append_pcm(avi, p + 8, szc)) return -1;
+            *audio_bytes_seen += szc;
         }
         i = next;
     }
@@ -333,6 +340,8 @@ int duck_avi_open_with_duck(duck_avi *avi, const void *blob, size_t size,
     const uint8_t *buf;
     size_t i;
     size_t movi = 0, movi_end = 0, riff_end;
+    uint64_t audio_bytes_expected = 0, audio_bytes_seen = 0;
+    unsigned video_frames_expected = 0;
 
     if (!avi) return -1;
     memset(avi, 0, sizeof *avi);
@@ -351,7 +360,7 @@ int duck_avi_open_with_duck(duck_avi *avi, const void *blob, size_t size,
         return -1;
     }
     size = riff_end;
-    if (validate_avi_streams(avi, buf, size)) {
+    if (validate_avi_streams(avi, buf, size, &audio_bytes_expected, &video_frames_expected)) {
         snprintf(avi->status, sizeof avi->status, "duck_avi: unsupported or invalid stream header");
         return -1;
     }
@@ -444,11 +453,13 @@ int duck_avi_open_with_duck(duck_avi *avi, const void *blob, size_t size,
         if (padded > movi_end - i - 8) goto fail;
         next = i + 8 + padded;
         if (!memcmp(p, "LIST", 4)) {
-            if (szc < 4 || ingest_rec_list(avi, p + 12, (size_t)szc - 4) < 0) goto fail;
+            if (szc < 4 || ingest_rec_list(avi, p + 12, (size_t)szc - 4,
+                                           &audio_bytes_seen) < 0) goto fail;
         } else if (!memcmp(p, "00dc", 4) || !memcmp(p, "00db", 4)) {
             if (add_frame(avi, p + 8, szc, 0, 0)) goto fail;
         } else if (!memcmp(p, "01wb", 4)) {
             if (append_pcm(avi, p + 8, szc)) goto fail;
+            audio_bytes_seen += szc;
         }
         i = next;
     }
@@ -456,6 +467,16 @@ int duck_avi_open_with_duck(duck_avi *avi, const void *blob, size_t size,
     if (avi->pcm_channels && !avi->pcm_samples) {
         duck_avi_free(avi);
         snprintf(avi->status, sizeof avi->status, "duck_avi: audio stream has no samples");
+        return -1;
+    }
+    if (audio_bytes_expected && audio_bytes_seen < audio_bytes_expected) {
+        duck_avi_free(avi);
+        snprintf(avi->status, sizeof avi->status, "duck_avi: incomplete audio stream");
+        return -1;
+    }
+    if (video_frames_expected && avi->frame_count < video_frames_expected) {
+        duck_avi_free(avi);
+        snprintf(avi->status, sizeof avi->status, "duck_avi: incomplete video stream");
         return -1;
     }
 
@@ -504,6 +525,31 @@ int duck_avi_step(duck_avi *avi) {
         return 1;
     }
 #ifdef MB_USE_FFMPEG
+    /* Compression zero is an interframe repeat, not a pixel-format change. */
+    if (f->size >= 15 && f->data[0] >= 0x10) {
+        unsigned header_size = ((f->data[0] >> 5) | (f->data[0] << 3)) & 0x7f;
+        unsigned version = f->data[10] ^ f->data[11];
+        unsigned type = f->data[11] ^ f->data[12];
+        unsigned flags = f->data[12] ^ f->data[13];
+        if (header_size >= 14 && header_size + 1 <= f->size &&
+            !(f->data[1] ^ f->data[2]) && version >= 2 &&
+            (type == 2 || type == 3) && (flags & 8u) && !(flags & 32u)) {
+            video_decoder *v = avi->video_decoder;
+            unsigned height = (f->data[4] ^ f->data[5]) | ((f->data[5] ^ f->data[6]) << 8);
+            unsigned width = (f->data[6] ^ f->data[7]) | ((f->data[7] ^ f->data[8]) << 8);
+            if (!avi->tm1_frames || !v || v->frame->height != (int)height ||
+                v->codec->sample_aspect_ratio.num <= 0 || v->codec->sample_aspect_ratio.den <= 0 ||
+                (uint64_t)width * v->codec->sample_aspect_ratio.den !=
+                    (uint64_t)v->frame->width * v->codec->sample_aspect_ratio.num) {
+                snprintf(avi->status, sizeof avi->status, "duck_avi: invalid repeat frame %u", avi->cur);
+                avi->decode_error = 1;
+                avi->playback_done = 1;
+                return 0;
+            }
+            avi->frames_drawn++;
+            return 1;
+        }
+    }
     if (video_step((video_decoder *)avi->video_decoder, f->data, f->size, avi->rgba) < 0) {
         snprintf(avi->status, sizeof avi->status, "duck_avi: invalid video frame %u", avi->cur);
         avi->decode_error = 1;

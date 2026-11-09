@@ -146,6 +146,37 @@ int main(void) {
         bad[off + 20] = 1; bad[off + 21] = 8; /* 2049: original chunks end mid-block */
         CHECK(duck_avi_open(&movie, bad, avi_size) != 0);
         memcpy(bad, avi, avi_size);
+        for (off = 12; off + 8 <= avi_size; off++)
+            if (!memcmp(bad + off, "01wb", 4) && read_le32(bad + off + 4) > 0) break;
+        CHECK(off + 8 <= avi_size);
+        memcpy(bad + off, "JUNK", 4);
+        CHECK(duck_avi_open(&movie, bad, avi_size) != 0);
+        CHECK(strstr(movie.status, "incomplete audio stream") != NULL);
+        memcpy(bad, avi, avi_size);
+        {
+            size_t movi, first, audio_header;
+            for (movi = 12; movi + 24 < avi_size; movi++)
+                if (!memcmp(bad + movi, "LIST", 4) && !memcmp(bad + movi + 8, "movi", 4)) break;
+            CHECK(movi + 24 < avi_size);
+            first = movi + 12;
+            CHECK(!memcmp(bad + first, "LIST", 4) && !memcmp(bad + first + 8, "rec 01wb", 8));
+            memmove(bad + first, bad + first + 12, avi_size - first - 12);
+            write_le32(bad + movi + 4, read_le32(bad + movi + 4) - 12);
+            write_le32(bad + 4, read_le32(bad + 4) - 12);
+            CHECK(duck_avi_open(&movie, bad, avi_size - 12) == 0);
+            duck_avi_free(&movie);
+            memcpy(bad + first, "JUNK", 4);
+            CHECK(duck_avi_open(&movie, bad, avi_size - 12) != 0);
+            CHECK(strstr(movie.status, "incomplete audio stream") != NULL);
+            for (audio_header = 12; audio_header + 48 < movi; audio_header++)
+                if (!memcmp(bad + audio_header, "strh", 4) &&
+                    !memcmp(bad + audio_header + 8, "auds", 4)) break;
+            CHECK(audio_header + 48 < movi);
+            write_le32(bad + audio_header + 8 + 32, 0);
+            CHECK(duck_avi_open(&movie, bad, avi_size - 12) == 0);
+            duck_avi_free(&movie);
+        }
+        memcpy(bad, avi, avi_size);
         {
             unsigned removed = 0;
             for (size_t j = 12; j + 4 <= avi_size; j++) {
@@ -166,6 +197,26 @@ int main(void) {
             memcpy(bad + off - 20, "JUNK", 4);
             CHECK(duck_avi_open(&movie, bad, avi_size) == 0);
             CHECK(movie.frame_count > 0 && movie.pcm_channels == 0 && movie.pcm_samples == 0);
+            duck_avi_free(&movie);
+        }
+        memcpy(bad, avi, avi_size);
+        {
+            size_t movi, frame, header;
+            for (movi = 12; movi + 12 < avi_size; movi++)
+                if (!memcmp(bad + movi, "LIST", 4) && !memcmp(bad + movi + 8, "movi", 4)) break;
+            CHECK(movi + 12 < avi_size);
+            for (frame = movi + 12; frame + 8 < avi_size; frame++)
+                if (!memcmp(bad + frame, "00dc", 4)) break;
+            CHECK(frame + 8 < avi_size);
+            memcpy(bad + frame, "JUNK", 4);
+            CHECK(duck_avi_open(&movie, bad, avi_size) != 0);
+            CHECK(strstr(movie.status, "incomplete video stream") != NULL);
+            for (header = 12; header + 48 < movi; header++)
+                if (!memcmp(bad + header, "strh", 4) &&
+                    !memcmp(bad + header + 8, "vidsDUCK", 8)) break;
+            CHECK(header + 48 < movi);
+            write_le32(bad + header + 8 + 32, 0);
+            CHECK(duck_avi_open(&movie, bad, avi_size) == 0);
             duck_avi_free(&movie);
         }
         free(bad);
@@ -376,6 +427,16 @@ int main(void) {
         }
         duck_avi_free(&original);
         duck_avi_free(&grouped);
+        memcpy(joined, avi, avi_size);
+        memmove(joined + first, joined + first + 12, avi_size - first - 12);
+        write_le32(joined + movi + 4, read_le32(joined + movi + 4) - 12u);
+        write_le32(joined + 4, read_le32(joined + 4) - 12u);
+        CHECK(duck_avi_open(&grouped, joined, avi_size - 12) == 0);
+        CHECK(grouped.frame_count == 203);
+        duck_avi_free(&grouped);
+        memcpy(joined + first, "JUNK", 4);
+        CHECK(duck_avi_open(&grouped, joined, avi_size - 12) != 0);
+        CHECK(strstr(grouped.status, "incomplete video stream") != NULL);
         free(joined);
     }
     {
@@ -529,7 +590,8 @@ int main(void) {
         sha256_update(&ctx, movie.rgba, 320u * 224u * 4u);
         sha256_final(&ctx, digest);
         sha256_hex(digest, hex);
-        CHECK(strcmp(hex, "811a21a28045551ab6fdb3a94f27d5aee5043f0ba626f166295fc2e5813444b0") == 0);
+        /* LOSE keeps its last image across repeat packets, as in Ymir. */
+        CHECK(strcmp(hex, "1005d8174a6f2a9edad1376c828d341ab473bb56074ae5cf3e00ecd42e532d97") == 0);
     }
 #endif
     while (movie.cur < 106) CHECK(duck_avi_step(&movie) == 1);
