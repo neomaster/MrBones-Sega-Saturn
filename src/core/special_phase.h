@@ -39,6 +39,9 @@ typedef enum {
 #define SPECIAL_BEAT_WINDOW 6u
 #define SPECIAL_HITS_TO_WIN 8u
 #define SPECIAL_PRESENT_PAGES 6u
+/* CRing: 16 entries of 0x6c bytes; docs/finale-ring-analysis.md */
+#define FINALE_RING_SLOTS 16u
+#define FINALE_RING_PHASE_WRAP 0x01000000
 
 typedef struct {
     special_phase_state state;
@@ -96,6 +99,17 @@ typedef struct {
     stage_enemies enemies;
     unsigned hazard_hits;
 
+    /* FINALE CRing arena (ShootRing / Brain_CRing) */
+    int ring_active[FINALE_RING_SLOTS]; /* entry +0x68 */
+    int ring_phase;                     /* object+0x704 (ShootRing select) */
+    int ring_phase_acc;                 /* Brain accumulator before >>16 */
+    int ring_phase_mode;                /* index into 0x002b2158 incr table */
+    int ring_active_count;              /* object+0x708 */
+    int ring_cleared;                   /* EndLevel(0) fired */
+    unsigned ring_shots;
+    int ring_last_index;                /* last ShootRing slot, -1 none */
+    int ring_last_activated;            /* 1=activated, 0=deactivated */
+
     /* Present */
     unsigned page;
     unsigned pages_needed;
@@ -105,6 +119,10 @@ typedef struct {
     unsigned sfx_flags;
     char status[176];
 } special_phase;
+
+/* ShootRing_CRing stand-in: dir 0..3 (table 0,128,192,64). Returns 1 if
+ * deactivating the last active ring triggered EndLevel(0). */
+int special_phase_finale_shoot(special_phase *phase, unsigned dir);
 
 int special_phase_load(special_phase *phase, cdimage *cd, const char *iso_dir,
                        stage_kind kind);

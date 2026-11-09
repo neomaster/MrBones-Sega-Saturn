@@ -23,7 +23,129 @@
 #define JUMP_IMPULSE (-(int32_t)(48u * UNITS_PER_PIXEL))
 #define GRAVITY_Y ((int32_t)(3u * UNITS_PER_PIXEL))
 
+/*
+ * FINALE CRing literals from /27FINALE/03CODE (base 0x00232000).
+ * Direction table @0x002b21e0; phase increments @0x002b2158; ShootRing
+ * adds 0x100 before subtracting object+0x704 (docs/finale-ring-analysis.md).
+ */
+static const int k_finale_dir[4] = {0, 128, 192, 64};
+static const int k_finale_phase_incr[16] = {
+    0, 0, 204, 153, 102, 51, 0, 204, 153, 102, 51, 0, 153, 51, 102, 153};
 
+static void finale_ring_init(special_phase *phase) {
+    unsigned i;
+    for (i = 0; i < FINALE_RING_SLOTS; i++)
+        phase->ring_active[i] = 1; /* host: start lit; clear-all → EndLevel(0) */
+    phase->ring_active_count = (int)FINALE_RING_SLOTS;
+    phase->ring_phase = 0;
+    phase->ring_phase_acc = 0;
+    phase->ring_phase_mode = 2; /* first non-zero incr in the table */
+    phase->ring_cleared = 0;
+    phase->ring_shots = 0;
+    phase->ring_last_index = -1;
+    phase->ring_last_activated = 0;
+}
+
+/* Brain_CRing: advance phase accumulator and publish high-16 to +0x704. */
+static void finale_ring_brain(special_phase *phase) {
+    int incr;
+    unsigned mode;
+    if (!phase || phase->ring_cleared) return;
+    mode = (unsigned)phase->ring_phase_mode & 15u;
+    incr = k_finale_phase_incr[mode];
+    phase->ring_phase_acc += incr;
+    if (phase->ring_phase_acc >= FINALE_RING_PHASE_WRAP)
+        phase->ring_phase_acc -= FINALE_RING_PHASE_WRAP;
+    if (phase->ring_phase_acc < 0)
+        phase->ring_phase_acc += FINALE_RING_PHASE_WRAP;
+    /* ShootRing subtracts the published phase (high 16 of accumulator). */
+    phase->ring_phase = (int)(int16_t)((unsigned)phase->ring_phase_acc >> 16);
+}
+
+static int finale_ring_select(int phase_field, unsigned dir) {
+    int idx;
+    dir &= 3u;
+    idx = ((k_finale_dir[dir] + 0x100 - phase_field) + 8) >> 4;
+    while (idx > 15)
+        idx -= 16;
+    while (idx < 0)
+        idx += 16;
+    return idx;
+}
+
+int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
+    int idx;
+    if (!phase || phase->kind != STAGE_KIND_FINALE || phase->ring_cleared)
+        return 0;
+    idx = finale_ring_select(phase->ring_phase, dir);
+    phase->ring_shots++;
+    phase->ring_last_index = idx;
+    if (!phase->ring_active[idx]) {
+        /* inactive → activate, increment +0x708 */
+        phase->ring_active[idx] = 1;
+        phase->ring_active_count++;
+        phase->ring_last_activated = 1;
+        phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        return 0;
+    }
+    /* active → deactivate, decrement; count==0 → EndLevel(0) */
+    phase->ring_active[idx] = 0;
+    phase->ring_active_count--;
+    phase->ring_last_activated = 0;
+    phase->sfx_flags |= RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C;
+    if (phase->ring_active_count < 0)
+        phase->ring_active_count = 0;
+    if (phase->ring_active_count == 0) {
+        phase->ring_cleared = 1;
+        return 1;
+    }
+    return 0;
+}
+
+static unsigned finale_dir_from_pad(const saturn_pad *pad) {
+    uint16_t h = pad ? pad->held : 0;
+    if (h & 0x1000u) return 1u; /* UP → 128 */
+    if (h & 0x4000u) return 2u; /* LEFT → 192 */
+    if (h & 0x2000u) return 3u; /* DOWN → 64 */
+    return 0u;                  /* RIGHT / default → 0 */
+}
+
+static void paint_finale_rings(const special_phase *phase, uint8_t *dst) {
+    /* 16 slots on a circle; integer offsets avoid libm. */
+    static const int8_t k_ox[16] = {0, 35, 64, 83, 90, 83, 64, 35,
+                                    0, -35, -64, -83, -90, -83, -64, -35};
+    static const int8_t k_oy[16] = {-90, -83, -64, -35, 0, 35, 64, 83,
+                                    90, 83, 64, 35, 0, -35, -64, -83};
+    unsigned i;
+    int cx = (int)SCR_W / 2, cy = 100;
+    for (i = 0; i < FINALE_RING_SLOTS; i++) {
+        int x = cx + k_ox[i];
+        int y = cy + k_oy[i];
+        int dy, dx;
+        int lit = phase->ring_active[i];
+        int flash = (phase->ring_last_index == (int)i && (phase->frames & 4u) == 0);
+        for (dy = -3; dy <= 3; dy++) {
+            for (dx = -3; dx <= 3; dx++) {
+                int px = x + dx, py = y + dy;
+                uint8_t *p;
+                if (px < 0 || py < 0 || px >= (int)SCR_W || py >= (int)SCR_H)
+                    continue;
+                if (dx * dx + dy * dy > 10) continue;
+                p = dst + ((size_t)py * SCR_W + (size_t)px) * 4u;
+                if (lit) {
+                    p[0] = 255;
+                    p[1] = flash ? 255 : 200;
+                    p[2] = flash ? 80 : 40;
+                } else {
+                    p[0] = 40;
+                    p[1] = 50;
+                    p[2] = 70;
+                }
+                p[3] = 255;
+            }
+        }
+    }
+}
 
 static void build_palette(const uint8_t *code, size_t code_size, uint8_t *palette) {
     uint32_t words[1024], tmp[1024];
@@ -265,6 +387,8 @@ int special_phase_load(special_phase *phase, cdimage *cd, const char *iso_dir,
     stage_enemies_init_special(&phase->enemies, phase->stage_name,
                                UNITS_PER_PIXEL);
     stage_enemies_load_disc_sprites(cd);
+    if (kind == STAGE_KIND_FINALE)
+        finale_ring_init(phase);
 
     /* LOSE / movie: AVI(+DUCK) required; CODE optional. */
     if (kind == STAGE_KIND_LOSE || kind == STAGE_KIND_MOVIE ||
@@ -621,6 +745,27 @@ static void step_present(special_phase *phase, const saturn_pad *pad) {
     if (phase->enemies.count > 0)
         (void)stage_enemies_step(&phase->enemies, &phase->skel, phase->bones_x,
                                  0, 0);
+
+    /* FINALE arena: Brain_CRing + CBlueShot→ShootRing (docs/finale-ring-analysis.md). */
+    if (phase->kind == STAGE_KIND_FINALE && !phase->ring_cleared) {
+        finale_ring_brain(phase);
+        /* A / B / C fire a blue shot; D-pad selects direction 0..3. */
+        if (pad->pressed & (0x0400u | 0x0100u | 0x0200u)) {
+            if (special_phase_finale_shoot(phase, finale_dir_from_pad(pad))) {
+                /* EndLevel(0) → PlayDuckMovie(3): finish now; AVI may still be up. */
+                if (phase->movie_ok)
+                    phase->movie.playback_done = 1;
+                phase->state = SPECIAL_ST_FINISHED;
+                snprintf(phase->status, sizeof phase->status,
+                         "%s finished (ring clear) shots=%u phase=%d "
+                         "enemies_rings=%u",
+                         phase->stage_name, phase->ring_shots, phase->ring_phase,
+                         phase->enemies.rings_fired);
+                return;
+            }
+        }
+    }
+
     if (advance > 0) {
         phase->page += (unsigned)advance;
         if (!phase->movie_ok) phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
@@ -639,19 +784,22 @@ static void step_present(special_phase *phase, const saturn_pad *pad) {
             phase->state = SPECIAL_ST_FINISHED;
             snprintf(phase->status, sizeof phase->status,
                      "%s finished (present win) pages=%u avi_frames=%u gfx=%u "
-                     "rings=%u bolts=%u",
+                     "rings=%u bolts=%u ring_slots=%d/%u shots=%u",
                      phase->stage_name, phase->page, phase->movie.frames_drawn,
                      phase->gfx_count, phase->enemies.rings_fired,
-                     phase->enemies.bolts_fired);
+                     phase->enemies.bolts_fired, phase->ring_active_count,
+                     FINALE_RING_SLOTS, phase->ring_shots);
         }
         return;
     }
     snprintf(phase->status, sizeof phase->status,
-             "%s present %u/%u duck=%s avi=%zu gfx=%u rings=%u bolts=%u",
+             "%s present %u/%u duck=%s avi=%zu gfx=%u rings=%u bolts=%u "
+             "arena=%d/%u shot=%d",
              phase->stage_name, phase->page, phase->pages_needed,
              phase->movie_ok ? phase->movie.status : "off", phase->avi_size,
              phase->gfx_count, phase->enemies.rings_fired,
-             phase->enemies.bolts_fired);
+             phase->enemies.bolts_fired, phase->ring_active_count,
+             FINALE_RING_SLOTS, phase->ring_last_index);
 }
 
 int special_phase_step(special_phase *phase, const saturn_pad *pad) {
@@ -738,15 +886,20 @@ int special_phase_render(special_phase *phase) {
                 ((int)SCR_W - (int)phase->gfx_w[i]) / 2,
                 ((int)SCR_H - (int)phase->gfx_h[i]) / 2);
         }
-        if (!phase->movie_ok && phase->kind == STAGE_KIND_FINALE && phase->enemies.count > 0) {
-            stage_enemies_render(&phase->enemies, NULL, phase->frame_rgba,
-                                 SCR_W, SCR_H, 0, 0, 180);
+        if (phase->kind == STAGE_KIND_FINALE && !phase->movie_ok) {
+            /* Ring HUD only without AVI — Ymir frame hashes need a clean movie blit. */
+            char ring_hud[48];
+            paint_finale_rings(phase, phase->frame_rgba);
+            if (phase->enemies.count > 0)
+                stage_enemies_render(&phase->enemies, NULL, phase->frame_rgba,
+                                     SCR_W, SCR_H, 0, 0, 180);
             runway_compose_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
                                        phase->skel.segments, RUNWAY_SKEL_SEGMENTS,
                                        8, 8);
+            snprintf(ring_hud, sizeof ring_hud, "RING %d/%u",
+                     phase->ring_active_count, FINALE_RING_SLOTS);
             mb_font_draw_text_shadow(phase->frame_rgba, SCR_W, SCR_H, 168, 8,
-                                     "FINALE: C.F. BONES",
-                                     255, 210, 80, 20, 10, 8, 1);
+                                     ring_hud, 255, 210, 80, 20, 10, 8, 1);
         } else if (!phase->movie_ok && phase->stage_name[0]) {
             mb_font_draw_text_shadow(phase->frame_rgba, SCR_W, SCR_H, 16, 10,
                                      phase->stage_name,

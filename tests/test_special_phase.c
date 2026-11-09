@@ -179,6 +179,30 @@ int main(void) {
         printf("FINALE: frames=%u avi=%zu %s\n", phase.frames, phase.avi_size,
                phase.status);
         special_phase_free(&phase);
+
+        /* Arena: ShootRing clears 16 lit slots → EndLevel(0). */
+        CHECK(special_phase_load(&phase, &disc2, "/27FINALE", STAGE_KIND_FINALE) == 0);
+        CHECK(phase.ring_active_count == (int)FINALE_RING_SLOTS);
+        CHECK(phase.ring_cleared == 0);
+        {
+            unsigned k;
+            for (k = 0; k < FINALE_RING_SLOTS; k++) {
+                /* dir 0: idx = ((0+0x100-phase)+8)>>4 → phase = 255-16*k selects k. */
+                phase.ring_phase = 255 - (int)(16u * k);
+                CHECK(special_phase_finale_shoot(&phase, 0) ==
+                      (k + 1u == FINALE_RING_SLOTS ? 1 : 0));
+                CHECK(phase.ring_last_index == (int)k);
+                CHECK(phase.ring_last_activated == 0);
+            }
+            CHECK(phase.ring_active_count == 0);
+            CHECK(phase.ring_cleared == 1);
+            CHECK(phase.ring_shots == FINALE_RING_SLOTS);
+            /* Second clear attempt is a no-op. */
+            CHECK(special_phase_finale_shoot(&phase, 0) == 0);
+        }
+        printf("FINALE ring arena: shots=%u cleared=%d OK\n", phase.ring_shots,
+               phase.ring_cleared);
+        special_phase_free(&phase);
     }
 
     CHECK(special_phase_load(&phase, &disc1, "/28LOSE", STAGE_KIND_LOSE) == 0);
