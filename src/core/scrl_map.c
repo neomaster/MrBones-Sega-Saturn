@@ -1,4 +1,5 @@
 #include "scrl_map.h"
+#include "scrl_decomp.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -44,33 +45,7 @@ int scrl_cdb_parse(const uint8_t *cdb, size_t sz, scrl_plane *out) {
 
 size_t scrl_decomp_byte(const uint8_t *src, size_t src_cap,
                         uint8_t *dst, size_t dst_cap) {
-    size_t sp = 0, dp = 0;
-    if (!src || !dst || src_cap == 0 || dst_cap == 0) return 0;
-    while (sp < src_cap && dp < dst_cap) {
-        uint8_t ctrl = src[sp++];
-        int bit;
-        for (bit = 7; bit >= 0 && dp < dst_cap; bit--) {
-            if ((ctrl & (uint8_t)(1u << bit)) == 0) {
-                if (sp >= src_cap) return dp;
-                dst[dp++] = src[sp++];
-            } else {
-                unsigned code, nibble, dist, count, k;
-                if (sp + 2u > src_cap) return dp;
-                code = ((unsigned)src[sp] << 8) | src[sp + 1u];
-                sp += 2u;
-                nibble = code & 0x0Fu;
-                if (nibble == 0u) return dp; /* nibble 0 -> 0x2a0bd4 end-of-stream */
-                dist = code >> 4;
-                count = nibble + 1u; /* nibble 1..15 -> copy 2..16 bytes */
-                if (dist == 0u) dist = 1u;
-                for (k = 0; k < count && dp < dst_cap; k++) {
-                    dst[dp] = (dp >= dist) ? dst[dp - dist] : 0u;
-                    dp++;
-                }
-            }
-        }
-    }
-    return dp;
+    return scrl_decomp_byte_ex(src, src_cap, dst, dst_cap, NULL);
 }
 
 static int add_plane(scrl_map *m, const char *cdn, const char *tiln,
