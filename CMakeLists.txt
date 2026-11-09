@@ -5,8 +5,11 @@ if (MSVC)
 endif()
 if (MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND
     CMAKE_C_CL_SHOWINCLUDES_PREFIX MATCHES "^Observa")
-    set(CMAKE_C_CL_SHOWINCLUDES_PREFIX "Observação: incluindo arquivo: ")
+    # Keep the prefix UTF-8 regardless of the configure console code page.
+    string(ASCII 195 167 195 163 _msvc_pt_accents)
+    set(CMAKE_C_CL_SHOWINCLUDES_PREFIX "Observa${_msvc_pt_accents}o: incluindo arquivo: ")
     set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_C_CL_SHOWINCLUDES_PREFIX}")
+    unset(_msvc_pt_accents)
     if (NOT CMAKE_C_COMPILER_LAUNCHER)
         set(CMAKE_C_COMPILER_LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/tools/msvc-utf8.cmd")
     endif()
@@ -149,6 +152,13 @@ if (WIN32)
 endif()
 
 enable_testing()
+if (MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND
+    CMAKE_C_CL_SHOWINCLUDES_PREFIX MATCHES "^Observa")
+    add_test(NAME test_msvc_dependencies COMMAND ${CMAKE_COMMAND}
+        "-DNINJA=${CMAKE_MAKE_PROGRAM}"
+        "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+        -P "${CMAKE_SOURCE_DIR}/tests/test_msvc_dependencies.cmake")
+endif()
 add_executable(test_duck_no_ffmpeg tests/test_duck_no_ffmpeg.c src/core/duck_avi.c src/core/duck_tm1.c)
 target_include_directories(test_duck_no_ffmpeg PRIVATE src)
 add_test(NAME test_duck_no_ffmpeg COMMAND test_duck_no_ffmpeg)

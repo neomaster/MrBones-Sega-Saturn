@@ -751,10 +751,9 @@ static void step_present(special_phase *phase, const saturn_pad *pad) {
         finale_ring_brain(phase);
         /* A / B / C fire a blue shot; D-pad selects direction 0..3. */
         if (pad->pressed & (0x0400u | 0x0100u | 0x0200u)) {
-            if (special_phase_finale_shoot(phase, finale_dir_from_pad(pad))) {
-                /* EndLevel(0) → PlayDuckMovie(3): finish now; AVI may still be up. */
-                if (phase->movie_ok)
-                    phase->movie.playback_done = 1;
+            if (special_phase_finale_shoot(phase, finale_dir_from_pad(pad)) &&
+                !phase->movie_ok) {
+                /* An active ending movie must finish on its own clock. */
                 phase->state = SPECIAL_ST_FINISHED;
                 snprintf(phase->status, sizeof phase->status,
                          "%s finished (ring clear) shots=%u phase=%d "
