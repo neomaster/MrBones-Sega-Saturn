@@ -14,13 +14,23 @@
 #define SCR_W 320u
 #define SCR_H 224u
 #define UNITS_PER_PIXEL 2341u
-#define START_X (40u * UNITS_PER_PIXEL)
+#define START_PX 40
+#define START_X ((uint32_t)START_PX * UNITS_PER_PIXEL)
 #define FINISH_X (START_X + 120u * UNITS_PER_PIXEL)
 #define GROUND_Y (180u * UNITS_PER_PIXEL)
-#define WALK_STEP (6u * UNITS_PER_PIXEL)
-#define JUMP_IMPULSE (-(int32_t)(48u * UNITS_PER_PIXEL))
-#define GRAVITY_Y ((int32_t)(3u * UNITS_PER_PIXEL))
 #define SCROLL_STRIP_W 640u
+/* The centre column of the actor box and its feet, relative to the box origin. */
+#define ACTOR_HALF_W (SIDESCRL_ACTOR_WIDTH / 2)
+#define ACTOR_FEET SIDESCRL_STAND_HEIGHT
+/* Ground the centre column is followed over per frame; see sidescrl_motion.h. */
+#define MAX_CLIMB_STEP 6
+/* Whole pixels kept between the actor's centre and the left edge of the world. */
+#define EDGE_MARGIN 4
+/* Pad bits, as saturn_pad reports them. */
+#define PAD_RIGHT 0x8000u
+#define PAD_LEFT 0x4000u
+#define PAD_JUMP 0x0100u
+#define PAD_START 0x0800u
 
 static const char *k_layer_names[] = {
     "07ACDB", "08ATIL", "09BCDB", "10BTIL",
@@ -196,16 +206,53 @@ static int build_scroll_from_map(sidescrl_phase *phase) {
     return 0;
 }
 
-static uint32_t floor_units_at(const sidescrl_phase *phase, uint32_t bones_x) {
-    unsigned world_px = bones_x / UNITS_PER_PIXEL;
-    int fy = scrl_map_find_floor(&phase->map, (int)world_px);
-    if (fy < 0) fy = 180;
-    return (unsigned)fy * UNITS_PER_PIXEL;
+/* ---- terrain seen by sidescrl_motion: the scrl_map floor profile -------------- */
+
+static int32_t floor_px_at(const sidescrl_phase *phase, int32_t column) {
+    int fy = scrl_map_find_floor(&phase->map, (int)column);
+    return fy < 0 ? 180 : fy;
 }
 
-static int move_blocked_wall(const sidescrl_phase *phase, uint32_t world_x) {
-    unsigned px = world_x / UNITS_PER_PIXEL;
-    return scrl_map_wall_at(&phase->map, (int)px);
+/* First column the actor box may not enter on the right: the strip is the world. */
+static int32_t world_right_col(const sidescrl_phase *phase) {
+    return phase->scroll_w ? (int32_t)phase->scroll_w : (int32_t)SCR_W;
+}
+
+/* y of the highest solid pixel in `column`; a column always has ground. */
+static int32_t terrain_ground(const void *ctx, int32_t column) {
+    return floor_px_at((const sidescrl_phase *)ctx, column);
+}
+
+/* Solid: everything at or below the floor, and everything beyond the world edges. */
+static bool terrain_wall(void *ctx, int32_t column, int32_t row) {
+    const sidescrl_phase *phase = (const sidescrl_phase *)ctx;
+    if (column < EDGE_MARGIN - ACTOR_HALF_W || column >= world_right_col(phase))
+        return true;
+    return row >= floor_px_at(phase, column);
+}
+
+/* Refresh the fields that mirror the actor (see the header). */
+static void sync_from_actor(sidescrl_phase *phase) {
+    const SidescrlActor *a = &phase->actor;
+    const int64_t cx = (int64_t)a->x + ACTOR_HALF_W;
+    const int64_t feet = (int64_t)a->y + ACTOR_FEET;
+    const int32_t ground = floor_px_at(phase, (int32_t)cx);
+    phase->bones_x = (uint32_t)(cx * UNITS_PER_PIXEL + a->rem_x);
+    phase->bones_y = (uint32_t)(feet * UNITS_PER_PIXEL + a->rem_y);
+    phase->ground_y = (uint32_t)ground * UNITS_PER_PIXEL;
+    phase->vel_x = a->vx;
+    phase->vel_y = a->vy;
+    phase->airborne = a->on_ground ? 0 : 1;
+    phase->facing = a->facing_left ? -1 : 1;
+}
+
+void sidescrl_phase_spawn(sidescrl_phase *phase, int world_x_px) {
+    int32_t floor;
+    if (!phase) return;
+    floor = floor_px_at(phase, world_x_px);
+    sidescrl_actor_init(&phase->actor, world_x_px - ACTOR_HALF_W, floor - ACTOR_FEET);
+    phase->actor.on_ground = true; /* flush on the floor: the first step keeps it there */
+    sync_from_actor(phase);
 }
 
 static void stage_name_from_iso(char *out, size_t n, const char *iso_dir) {
@@ -285,8 +332,7 @@ int sidescrl_phase_load(sidescrl_phase *phase, cdimage *cd, const char *iso_dir)
     }
     stage_enemies_populate_sidescrl_strip(&phase->enemies, phase->scroll_w);
 
-    phase->bones_y = floor_units_at(phase, phase->bones_x);
-    phase->ground_y = phase->bones_y;
+    sidescrl_phase_spawn(phase, START_PX);
 
     off = 0;
     while (phase->anim_count < SIDESCRL_ANIM_MAX) {
@@ -354,7 +400,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
     phase->sfx_flags = 0;
     held = pad->held;
 
-    if (pad->pressed & 0x0800u) {
+    if (pad->pressed & PAD_START) {
         if (phase->state == SIDESCRL_ST_PAUSED) {
             runway_skel_set_paused(&phase->skel, 0);
             phase->state = phase->pre_pause_state;
@@ -370,79 +416,27 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
 
     runway_skel_tick_cooldown(&phase->skel);
 
-    phase->vel_x = 0;
-    if (held & 0x8000u) {
-        phase->facing = 1;
-        phase->vel_x = (int32_t)WALK_STEP;
-    } else if (held & 0x4000u) {
-        phase->facing = -1;
-        phase->vel_x = -(int32_t)WALK_STEP;
-    }
+    {
+        /* One unified step: walk, wall clamp, jump, slope and gravity. */
+        const bool was_on_ground = phase->actor.on_ground;
+        const int32_t walk_dir = (held & PAD_RIGHT) ? 1 : ((held & PAD_LEFT) ? -1 : 0);
+        const bool jump_edge = (pad->pressed & PAD_JUMP) != 0;
+        SidescrlActor *a = &phase->actor;
 
-    if ((pad->pressed & 0x0100u) && !phase->airborne) {
-        int hix = scrl_map_get_hixel(&phase->map,
-                                     (int)(phase->bones_x / UNITS_PER_PIXEL),
-                                     (int)(phase->bones_y / UNITS_PER_PIXEL) - 8);
-        if (hix != SCRL_HIXEL_WALL) {
-            phase->vel_y = JUMP_IMPULSE;
-            phase->airborne = 1;
-            phase->state = SIDESCRL_ST_AIR;
+        sidescrl_motion_step(a, walk_dir, jump_edge, MAX_CLIMB_STEP, terrain_wall,
+                             terrain_ground, phase);
+        if (a->y < 0) { /* the top of the screen is a ceiling */
+            a->y = 0;
+            a->rem_y = 0;
+            if (a->vy < 0) a->vy = 0;
+        }
+        if (was_on_ground && !a->on_ground && a->jumping)
             phase->sfx_flags |= RUNWAY_SFX_FLAG_JUMP;
-        }
-    }
-
-    phase->ground_y = floor_units_at(phase, phase->bones_x);
-
-    if (phase->airborne) {
-        phase->vel_y += GRAVITY_Y;
-        {
-            int64_t ny = (int64_t)phase->bones_y + (int64_t)phase->vel_y;
-            if (ny < 0) {
-                ny = 0;
-                phase->vel_y = 0;
-            }
-            if (phase->vel_y >= 0 && (uint32_t)ny >= phase->ground_y) {
-                phase->bones_y = phase->ground_y;
-                phase->vel_y = 0;
-                phase->airborne = 0;
-                phase->sfx_flags |= RUNWAY_SFX_FLAG_LAND;
-                phase->state = phase->vel_x ? SIDESCRL_ST_WALK : SIDESCRL_ST_STAND;
-            } else {
-                phase->bones_y = (uint32_t)ny;
-                phase->state = SIDESCRL_ST_AIR;
-            }
-        }
-    } else {
-        phase->bones_y = phase->ground_y;
-        if (phase->vel_x)
-            phase->state = SIDESCRL_ST_WALK;
-        else
-            phase->state = SIDESCRL_ST_STAND;
-    }
-
-    if (phase->vel_x) {
-        int64_t nx = (int64_t)phase->bones_x + (int64_t)phase->vel_x;
-        unsigned px;
-        if (nx < 4 * (int64_t)UNITS_PER_PIXEL)
-            nx = 4 * (int64_t)UNITS_PER_PIXEL;
-        px = (unsigned)(nx / UNITS_PER_PIXEL);
-        {
-            unsigned max_px = (phase->scroll_w > SCR_W)
-                                  ? (phase->scroll_w - 8u)
-                                  : (SCR_W - 4u);
-            if (px >= max_px)
-                nx = (int64_t)max_px * UNITS_PER_PIXEL;
-        }
-        /* §23 SCRLCOLL wall: block step into solid column. */
-        if (!move_blocked_wall(phase, (uint32_t)nx)) {
-            if (!phase->airborne && phase->state != SIDESCRL_ST_WALK)
-                phase->sfx_flags |= RUNWAY_SFX_FLAG_WALK;
-            phase->bones_x = (uint32_t)nx;
-        } else {
-            phase->vel_x = 0;
-            if (!phase->airborne)
-                phase->state = SIDESCRL_ST_STAND;
-        }
+        if (!was_on_ground && a->on_ground)
+            phase->sfx_flags |= RUNWAY_SFX_FLAG_LAND;
+        phase->state = !a->on_ground ? SIDESCRL_ST_AIR
+                                     : (a->vx != 0 ? SIDESCRL_ST_WALK : SIDESCRL_ST_STAND);
+        sync_from_actor(phase);
     }
 
     {

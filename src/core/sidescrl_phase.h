@@ -4,6 +4,7 @@
 #include "core/runway_skel.h"
 #include "core/saturn_pad.h"
 #include "core/scrl_map.h"
+#include "core/sidescrl_motion.h"
 #include "core/stage_enemy.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -14,6 +15,14 @@
  * §23: LoadCDB/LoadMap/DrawMap multi-layer ACDB/ATIL…DTIL + AMAP floor;
  * SCRLCOLLGetHixel3D / pFloorHixels via scrl_map. Palette from 02TITL/04STXT/CODE.
  * §24: poofs.o / CBlueSparkle enemies (denser on BAT1–3).
+ *
+ * Motion: one sidescrl_motion_step per frame on `actor` (walk, wall clamp, jump,
+ * slope, gravity). The terrain it sees is the scrl_map floor profile: the ground
+ * under a column is floor_py, every pixel at or below it is solid, and the world
+ * edges are walls. bones_x/bones_y/vel_x/airborne/ground_y are derived from the
+ * actor after each step (bones_x is the centre column and bones_y the feet, both
+ * in units) so enemies, rendering and the stage runner read what they always did.
+ * See docs/sidescrl-motion-architecture.md.
  */
 
 typedef enum {
@@ -64,7 +73,8 @@ typedef struct {
     scrl_map map; /* §23 LoadCDB/DrawMap/SCRLCOLL */
     uint8_t palette[4096];
 
-    uint32_t bones_x, bones_y;
+    SidescrlActor actor; /* the authoritative pose; the fields below mirror it */
+    uint32_t bones_x, bones_y; /* centre column / feet, in units */
     uint32_t camera_x;
     uint32_t finish_x;
     uint32_t ground_y;
@@ -79,6 +89,13 @@ typedef struct {
     unsigned hazard_hits;
     char status[160];
 } sidescrl_phase;
+
+/*
+ * Put the actor standing on the floor under world column `world_x_px` (the centre
+ * column of its box), at rest, and refresh the mirrored fields. Needs phase->map
+ * with its collision table built. Used by load; also by tests.
+ */
+void sidescrl_phase_spawn(sidescrl_phase *phase, int world_x_px);
 
 int sidescrl_phase_load(sidescrl_phase *phase, cdimage *cd, const char *iso_dir);
 void sidescrl_phase_free(sidescrl_phase *phase);
