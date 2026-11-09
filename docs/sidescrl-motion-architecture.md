@@ -216,7 +216,7 @@ fixa), e comparando dois atores idênticos para determinismo: ✔
   `SIDESCRL_WALL_MAX_SCAN`). Não ocorre com as constantes de caminhada.
 - **Mapa e solo:** o solo é amostrado só na coluna central e as paredes por pixel; os callbacks devem
   descrever o mesmo terreno.
-- **Constantes não originais** (seção 7) e **sem integração** com `sidescrl_phase.c`.
+- **Constantes não originais** (seção 7). A integração com `sidescrl_phase.c` está na seção 11.
 
 ## 10. Verificação e histórico de revisão
 
@@ -247,4 +247,80 @@ Medido depois da correção, na hora da escrita:
 | CTest completo, build dinâmico (`build`) | 52/52, incluindo `test_full_campaign`, `test_fmv_all` e `test_movie_audio` |
 | CTest dos testes de sidescroll, build estático `/MT` (`build-static`), recompilado | 8/8 |
 
-O CTest completo no build estático não foi rodado depois da correção.
+O CTest completo no build estático foi rodado depois da integração em `sidescrl_phase` (seção 11.5).
+
+## 11. Integração em `sidescrl_phase`
+
+`sidescrl_phase_step` chama `sidescrl_motion_step` uma vez por frame. Isso substitui a lógica anterior:
+velocidade constante de 6 px/frame, salto de 48 px/frame com gravidade de 3 px/frame² (a subida só parava
+no topo da tela) e parede testada em uma única coluna.
+
+### 11.1 O que a fase fornece
+
+| Entrada do `sidescrl_motion_step` | Origem na fase |
+|---|---|
+| `walk_dir` | direita (`0x8000`) vale +1 e tem prioridade, esquerda (`0x4000`) vale -1 |
+| `jump_edge` | botão de salto (`0x0100`) pressionado neste frame |
+| `max_climb_step` | `MAX_CLIMB_STEP = 6` |
+| `get_ground(col)` | `floor_py[col]` do `scrl_map` |
+| `is_wall(col, row)` | `row >= floor_py[col]`; fora do mundo é parede |
+
+- **Ator.** `phase->actor` é a pose de verdade. `x` é a coluna central menos 10 e `y` é o pé menos 42.
+  `bones_x`, `bones_y`, `vel_x`, `vel_y`, `airborne`, `facing` e `ground_y` são espelhos recalculados depois
+  de cada passo, então inimigos, render e `stage_runner` leem o que sempre leram. `bones_x` é a coluna
+  central e `bones_y` os pés, em unidades, com o resto sub-pixel somado.
+- **Bordas.** Colunas menores que `EDGE_MARGIN - 10` (`-6`) e maiores ou iguais a `scroll_w` são parede. O
+  centro do ator fica em `[4, scroll_w - 10]`, o que mantém a margem de 4 colunas de antes à esquerda.
+- **Teto.** `y < 0` é cortado para 0, como o `ny < 0` antigo.
+- **Sons.** `JUMP` no frame em que o salto começa (`was_on_ground`, agora no ar, `jumping`). `LAND` em toda
+  transição ar -> chão, o que inclui cair de um degrau fundo.
+- **Estado.** `AIR` fora do chão, `WALK` com `vx != 0`, senão `STAND`. Encostar numa parede zera `vx` e
+  mostra `STAND`, como antes.
+- **`sidescrl_phase_spawn(phase, coluna)`** põe o ator parado no chão sob a coluna. A carga usa a coluna 40.
+
+### 11.2 O que mudou no comportamento
+
+| | Antes | Agora |
+|---|---|---|
+| Caminhada | 6 px/frame constante | acelera 1 px/frame² até 3 px/frame; para por atrito |
+| Salto | sobe até o teto da tela | sobe 91 px e fica 61 frames no ar (medido, chão plano); sem salto duplo |
+| Parede | uma coluna, só com `06AMAP` | pixel a pixel: degrau até 6 linhas sobe, face maior bloqueia |
+| Rampa | o pé copia o chão a cada coluna | seguimento com janela de contato; 3 linhas/coluna sobe a no máximo 2 px/frame |
+| Degrau fundo | não existe | vira queda com gravidade, com som `LAND` |
+
+O salto e a caminhada usam as constantes *placeholder* da seção 7. A fase não define velocidades próprias.
+
+### 11.3 Chão estimado
+
+Das dez fases de sidescroll, cinco têm `06AMAP` (VALLEY, BAT1, BAT2, BAT3, VORTEX) e cinco não (MAUSO,
+GLASS, VILLAGE, SHADOW, LAFF). Para as cinco sem ele `scrl_map` estima o chão pela densidade de bytes do
+TIL, e esses bytes são fluxos comprimidos: o resultado é ruído. Medido no
+MAUSO antes do limite: das 1176 colunas, 217 tinham salto de 5 linhas ou mais entre vizinhas (máximo 34). O
+código antigo escondia isso porque só copiava a altura. Com a física unificada o ator caiu num poço em
+`x = 274`, não conseguiu sair, e os poofs gastaram o esqueleto (`lost`, 31 contatos).
+
+`scrl_map_build_collision` agora limita a inclinação de um chão **estimado** a `SCRL_FLOOR_MAX_SLOPE = 2`
+linhas por coluna, que é o limite de velocidade plena da seção 6. O chão **autoral** (`06AMAP`) não é
+alterado. É um *stand-in*: torna o chão andável, não o torna correto. Só o dado real de tile e colisão
+resolve isso.
+
+### 11.4 Limites da integração
+
+- `MAX_CLIMB_STEP` e `EDGE_MARGIN` são constantes da fase, sem origem no binário.
+- `scrl_map_get_hixel` e `scrl_map_wall_at` seguem públicos e testados, mas a fase não os usa mais.
+- Os testes com disco só seguram a direita: o salto é coberto apenas pelo terreno sintético. Nenhum teste
+  exige pular para passar de um obstáculo das fases reais.
+
+### 11.5 Verificação
+
+| Verificação | Resultado |
+|---|---|
+| `test_sidescrl_phase`, parte sem disco (terreno sintético) | andar, rampas de 1, 2 e 3 linhas, rampa de 5 como parede, parede de 80 linhas, bordas, salto, queda |
+| `test_scrl_map`, parte sem disco | chão estimado com `|Δ| <= 2`; chão autoral com penhasco de 100 linhas intacto |
+| Mutações em `sidescrl_phase.c` | 8 de 8 pegas (subida, margem, som de pouso, borda direita, paredes, som de salto, estado, espelho) |
+| Mutações no limitador de `scrl_map.c` | 5 de 5 pegas; uma sexta (o passe de volta) é código morto e foi removida |
+| Fases de sidescroll, segurando direita | as 10 terminam em `FINISHED`: MAUSO 181 quadros e 6 contatos, VALLEY 184 e 5, BAT1 211 e 4, BAT2 181 e 5, BAT3 223 e 5, GLASS 181 e 6, VORTEX 181 e 5, VILLAGE 181 e 6, SHADOW 181 e 5, LAFF 181 e 5 |
+| CTest completo, build estático `/MT` com os discos | 52/52 |
+
+Os 181 quadros são o chão plano: 540 px a 3 px/frame, mais a aceleração. BAT1 e BAT3 demoram mais e são
+as que têm mais colunas com inclinação acima de 2 linhas (84 e 96, contra 10 na BAT2 e 0 ou 4 nas demais).
