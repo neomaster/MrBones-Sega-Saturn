@@ -58,9 +58,28 @@ static int add_plane(scrl_map *m, const char *cdn, const char *tiln,
     snprintf(p->til_name, sizeof p->til_name, "%s", tiln ? tiln : "");
     p->til = (const uint8_t *)til;
     p->til_size = tsz;
+    /* All or nothing: a TIL that does not walk cleanly leaves the plane transparent. */
+    if (til && tsz)
+        (void)scrl_tilecache_build(&p->tiles, p->pixel_w, p->pixel_h, (const uint8_t *)cdb, csz,
+                                   (const uint8_t *)til, tsz);
     m->plane_count++;
     m->has_cdb = 1;
     return 1;
+}
+
+void scrl_map_free(scrl_map *m) {
+    unsigned i;
+    if (!m) return;
+    for (i = 0; i < SCRL_PLANE_MAX; i++) scrl_tilecache_free(&m->planes[i].tiles);
+    memset(m, 0, sizeof *m);
+}
+
+unsigned scrl_map_cached_planes(const scrl_map *m) {
+    unsigned i, n = 0;
+    if (!m) return 0;
+    for (i = 0; i < m->plane_count && i < SCRL_PLANE_MAX; i++)
+        if (m->planes[i].tiles.status == SCRL_TC_OK) n++;
+    return n;
 }
 
 static void parse_amap(scrl_map *m, const uint8_t *amap, size_t sz) {
@@ -198,17 +217,23 @@ void scrl_map_build_collision(scrl_map *m, unsigned strip_w) {
     }
 }
 
+/*
+ * The CDB and TIL are descriptors and compressed streams, not raster pixels: reading their
+ * bytes as dots turns the screen into noise. A plane is sampled only through its decoded tile
+ * cache (scrl_tilecache.h), and a plane whose cache could not be built is not sampled at all.
+ * Dot 0, a missing block and a point outside the plane are transparent.
+ */
 static void sample_plane(const scrl_plane *p, unsigned sx, unsigned sy,
                          const uint8_t *pal, uint8_t *rgba) {
-    (void)p; (void)sx; (void)sy; (void)pal;
-    /*
-     * CDB and TIL contain structured VDP2 cell descriptors and LZ-compressed
-     * tile streams (tagTILE_DEF), not raw 8bpp raster pixels. Sampling raw
-     * compressed bitstreams directly as pixel indices corrupts the entire
-     * display into high-frequency TV static noise. Keep transparent until
-     * full VDP2 tile cache is populated.
-     */
-    rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
+    const int dot = scrl_tilecache_pixel(&p->tiles, sx, sy);
+    if (dot <= 0) {
+        rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
+        return;
+    }
+    rgba[0] = pal[4 * dot + 1]; /* palette entries are {unused, R, G, B} */
+    rgba[1] = pal[4 * dot + 2];
+    rgba[2] = pal[4 * dot + 3];
+    rgba[3] = 255;
 }
 
 int scrl_map_draw(const scrl_map *m, const uint8_t *palette_rgba1024,
@@ -246,7 +271,7 @@ int scrl_map_draw(const scrl_map *m, const uint8_t *palette_rgba1024,
             const scrl_plane *p = &m->planes[pi - 1];
             unsigned div = k_div[(pi - 1) < SCRL_PLANE_MAX ? (pi - 1) : 3];
             unsigned cam = camera_px / div;
-            if (!p->til || p->til_size == 0) continue;
+            if (p->tiles.status != SCRL_TC_OK) continue; /* nothing to draw: skip the pixels */
             for (y = 0; y < strip_h; y++) {
                 for (x = 0; x < strip_w; x++) {
                     uint8_t px[4];

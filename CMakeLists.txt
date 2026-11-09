@@ -60,6 +60,7 @@ add_library(mbcore STATIC
     src/core/sidescrl_phase.c
     src/core/scrl_map.c
     src/core/scrl_decomp.c
+    src/core/scrl_tilecache.c
     src/core/special_phase.c
     src/core/rhythm_table.c
     src/core/stage_enemy.c
@@ -148,7 +149,7 @@ if (WIN32 AND MB_FFMPEG_ROOT)
     set_tests_properties(test_fmv_all PROPERTIES TIMEOUT 300
         ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue")
 endif()
-foreach(t test_sha256 test_cdimage test_config test_stxtr test_bones_state test_sprite_decode test_runway_sprite test_snd1 test_snd1_pcm test_mover test_cdda test_runway_projection test_bones_message test_bones_bbs test_runway_input test_sound_sequence test_pan_collision test_sound_event test_saturn_pad test_pan_frame test_pan_palette test_runway_compose test_host_input test_obj_scheduler test_pan_collision_map test_bones_tall test_mplay_cue test_runway_phase test_runway_sfx test_runway_skel test_nvm_shadow test_menu_phase test_stage_catalog test_stage_runner test_stage_progress test_sidescrl_phase test_scrl_map test_special_phase test_duck_avi test_rhythm_enemies test_menu_options test_aabb_hitchk test_sidescrl_physics test_sidescrl_slope test_menu_options_view test_sidescrl_wall test_sidescrl_motion test_scrl_decomp)
+foreach(t test_sha256 test_cdimage test_config test_stxtr test_bones_state test_sprite_decode test_runway_sprite test_snd1 test_snd1_pcm test_mover test_cdda test_runway_projection test_bones_message test_bones_bbs test_runway_input test_sound_sequence test_pan_collision test_sound_event test_saturn_pad test_pan_frame test_pan_palette test_runway_compose test_host_input test_obj_scheduler test_pan_collision_map test_bones_tall test_mplay_cue test_runway_phase test_runway_sfx test_runway_skel test_nvm_shadow test_menu_phase test_stage_catalog test_stage_runner test_stage_progress test_sidescrl_phase test_scrl_map test_special_phase test_duck_avi test_rhythm_enemies test_menu_options test_aabb_hitchk test_sidescrl_physics test_sidescrl_slope test_menu_options_view test_sidescrl_wall test_sidescrl_motion test_scrl_decomp test_scrl_tilecache)
     add_executable(${t} tests/${t}.c)
     target_link_libraries(${t} mbcore)
     add_test(NAME ${t} COMMAND ${t} WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

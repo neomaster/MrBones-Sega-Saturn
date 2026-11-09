@@ -380,6 +380,7 @@ fail:
 void sidescrl_phase_free(sidescrl_phase *phase) {
     unsigned i;
     if (!phase) return;
+    scrl_map_free(&phase->map); /* the tile caches own their memory; the layers below are not theirs */
     for (i = 0; i < phase->anim_count && i < SIDESCRL_ANIM_MAX; i++)
         free(phase->anim_rgba[i]);
     for (i = 0; i < phase->layer_count && i < SIDESCRL_LAYER_MAX; i++)

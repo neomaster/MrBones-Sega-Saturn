@@ -1,5 +1,6 @@
 #ifndef MB_SCRL_MAP_H
 #define MB_SCRL_MAP_H
+#include "scrl_tilecache.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -37,6 +38,7 @@ typedef struct {
     unsigned tile_count;       /* CDB[+8] n from LoadCDB@2a1d38 */
     unsigned flags;
     unsigned hdr_style; /* 0=A pixel dims, 1=B tile dims */
+    scrl_tile_cache tiles; /* decoded TIL blocks; status != OK means "draw nothing" */
 } scrl_plane;
 
 typedef struct {
@@ -54,7 +56,11 @@ typedef struct {
     int has_cdb;
 } scrl_map;
 
-/* Bind layer blobs already loaded by caller (pointers not owned). */
+/*
+ * Bind layer blobs already loaded by caller (pointers not owned) and decode each plane's TIL
+ * into its tile cache. The map owns the caches: release them with scrl_map_free. Calling init
+ * again on a map that was already initialised leaks them, so free it first.
+ */
 int scrl_map_init(scrl_map *m,
                   const void *acdb, size_t acdb_sz, const void *atil, size_t atil_sz,
                   const void *bcdb, size_t bcdb_sz, const void *btil, size_t btil_sz,
@@ -62,13 +68,20 @@ int scrl_map_init(scrl_map *m,
                   const void *dcdb, size_t dcdb_sz, const void *dtil, size_t dtil_sz,
                   const void *amap, size_t amap_sz);
 
+/* Release the tile caches and zero the map. The map must be zeroed or initialised. */
+void scrl_map_free(scrl_map *m);
+
+/* Planes whose tile cache was built (the rest are drawn as nothing). */
+unsigned scrl_map_cached_planes(const scrl_map *m);
+
 /* Parse CDB header alone (tests / diagnostics). */
 int scrl_cdb_parse(const uint8_t *cdb, size_t sz, scrl_plane *out);
 
 /*
  * _DecompByte@0x002a0b4c (compress.o): MSB-first control byte; bit=0 literal,
  * bit=1 BE16 [dist:12 | nibble:4] where nibble=0 terminates and nibble=1..15
- * copies (nibble+1) bytes from dst - dist. Returns bytes written to dst.
+ * copies (nibble+1) bytes from dst - dist. Returns bytes written to dst. This is
+ * scrl_decomp_byte_ex (core/scrl_decomp.h) without its report.
  */
 size_t scrl_decomp_byte(const uint8_t *src, size_t src_cap,
                         uint8_t *dst, size_t dst_cap);
