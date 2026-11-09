@@ -321,7 +321,7 @@ int runway_phase_load_dir(runway_phase *phase, cdimage *cd, const char *iso_dir)
     {
         void *frame = NULL;
         size_t frame_size = 0;
-        const uint8_t *bank = palette + 0 * 1024;
+        const uint8_t *bank = palette + 1 * 1024;
         snprintf(pan_path, sizeof pan_path, "%s/15PAN", iso_dir);
         if (resource_load(cd, pan_path, &frame, &frame_size) || frame_size == 0 ||
             pan_scroll_init(&phase->pan, (const uint8_t *)frame, frame_size, bank)) {

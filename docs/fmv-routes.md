@@ -33,6 +33,8 @@ Em FINALE, os bytes do binário original confirmam que o literal `0028ce00` apon
 
 Em 09/11, o Ymir com disco 2 e seleção forçada de fase `0022896c=27`, filme `00228970=0`, mostrou a arena de FINALE com Mr. Bones e uma guitarra (captura `build-static/ymir-finale-review/screenshots/mr Bones [MK-81016]-20261109T133600.304.png`). Sem comandos de jogo, a execução retornou ao menu; não foi observada uma vitória. O port ainda inicia diretamente o AVI e não implementa a arena, seus controles ou a transição de vitória. O teste de campanha simulado não valida essa fase.
 
+Em outra execução, o breakpoint no cérebro `0028ccd0` ocorreu com `R4=06026a9c`, resultado `+0x44=1` e campos `+0x48/+0x4c=-1`. Alterar apenas o resultado de 1 para 0 em RAM levou o Ymir ao filme de FINALE. A captura `build-static/ymir-finale-winref/screenshots/mr Bones [MK-81016]-20261109T134500.548.png` coincide em RGBA com o intervalo 288 do AVI decodificado pelo port. Isso confirma o ramo sob o resultado forçado; não valida a condição de vitória normal ou a fase nativa.
+
 No Ymir, uma entrada direta forçada em GUITAR (`0022896c=7`, `00228970=0` no ponto `0020b95c`) mostrou a fase Guitar Solo: personagem com guitarra diante da plateia. O arquivo `/07GUITAR/20AVI` mostra uma cena cinematográfica diferente; sua chamada após GUITAR é indicada pela descompilação da tabela. A entrada foi forçada, portanto a observação não comprova sozinha a transição de vitória nem a fidelidade da fase nativa, ainda incompleta.
 
 O mesmo procedimento com `0022896c=14` mostrou DRUM com o personagem entre tambores; `/14DRUM/20AVI` contém uma sequência visual diferente. A chamada de seu FMV após a vitória padrão é uma conclusão da análise estática, não uma transição observada em uma partida completa.
