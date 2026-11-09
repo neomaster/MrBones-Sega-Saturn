@@ -7,8 +7,19 @@
 *.sav
 data/
 saves/
-# Build output
+# Build output (build/, build-static/, build-mt-validation/, ...) and loose compiler objects
 build/
+build-*/
 out/
+/*.obj
+*.exe
+*.dll
+*.log
+*.pyc
+__pycache__/
+# Local emulator (third-party binaries, profile, game screenshots) and generated frame dumps
+tools/ymir/
+tools/ymir-profile/
+tools/frame_dump.*
 # Local config with disc paths
 mrbones.ini

@@ -1,0 +1,480 @@
+Program 02LOADER.bin language SuperH:BE:32:SH-2 imagebase 00000000
+
+=== SoundEvent @ 00204128 ===
+BODY [[00204128, 0020416b]]
+
+void FUN_00204128(int param_1)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  uint uVar4;
+  int iVar5;
+  uint *puVar6;
+  
+  uVar4 = DAT_0020417c;
+  puVar3 = PTR_DAT_00204178;
+  puVar2 = PTR_PTR_00204174;
+  puVar1 = PTR_DAT_00204170;
+  if (*(int *)PTR_DAT_0020416c != 0) {
+    for (puVar6 = *(uint **)(param_1 * 4 + *(int *)PTR_DAT_0020416c + 4); puVar6 != (uint *)0x0;
+        puVar6 = puVar6 + 8) {
+      **(int **)puVar1 = (int)puVar6;
+      iVar5 = *(int *)puVar1;
+      *(int *)puVar1 = iVar5 + 4;
+      if (iVar5 + 4 == *(int *)puVar2) {
+        *(undefined **)puVar1 = puVar3;
+      }
+      if ((*puVar6 & uVar4) != 0) {
+        return;
+      }
+    }
+  }
+  return;
+}
+
+
+-- listing head --
+00204128 mov.l r14,@-r15
+0020412a mov.l @(0x20416c,pc),r1
+0020412c mov.l @r1,r1
+0020412e mov r15,r14
+00204130 tst r1,r1
+00204132 bt 0x00204166
+00204134 shll2 r4
+00204136 add r1,r4
+00204138 mov.l @(0x4,r4),r4
+0020413a tst r4,r4
+0020413c bt 0x00204166
+0020413e mov.l @(0x204170,pc),r3
+00204140 mov.l @(0x204174,pc),r5
+00204142 mov.l @(0x204178,pc),r6
+00204144 mov.l @(0x20417c,pc),r7
+00204146 mov.l @r3,r1
+00204148 mov.l r4,@r1
+0020414a mov.l @r3,r2
+0020414c add 0x4,r2
+0020414e mov.l r2,@r3
+00204150 mov.l @r5,r1
+00204152 cmp/eq r1,r2
+00204154 bf 0x00204158
+00204156 mov.l r6,@r3
+00204158 mov.l @r4,r1
+0020415a and r7,r1
+0020415c tst r1,r1
+0020415e bf 0x00204166
+00204160 add 0x20,r4
+00204162 tst r4,r4
+00204164 bf 0x00204146
+00204166 mov r14,r15
+00204168 rts
+0020416a _mov.l @r15+,r14
+00204180 mov.l r14,@-r15
+00204182 sts.l pr,@-r15
+00204184 add -0x14,r15
+00204186 mov r15,r14
+00204188 mov #0x2,r3
+0020418a mov.l r3,@r14
+
+=== SoundStartSequence @ 002041d0 ===
+BODY [[002041d0, 0020420d]]
+
+undefined1 SoundStartSequence(int param_1,undefined1 param_2,undefined1 param_3,undefined1 param_4)
+
+{
+  uint uVar1;
+  undefined1 uVar2;
+  int iVar3;
+  int *piVar4;
+  
+  if (param_1 == 0) {
+    uVar1 = *(uint *)PTR_DAT_00204214;
+    piVar4 = (int *)PTR_DAT_00204214;
+    if (uVar1 == 2) {
+      iVar3 = 0;
+      goto LAB_002041f6;
+    }
+  }
+  else {
+    uVar1 = *(uint *)PTR_DAT_00204210;
+    piVar4 = (int *)PTR_DAT_00204210;
+    if (uVar1 == 4) {
+      iVar3 = 3;
+      goto LAB_002041f6;
+    }
+  }
+  iVar3 = uVar1 + 1;
+LAB_002041f6:
+  *piVar4 = iVar3;
+  uVar2 = (*(code *)PTR_FUN_00204218)(uVar1 & 0xff,param_2,param_3,param_4);
+  return uVar2;
+}
+
+
+-- listing head --
+002041d0 mov.l r14,@-r15
+002041d2 sts.l pr,@-r15
+002041d4 mov r15,r14
+002041d6 tst r4,r4
+002041d8 bt 0x002041e6
+002041da mov.l @(0x204210,pc),r2
+002041dc mov.l @r2,r0
+002041de cmp/eq 0x4,r0
+002041e0 bf 0x002041f2
+002041e2 bra 0x002041f6
+002041e4 _mov #0x3,r1
+002041e6 mov.l @(0x204214,pc),r2
+002041e8 mov.l @r2,r0
+002041ea cmp/eq 0x2,r0
+002041ec bf 0x002041f2
+002041ee bra 0x002041f6
+002041f0 _mov #0x0,r1
+002041f2 mov r0,r1
+002041f4 add 0x1,r1
+002041f6 mov.l r1,@r2
+002041f8 extu.b r7,r7
+002041fa extu.b r6,r6
+002041fc extu.b r0,r4
+002041fe mov.l @(0x204218,pc),r0
+00204200 jsr @r0
+00204202 _extu.b r5,r5
+00204204 mov r14,r15
+00204206 lds.l @r15+,pr
+00204208 mov.l @r15+,r14
+0020420a rts
+0020420c _extu.b r0,r0
+0020472c mov.l r14,@-r15
+0020472e mov r15,r14
+00204730 mov.l @(0x204740,pc),r1
+00204732 mov.l @(0x204744,pc),r2
+00204734 mov.l @r1,r1
+00204736 mov #0x0,r1
+00204738 mov.l r1,@r2
+0020473a rts
+0020473c _mov.l @r15+,r14
+
+=== SND_Init @ 00200468 ===
+BODY [[00200468, 00200577]]
+
+void SND_Init(undefined4 *param_1)
+
+{
+  byte bVar1;
+  byte *pbVar2;
+  int iVar3;
+  undefined *puVar4;
+  int iVar5;
+  int iVar6;
+  
+  pbVar2 = DAT_00200584;
+  bVar1 = *DAT_00200584;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *DAT_00200584;
+  }
+  *DAT_00200584 = 1;
+  *DAT_00200588 = 7;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  *DAT_0020058c = DAT_00200578;
+  iVar3 = DAT_00200594;
+  (*(code *)PTR_FUN_00200598)(DAT_00200594,DAT_00200590);
+  puVar4 = PTR_FUN_0020059c;
+  (*(code *)PTR_FUN_0020059c)(iVar3,*param_1,*(undefined2 *)(param_1 + 1));
+  iVar5 = *DAT_002005a0;
+  *(int *)PTR_DAT_002005a4 = iVar5 + iVar3;
+  iVar6 = *DAT_002005a8 + iVar3;
+  *(int *)PTR_DAT_002005ac = iVar6;
+  *DAT_002005b4 = CONCAT22(*DAT_002005b0,*DAT_002005b8) + iVar3;
+  *(int *)PTR_DAT_002005bc = iVar6;
+  *(int *)PTR_DAT_002005c4 = *DAT_002005c0 + iVar3;
+  *(int *)PTR_DAT_002005c8 = DAT_0020057a + iVar6;
+  *(int *)PTR_DAT_002005cc = DAT_0020057c + iVar6;
+  *(int *)PTR_DAT_002005d0 = DAT_0020057e + iVar6;
+  *(int *)PTR_DAT_002005d4 = DAT_00200580 + iVar6;
+  *(int *)PTR_DAT_002005d8 = iVar6 + DAT_00200582;
+  (*(code *)puVar4)(*(int *)(iVar5 + iVar3 + 8) + iVar3,param_1[2],
+                    ((uint)*(ushort *)(param_1 + 3) * 2 & 0xfffffffc) + 4);
+  pbVar2 = DAT_00200584;
+  do {
+  } while ((*DAT_00200584 & 1) != 0);
+  *DAT_00200584 = 1;
+  *DAT_00200588 = 6;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  return;
+}
+
+
+-- listing head --
+00200468 mov.l r8,@-r15
+0020046a mov.l r9,@-r15
+0020046c mov.l r10,@-r15
+0020046e mov.l r14,@-r15
+00200470 sts.l pr,@-r15
+00200472 mov r15,r14
+00200474 mov.l @(0x200584,pc),r1
+00200476 mov.b @r1,r0
+00200478 bra 0x0020047e
+0020047a _mov r4,r9
+0020047c mov.b @r1,r0
+0020047e and 0x1,r0
+00200480 tst r0,r0
+00200482 bf 0x0020047c
+00200484 mov.l @(0x200584,pc),r3
+00200486 mov #0x1,r1
+00200488 mov.b r1,@r3
+0020048a mov.l @(0x200588,pc),r2
+0020048c mov #0x7,r1
+0020048e mov.b r1,@r2
+00200490 mov.b @r3,r0
+00200492 and 0x1,r0
+00200494 tst r0,r0
+00200496 bt 0x002004a2
+00200498 mov r3,r1
+0020049a mov.b @r1,r0
+0020049c and 0x1,r0
+0020049e tst r0,r0
+002004a0 bf 0x0020049a
+002004a2 mov.l @(0x20058c,pc),r2
+002004a4 mov.w @(0x200578,pc),r1
+002004a6 mov.w r1,@r2
+002004a8 mov.l @(0x200590,pc),r5
+002004aa mov.l @(0x200594,pc),r8
+002004ac mov.l @(0x200598,pc),r1
+002004ae jsr @r1
+002004b0 _mov r8,r4
+002004b2 mov r9,r1
+002004b4 add 0x4,r1
+002004b6 mov.l @(0x20059c,pc),r10
+
+=== SND_StartPcm @ 00200b38 ===
+BODY [[00200b38, 00200ba7]]
+
+undefined8 SND_StartPcm(void)
+
+{
+  bool bVar1;
+  undefined *puVar2;
+  uint in_r0;
+  char cVar3;
+  uint uVar4;
+  undefined1 unaff_r9;
+  undefined1 unaff_r10;
+  undefined1 unaff_r11;
+  undefined1 unaff_r12;
+  uint uVar5;
+  
+  uVar4 = (uint)DAT_00200ba8;
+  uVar5 = in_r0 & 0xfff0fff | 0xf0;
+  cVar3 = (*(code *)PTR_FUN_00200bac)();
+  puVar2 = PTR_DAT_00200bb0;
+  uVar5 = uVar5 & 0xfffffffe | (uint)(cVar3 == '\0');
+  bVar1 = ((byte)uVar5 & 1) == 1;
+  if (!bVar1) {
+    *(undefined1 *)(*(int *)PTR_DAT_00200bb0 + 2) = unaff_r9;
+    *(undefined1 *)(*(int *)puVar2 + 3) = unaff_r10;
+    *(undefined1 *)(*(int *)puVar2 + 4) = unaff_r11;
+    *(undefined1 *)(*(int *)puVar2 + 5) = unaff_r12;
+    **(undefined2 **)puVar2 = DAT_00200baa;
+  }
+  return CONCAT44(uVar5 & uVar4,(uint)bVar1);
+}
+
+
+-- listing head --
+00200b38 shar r13
+00200b3a shar r13
+00200b3c shar r13
+00200b3e mov #0xf,r3
+00200b40 and r3,r13
+00200b42 mov.w @(0x200ba8,pc),r8
+00200b44 or 0xf0,r0
+00200b46 ldc r0,sr
+00200b48 mov.l @(0x200bac,pc),r0
+00200b4a jsr @r0
+00200b4c _nop
+00200b4e extu.b r0,r1
+00200b50 tst r1,r1
+00200b52 bt 0x00200b86
+00200b54 mov.l @(0x200bb0,pc),r2
+00200b56 mov.l @r2,r1
+00200b58 add 0x2,r1
+00200b5a mov.b r9,@r1
+00200b5c mov.l @r2,r1
+00200b5e add 0x3,r1
+00200b60 mov.b r10,@r1
+00200b62 mov.l @r2,r1
+00200b64 shll2 r13
+00200b66 shll2 r13
+00200b68 add 0x4,r1
+00200b6a mov.b r11,@r1
+00200b6c mov.l @r2,r1
+00200b6e mov #0x0,r0
+00200b70 add 0x5,r1
+00200b72 mov.b r12,@r1
+00200b74 mov.l @r2,r2
+00200b76 mov.w @(0x200baa,pc),r1
+00200b78 mov.w r1,@r2
+00200b7a stc sr,r1
+00200b7c and r8,r1
+00200b7e or r1,r13
+00200b80 ldc r13,sr
+00200b82 bra 0x00200b96
+00200b84 _mov r14,r15
+00200b86 stc sr,r1
+
+=== SND_StartSeq @ 002006b0 ===
+BODY [[002006b0, 002006c1]]
+
+void SND_StartSeq(void)
+
+{
+  undefined4 *in_r2;
+  undefined4 in_r3;
+  
+  *in_r2 = in_r3;
+  return;
+}
+
+
+-- listing head --
+002006b0 mov.l r3,@r2
+002006b2 mov r14,r15
+002006b4 lds.l @r15+,pr
+002006b6 mov.l @r15+,r14
+002006b8 mov.l @r15+,r11
+002006ba mov.l @r15+,r10
+002006bc mov.l @r15+,r9
+002006be rts
+002006c0 _mov.l @r15+,r8
+002006d0 mov.l r8,@-r15
+002006d2 mov.l r9,@-r15
+002006d4 mov.l r10,@-r15
+002006d6 mov.l r14,@-r15
+002006d8 sts.l pr,@-r15
+002006da mov r15,r14
+002006dc extu.b r4,r9
+002006de stc sr,r0
+002006e0 mov r0,r10
+002006e2 shar r10
+002006e4 shar r10
+002006e6 shar r10
+002006e8 shar r10
+002006ea mov #0xf,r7
+002006ec and r7,r10
+002006ee mov.w @(0x20077c,pc),r8
+002006f0 or 0xf0,r0
+002006f2 ldc r0,sr
+002006f4 mov.l @(0x200780,pc),r0
+002006f6 jsr @r0
+002006f8 _nop
+002006fa extu.b r0,r1
+002006fc tst r1,r1
+002006fe bf 0x00200710
+00200700 stc sr,r1
+00200702 and r8,r1
+00200704 shll2 r10
+00200706 shll2 r10
+00200708 or r1,r10
+0020070a ldc r10,sr
+0020070c bra 0x0020076e
+
+=== SoundStartSequence_mapoff @ 002004cc ===
+BODY [[002004cc, 00200577]]
+
+void SoundStartSequence_mapoff(int param_1)
+
+{
+  byte bVar1;
+  byte *pbVar2;
+  int *in_r2;
+  int iVar3;
+  int unaff_r8;
+  int unaff_r9;
+  code *unaff_r10;
+  
+  *in_r2 = param_1;
+  iVar3 = *DAT_002005a8 + unaff_r8;
+  *(int *)PTR_DAT_002005ac = iVar3;
+  *DAT_002005b4 = CONCAT22(*DAT_002005b0,*DAT_002005b8) + unaff_r8;
+  *(int *)PTR_DAT_002005bc = iVar3;
+  *(int *)PTR_DAT_002005c4 = *DAT_002005c0 + unaff_r8;
+  *(int *)PTR_DAT_002005c8 = DAT_0020057a + iVar3;
+  *(int *)PTR_DAT_002005cc = DAT_0020057c + iVar3;
+  *(int *)PTR_DAT_002005d0 = DAT_0020057e + iVar3;
+  *(int *)PTR_DAT_002005d4 = DAT_00200580 + iVar3;
+  *(int *)PTR_DAT_002005d8 = iVar3 + DAT_00200582;
+  (*unaff_r10)(*(int *)(param_1 + 8) + unaff_r8,*(undefined4 *)(unaff_r9 + 8),
+               ((uint)*(ushort *)(unaff_r9 + 0xc) * 2 & 0xfffffffc) + 4);
+  pbVar2 = DAT_00200584;
+  do {
+  } while ((*DAT_00200584 & 1) != 0);
+  *DAT_00200584 = 1;
+  *DAT_00200588 = 6;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  return;
+}
+
+
+-- listing head --
+002004cc mov.l r4,@r2
+002004ce mov.l @(0x2005a8,pc),r1
+002004d0 mov.l @r1,r3
+002004d2 mov.l @(0x2005ac,pc),r2
+002004d4 add r8,r3
+002004d6 mov.l r3,@r2
+002004d8 mov.l @(0x2005b0,pc),r1
+002004da mov.w @r1,r2
+002004dc mov.l @(0x2005b4,pc),r7
+002004de mov.l @(0x2005b8,pc),r1
+002004e0 mov.w @r1,r1
+002004e2 shll16 r2
+002004e4 extu.w r1,r1
+002004e6 or r1,r2
+002004e8 add r8,r2
+002004ea mov.l r2,@r7
+002004ec mov.l @(0x2005bc,pc),r1
+002004ee mov.l r3,@r1
+002004f0 mov.l @(0x2005c0,pc),r1
+002004f2 mov.l @r1,r1
+002004f4 mov.l @(0x2005c4,pc),r2
+002004f6 add r8,r1
+002004f8 mov.l r1,@r2
+002004fa mov.l @(0x2005c8,pc),r2
+002004fc mov.w @(0x20057a,pc),r1
+002004fe add r3,r1
+00200500 mov.l r1,@r2
+00200502 mov.l @(0x2005cc,pc),r2
+00200504 mov.w @(0x20057c,pc),r1
+00200506 add r3,r1
+00200508 mov.l r1,@r2
+0020050a mov.l @(0x2005d0,pc),r2
+0020050c mov.w @(0x20057e,pc),r1
+0020050e add r3,r1
+00200510 mov.l r1,@r2
+00200512 mov.l @(0x2005d4,pc),r2
+00200514 mov.w @(0x200580,pc),r1
+00200516 add r3,r1
+00200518 mov.l r1,@r2
+0020051a mov.l @(0x2005d8,pc),r2
+
+=== refs to 0x00204128 / 0x002041d0 (word scan) ===
+  lit@00203fe4 -> 00204128
+  lit@00204104 -> 00204128
+  lit@00206d58 -> 00204128
+  lit@00206f44 -> 00204128
+  lit@00206fe0 -> 00204128
+  lit@002071d8 -> 00204128
+  count=6
+  lit@002143bc -> 002041D0
+  count=1
+
+=== refs to SoundFunctionList-ish / common sound IDs ===

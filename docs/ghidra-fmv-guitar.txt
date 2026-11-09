@@ -1,0 +1,99 @@
+=== 00261ed8 ===
+
+void fmv_00261ed8(int param_1)
+
+{
+  int iVar1;
+  code *pcVar2;
+  undefined4 uVar3;
+  int iVar4;
+  
+  if (*(int *)PTR_DAT_00261fdc != 0) {
+    return;
+  }
+  *(undefined4 *)PTR_DAT_00261fdc = 1;
+  (*DAT_00261fe0)(0xfffffffb);
+  *DAT_00261fe4 = 0;
+  pcVar2 = DAT_00261fe8;
+  if (*(int *)(param_1 + 0x44) == 0) {
+    for (iVar4 = 0; iVar4 < 8; iVar4 = iVar4 + 1) {
+      do {
+        iVar1 = (*pcVar2)(iVar4);
+      } while (iVar1 != 0);
+    }
+    uVar3 = 0x18;
+  }
+  else {
+    if (*(int *)(param_1 + 0x44) != 1) goto LAB_00261f4c;
+    for (iVar4 = 0; iVar4 < 8; iVar4 = iVar4 + 1) {
+      do {
+        iVar1 = (*pcVar2)(iVar4);
+      } while (iVar1 != 0);
+    }
+    uVar3 = 0x19;
+  }
+  (*DAT_00261fec)(uVar3);
+LAB_00261f4c:
+  pcVar2 = DAT_00261ff0;
+  (*DAT_00261ff0)(param_1,0x32);
+  iVar4 = *DAT_00261ff4;
+  if (iVar4 != 0) {
+    (**(code **)(iVar4 + 0x34))(iVar4,DAT_00261ff8,0,0);
+  }
+  (*pcVar2)(param_1,0xc);
+  (*DAT_00261ffc)();
+  if (*(int *)(param_1 + 0x4c) == -1) {
+    iVar4 = *(int *)(param_1 + 0x48);
+    pcVar2 = DAT_00262004;
+    if (iVar4 == -1) {
+      iVar4 = *(int *)(param_1 + 0x44);
+      if (iVar4 == 1) {
+        (*DAT_00262000)(0x1c,3);
+        return;
+      }
+      if (iVar4 == 0) {
+        iVar4 = 8;
+        pcVar2 = DAT_00262008;
+      }
+      else {
+        if (iVar4 != 2) {
+          return;
+        }
+        iVar4 = 3;
+      }
+    }
+    (*pcVar2)(iVar4);
+  }
+  else {
+    (*DAT_00262000)(*(int *)(param_1 + 0x4c),*(undefined4 *)(param_1 + 0x48));
+  }
+  return;
+}
+
+
+=== 00262050 ===
+
+void fmv_00262050(undefined4 param_1,undefined4 param_2)
+
+{
+  undefined4 uVar1;
+  
+  uVar1 = (*(code *)PTR_FUN_0026207c)(4);
+  (*(code *)PTR_FUN_00262080)(uVar1,param_1,param_2);
+  return;
+}
+
+
+=== 00261ec4 ===
+
+void FUN_00261ec4(int param_1,undefined4 param_2,undefined4 param_3)
+
+{
+  *(undefined4 *)(param_1 + 0x4c) = param_2;
+  *(undefined4 *)(param_1 + 0x48) = param_3;
+  return;
+}
+
+
+ref 0026206a fmv_00262050
+ref 00262080 null

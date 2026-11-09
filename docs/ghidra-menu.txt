@@ -1,0 +1,1144 @@
+Program 03MENU_03CODE.bin language SuperH:BE:32:SH-2 imagebase 00000000
+
+=== main @ 0023c278 ===
+BODY [[0023c278, 0023c2e5]]
+
+void main(void)
+
+{
+  undefined4 *puVar1;
+  undefined *puVar2;
+  code *pcVar3;
+  
+  (*(code *)PTR_FUN_0023c2ec)();
+  (*DAT_0023c2f4)(PTR_s_Starting_MENU_0023c267_1_0023c2f0);
+  puVar1 = DAT_0023c2f8;
+  *(undefined2 *)(DAT_0023c2f8 + 0x11) = 0;
+  *(undefined2 *)((int)puVar1 + 0x46) = DAT_0023c2e6;
+  *(undefined2 *)(puVar1 + 0x12) = 0;
+  *(undefined2 *)((int)puVar1 + 0x4a) = DAT_0023c2e8;
+  *puVar1 = 0;
+  puVar1[1] = 0;
+  pcVar3 = DAT_0023c304;
+  puVar2 = PTR_DAT_0023c300;
+  puVar1[2] = DAT_0023c2fc;
+  (*pcVar3)(puVar2);
+  (*DAT_0023c308)(10);
+  (*pcVar3)(PTR_LAB_0023c30c);
+  (*DAT_0023c310)(10);
+  (*DAT_0023c318)(PTR_DAT_0023c314);
+  (*DAT_0023c31c)(6);
+  return;
+}
+
+
+-- listing head --
+0023c278 mov.l r8,@-r15
+0023c27a mov.l r14,@-r15
+0023c27c sts.l pr,@-r15
+0023c27e mov.l @(0x23c2ec,pc),r1
+0023c280 jsr @r1
+0023c282 _mov r15,r14
+0023c284 mov.l @(0x23c2f0,pc),r4
+0023c286 mov.l @(0x23c2f4,pc),r0
+0023c288 jsr @r0
+0023c28a _nop
+0023c28c mov.l @(0x23c2f8,pc),r2
+0023c28e mov r2,r1
+0023c290 add 0x44,r1
+0023c292 mov #0x0,r7
+0023c294 mov.w r7,@r1
+0023c296 mov r2,r3
+0023c298 add 0x46,r3
+0023c29a mov.w @(0x23c2e6,pc),r1
+0023c29c mov.w r1,@r3
+0023c29e mov r2,r1
+0023c2a0 add 0x48,r1
+0023c2a2 mov.w r7,@r1
+0023c2a4 mov r2,r3
+0023c2a6 add 0x4a,r3
+0023c2a8 mov.w @(0x23c2e8,pc),r1
+0023c2aa mov.w r1,@r3
+0023c2ac mov #0x0,r1
+0023c2ae mov.l r1,@r2
+
+=== ___main @ 0023c25c ===
+BODY [[0023c25c, 0023c265]]
+
+void FUN_0023c25c(void)
+
+{
+  return;
+}
+
+
+-- listing head --
+0023c25c mov.l r14,@-r15
+0023c25e mov r15,r14
+0023c260 mov.l @r15+,r14
+0023c262 rts
+0023c264 _nop
+0023c278 mov.l r8,@-r15
+0023c27a mov.l r14,@-r15
+0023c27c sts.l pr,@-r15
+0023c27e mov.l @(0x23c2ec,pc),r1
+0023c280 jsr @r1
+0023c282 _mov r15,r14
+0023c284 mov.l @(0x23c2f0,pc),r4
+0023c286 mov.l @(0x23c2f4,pc),r0
+0023c288 jsr @r0
+0023c28a _nop
+0023c28c mov.l @(0x23c2f8,pc),r2
+0023c28e mov r2,r1
+0023c290 add 0x44,r1
+0023c292 mov #0x0,r7
+0023c294 mov.w r7,@r1
+0023c296 mov r2,r3
+0023c298 add 0x46,r3
+0023c29a mov.w @(0x23c2e6,pc),r1
+0023c29c mov.w r1,@r3
+0023c29e mov r2,r1
+0023c2a0 add 0x48,r1
+0023c2a2 mov.w r7,@r1
+0023c2a4 mov r2,r3
+
+=== CreateCMenuSelector @ 0023c324 ===
+BODY [[0023c324, 0023c357]]
+
+void CreateCMenuSelector(undefined4 param_1)
+
+{
+  undefined4 uVar1;
+  
+  uVar1 = (*DAT_0023c35c)((int)DAT_0023c35a,(int)DAT_0023c358,DAT_0023c360);
+  (*DAT_0023c364)(uVar1,DAT_0023c368);
+  (*(code *)PTR_FUN_0023c36c)(uVar1,param_1);
+  return;
+}
+
+
+-- listing head --
+0023c324 mov.l r8,@-r15
+0023c326 mov.l r9,@-r15
+0023c328 mov.l r14,@-r15
+0023c32a sts.l pr,@-r15
+0023c32c mov r4,r8
+0023c32e mov.l @(0x23c35c,pc),r0
+0023c330 mov.l @(0x23c360,pc),r6
+0023c332 mov.w @(0x23c358,pc),r5
+0023c334 mov.w @(0x23c35a,pc),r4
+0023c336 jsr @r0
+0023c338 _mov r15,r14
+0023c33a mov r0,r9
+0023c33c mov.l @(0x23c364,pc),r1
+0023c33e mov.l @(0x23c368,pc),r5
+0023c340 jsr @r1
+0023c342 _mov r9,r4
+0023c344 mov.l @(0x23c36c,pc),r0
+0023c346 mov r8,r5
+0023c348 jsr @r0
+0023c34a _mov r9,r4
+0023c34c mov r14,r15
+0023c34e lds.l @r15+,pr
+0023c350 mov.l @r15+,r14
+0023c352 mov.l @r15+,r9
+0023c354 rts
+0023c356 _mov.l @r15+,r8
+0023c370 mov.l r14,@-r15
+0023c372 mov r15,r14
+
+=== ctor_CMenuSelector @ 0023c370 ===
+BODY [[0023c370, 0023c3c9]]
+
+void FUN_0023c370(int param_1)
+
+{
+  int iVar1;
+  
+  *(undefined **)(param_1 + 0x40) = PTR_DAT_0023c3cc;
+  *(undefined4 *)(param_1 + 0x58) = 0;
+  *(undefined4 *)(param_1 + 0xbc) = 0;
+  iVar1 = (int)DAT_0023c3ca;
+  *(undefined4 *)(iVar1 + param_1) = 0;
+  ((undefined4 *)(iVar1 + param_1))[0x19] = 0;
+  *DAT_0023c3d0 = DAT_0023c3d4;
+  *(undefined4 *)(param_1 + 0x14) = 0;
+  *(undefined4 *)(param_1 + 0x18) = 0;
+  *(undefined4 *)(param_1 + 0x1c) = 0;
+  *(undefined2 *)(param_1 + 0x24) = 0;
+  *(undefined2 *)(param_1 + 0x22) = 0;
+  *(undefined2 *)(param_1 + 0x20) = 0;
+  *(undefined4 *)(param_1 + 0x50) = 0xffffffff;
+  *(undefined4 *)(param_1 + 0x44) = 0;
+  *(int *)PTR_DAT_0023c3d8 = param_1;
+  return;
+}
+
+
+-- listing head --
+0023c370 mov.l r14,@-r15
+0023c372 mov r15,r14
+0023c374 mov r4,r0
+0023c376 mov r0,r2
+0023c378 add 0x40,r2
+0023c37a mov.l @(0x23c3cc,pc),r1
+0023c37c mov.l r1,@r2
+0023c37e mov r0,r1
+0023c380 add 0x58,r1
+0023c382 mov #0x0,r2
+0023c384 mov.l r2,@r1
+0023c386 add 0x64,r1
+0023c388 mov.l r2,@r1
+0023c38a mov.w @(0x23c3ca,pc),r1
+0023c38c add r0,r1
+0023c38e mov.l r2,@r1
+0023c390 add 0x64,r1
+0023c392 mov.l r2,@r1
+0023c394 mov.l @(0x23c3d0,pc),r3
+0023c396 mov.l @(0x23c3d4,pc),r1
+0023c398 mov.l r1,@r3
+0023c39a mov.l r2,@(0x14,r0)
+0023c39c mov.l r2,@(0x18,r0)
+0023c39e mov.l r2,@(0x1c,r0)
+0023c3a0 mov r0,r6
+0023c3a2 add 0x20,r6
+0023c3a4 mov r0,r7
+0023c3a6 add 0x22,r7
+
+=== DoLeagal_CMenuSelector @ 0023c530 ===
+BODY [[0023c530, 0023c591]]
+
+void DoLeagal_CMenuSelector(int param_1)
+
+{
+  undefined4 auStack_78 [13];
+  int iStack_44;
+  int iStack_1c;
+  int iStack_18;
+  int iStack_14;
+  
+  auStack_78[0] = 0;
+  iStack_14 = 0;
+  (*(code *)PTR_FUN_0023c59c)(auStack_78,PTR_LAB_0023c598,param_1 + 0x14);
+  iStack_44 = (int)DAT_0023c592;
+  *DAT_0023c5a0 = 1;
+  (*DAT_0023c5a4)(param_1,(int)DAT_0023c594);
+  if (iStack_14 != 0) {
+    *(int *)(iStack_18 + 0x5c) = iStack_1c;
+    *(int *)(iStack_1c + 0x60) = iStack_18;
+  }
+  return;
+}
+
+
+-- listing head --
+0023c530 mov.l r8,@-r15
+0023c532 mov.l r9,@-r15
+0023c534 mov.l r14,@-r15
+0023c536 sts.l pr,@-r15
+0023c538 add -0x68,r15
+0023c53a mov r15,r14
+0023c53c mov r4,r9
+0023c53e mov #0x0,r1
+0023c540 mov.l r1,@r14
+0023c542 mov r14,r8
+0023c544 add 0x64,r8
+0023c546 mov.l r1,@r8
+0023c548 mov r9,r6
+0023c54a add 0x14,r6
+0023c54c mov.l @(0x23c598,pc),r5
+0023c54e mov.l @(0x23c59c,pc),r1
+0023c550 jsr @r1
+0023c552 _mov r14,r4
+0023c554 mov.w @(0x23c592,pc),r1
+0023c556 mov.l r1,@(0x34,r14)
+0023c558 mov.l @(0x23c5a0,pc),r2
+0023c55a mov #0x1,r1
+0023c55c mov.l r1,@r2
+0023c55e mov.w @(0x23c594,pc),r5
+0023c560 mov.l @(0x23c5a4,pc),r1
+0023c562 jsr @r1
+0023c564 _mov r9,r4
+0023c566 mov.l @r8,r1
+
+=== UpdateLevels_CMenuSelector @ 0023c5a8 ===
+BODY [[0023c5a8, 0023c5f7]]
+
+void FUN_0023c5a8(void)
+
+{
+  undefined *puVar1;
+  int iVar2;
+  int iVar3;
+  uint uVar4;
+  int iVar5;
+  undefined4 uVar6;
+  
+  puVar1 = PTR_DAT_0023c5f8;
+  iVar3 = (*DAT_0023c5fc)(*(undefined4 *)PTR_DAT_0023c5f8,*(undefined4 *)(PTR_DAT_0023c5f8 + 4));
+  iVar2 = DAT_0023c600;
+  uVar6 = 0;
+  iVar3 = iVar3 + -1;
+  if (iVar3 != -1) {
+    do {
+      iVar5 = *(int *)(*(int *)(puVar1 + 8) + iVar3 * 4);
+      uVar4 = (uint)*(byte *)(iVar2 + *(int *)(iVar5 + 8));
+      *(uint *)(iVar5 + 4) = uVar4;
+      if (uVar4 != 0) {
+        uVar6 = 1;
+      }
+      iVar3 = iVar3 + -1;
+    } while (iVar3 != -1);
+  }
+  *(undefined4 *)(PTR_DAT_0023c604 + 4) = uVar6;
+  return;
+}
+
+
+-- listing head --
+0023c5a8 mov.l r8,@-r15
+0023c5aa mov.l r14,@-r15
+0023c5ac sts.l pr,@-r15
+0023c5ae mov.l @(0x23c5f8,pc),r8
+0023c5b0 mov.l @r8,r4
+0023c5b2 mov r15,r14
+0023c5b4 mov.l @(0x23c5fc,pc),r0
+0023c5b6 jsr @r0
+0023c5b8 _mov.l @(0x4,r8),r5
+0023c5ba mov r0,r3
+0023c5bc mov #0x0,r7
+0023c5be add -0x1,r3
+0023c5c0 mov r3,r0
+0023c5c2 cmp/eq -0x1,r0
+0023c5c4 bt 0x0023c5ea
+0023c5c6 mov r8,r4
+0023c5c8 add 0x8,r4
+0023c5ca mov.l @(0x23c600,pc),r6
+0023c5cc mov r3,r0
+0023c5ce mov.l @r4,r1
+0023c5d0 shll2 r0
+0023c5d2 mov.l @(r0,r1),r2
+0023c5d4 mov.l @(0x8,r2),r0
+0023c5d6 mov.b @(r0,r6),r1
+0023c5d8 extu.b r1,r1
+0023c5da mov.l r1,@(0x4,r2)
+0023c5dc tst r1,r1
+0023c5de bt 0x0023c5e2
+
+=== InitOptions_CMenuSelector @ 0023c608 ===
+BODY [[0023c608, 0023c667]]
+
+void FUN_0023c608(int param_1)
+
+{
+  undefined *puVar1;
+  
+  puVar1 = PTR_LAB_0023c674;
+  if (*DAT_0023c66c != 0) {
+    puVar1 = PTR_LAB_0023c670;
+  }
+  (*(code *)PTR_FUN_0023c678)(param_1 + 0x58,puVar1,param_1 + 0x14);
+  *(int *)(param_1 + 0x8c) = (int)DAT_0023c668;
+  puVar1 = PTR_LAB_0023c684;
+  if (*DAT_0023c67c != 0) {
+    puVar1 = PTR_LAB_0023c680;
+  }
+  (*(code *)PTR_FUN_0023c678)(DAT_0023c66a + param_1,puVar1,param_1 + 0x14);
+  *(int *)(param_1 + DAT_0023c66a + 0x34) = (int)DAT_0023c668;
+  return;
+}
+
+
+-- listing head --
+0023c608 mov.l r8,@-r15
+0023c60a mov.l r14,@-r15
+0023c60c sts.l pr,@-r15
+0023c60e mov r15,r14
+0023c610 mov.l @(0x23c66c,pc),r1
+0023c612 mov.l @r1,r1
+0023c614 mov r4,r8
+0023c616 tst r1,r1
+0023c618 bt 0x0023c622
+0023c61a mov r8,r6
+0023c61c mov.l @(0x23c670,pc),r5
+0023c61e bra 0x0023c62a
+0023c620 _add 0x14,r6
+0023c622 mov r8,r6
+0023c624 add 0x14,r6
+0023c626 mov.l @(0x23c674,pc),r5
+0023c628 mov r8,r4
+0023c62a mov.l @(0x23c678,pc),r1
+0023c62c jsr @r1
+0023c62e _add 0x58,r4
+0023c630 mov r8,r2
+0023c632 add 0x58,r2
+0023c634 mov.w @(0x23c668,pc),r1
+0023c636 mov.l r1,@(0x34,r2)
+0023c638 mov.l @(0x23c67c,pc),r1
+0023c63a mov.l @r1,r1
+0023c63c tst r1,r1
+0023c63e bt 0x0023c648
+
+=== StartMenuScreen_CMenuSelector @ 0023c77c ===
+BODY [[0023c77c, 0023c8c3]]
+
+void FUN_0023c77c(int param_1,undefined *param_2)
+
+{
+  bool bVar1;
+  undefined *puVar2;
+  code *pcVar3;
+  int *piVar4;
+  int iVar5;
+  undefined4 uVar6;
+  undefined4 *puVar7;
+  int iVar8;
+  int *piVar9;
+  int iVar10;
+  int iVar11;
+  
+  bVar1 = false;
+  *(undefined4 *)(param_1 + 0x50) = 0xffffffff;
+  *(undefined4 *)(param_1 + 0x54) = 0xffffffff;
+  puVar2 = PTR_DAT_0023c8c8;
+  puVar7 = (undefined4 *)(param_1 + 0x44);
+  if ((undefined *)*puVar7 == PTR_DAT_0023c8c8) {
+    (*(code *)PTR_FUN_0023c8cc)();
+  }
+  (*(code *)PTR_FUN_0023c8d0)(param_1);
+  *puVar7 = param_2;
+  if (param_2 == puVar2) {
+    (*(code *)PTR_FUN_0023c8d4)(param_1);
+  }
+  if ((undefined *)*puVar7 == PTR_DAT_0023c8d8) {
+    (*DAT_0023c8e0)(PTR_DAT_0023c8dc,8);
+  }
+  if ((undefined *)*puVar7 == PTR_DAT_0023c8e4) {
+    (*DAT_0023c8e0)(PTR_DAT_0023c8e8,8);
+  }
+  (*(code *)PTR_FUN_0023c8ec)(param_1);
+  pcVar3 = DAT_0023c8f0;
+  iVar11 = 0;
+  do {
+    if (**(int **)(param_1 + 0x44) <= iVar11) {
+      iVar10 = *(int *)(param_1 + 0x44);
+      iVar11 = (*DAT_0023c8f4)(*(undefined4 *)(param_1 + 0x50),*(undefined4 *)(iVar10 + 4));
+      *(undefined4 *)(param_1 + 0x4c) =
+           *(undefined4 *)(*(int *)(iVar10 + 8) + (iVar11 + *(int *)(param_1 + 0x54)) * 4);
+      return;
+    }
+    iVar10 = 0;
+    while( true ) {
+      iVar8 = *(int *)(param_1 + 0x44);
+      if (*(int *)(iVar8 + 4) <= iVar10) break;
+      iVar5 = (*DAT_0023c8f4)(iVar11);
+      iVar8 = *(int *)(*(int *)(iVar8 + 8) + (iVar5 + iVar10) * 4);
+      if (iVar8 != 0) {
+        piVar9 = (int *)(iVar8 + 0x20);
+        *piVar9 = param_1 + 0x14;
+        piVar4 = DAT_0023c8f8;
+        *(int *)(iVar8 + 0x7c) = *DAT_0023c8f8;
+        *(int **)(iVar8 + 0x80) = DAT_0023c8f8 + -0x17;
+        *piVar4 = (int)piVar9;
+        *(int **)(*(int *)(iVar8 + 0x7c) + 0x60) = piVar9;
+        (*DAT_0023c8fc)(piVar9);
+        *(int *)(iVar8 + 0x54) = (int)DAT_0023c8c4;
+        if (*(int *)(iVar8 + 4) == 0) {
+          uVar6 = *(undefined4 *)(iVar8 + 0x1c);
+        }
+        else {
+          if (!bVar1) {
+            *(int *)(param_1 + 0x50) = iVar11;
+            *(int *)(param_1 + 0x54) = iVar10;
+            (*pcVar3)(piVar9,*(undefined4 *)(iVar8 + 0x18));
+            bVar1 = true;
+            goto LAB_0023c882;
+          }
+          uVar6 = *(undefined4 *)(iVar8 + 0x14);
+        }
+        (*pcVar3)(piVar9,uVar6);
+      }
+LAB_0023c882:
+      iVar10 = iVar10 + 1;
+    }
+    iVar11 = iVar11 + 1;
+  } while( true );
+}
+
+
+-- listing head --
+0023c77c mov.l r8,@-r15
+0023c77e mov.l r9,@-r15
+0023c780 mov.l r10,@-r15
+0023c782 mov.l r11,@-r15
+0023c784 mov.l r12,@-r15
+0023c786 mov.l r13,@-r15
+0023c788 mov.l r14,@-r15
+0023c78a sts.l pr,@-r15
+0023c78c add -0x4,r15
+0023c78e mov r15,r14
+0023c790 mov r4,r11
+0023c792 mov r5,r9
+0023c794 mov #0x0,r7
+0023c796 mov.l r7,@r14
+0023c798 mov r11,r1
+0023c79a add 0x50,r1
+0023c79c mov #-0x1,r2
+0023c79e mov.l r2,@r1
+0023c7a0 mov r11,r1
+0023c7a2 add 0x54,r1
+0023c7a4 mov.l r2,@r1
+0023c7a6 mov r11,r8
+0023c7a8 add 0x44,r8
+0023c7aa mov.l @r8,r1
+0023c7ac mov.l @(0x23c8c8,pc),r10
+0023c7ae cmp/eq r10,r1
+0023c7b0 bf 0x0023c7b8
+0023c7b2 mov.l @(0x23c8cc,pc),r1
+
+=== MoveSelectorH_CMenuSelector @ 0023c900 ===
+BODY [[0023c900, 0023c9f7]]
+
+void MoveSelectorH_CMenuSelector(int param_1,int param_2)
+
+{
+  int iVar1;
+  int iVar2;
+  int iVar3;
+  int *piVar4;
+  int iVar5;
+  int *piVar6;
+  int iVar7;
+  int iVar8;
+  
+  iVar8 = *(int *)(param_1 + 0x54) + param_2;
+  if (-1 < iVar8) {
+    piVar4 = (int *)(param_1 + 0x44);
+    piVar6 = (int *)*piVar4;
+    if (iVar8 < piVar6[1]) {
+      iVar1 = (*DAT_0023c9f8)(*(undefined4 *)(param_1 + 0x50));
+      iVar1 = *(int *)(piVar6[2] + (iVar1 + iVar8) * 4);
+      if ((iVar1 == 0) || (*(int *)(iVar1 + 4) == 0)) {
+        iVar3 = -1;
+        iVar1 = *piVar6 * 2;
+        iVar7 = 0;
+        if (0 < *piVar6) {
+          do {
+            iVar5 = *piVar4;
+            iVar2 = (*DAT_0023c9f8)(iVar7,*(undefined4 *)(iVar5 + 4));
+            iVar2 = *(int *)(*(int *)(iVar5 + 8) + (iVar2 + iVar8) * 4);
+            if ((iVar2 != 0) && (*(int *)(iVar2 + 4) != 0)) {
+              iVar2 = *(int *)(param_1 + 0x50) - iVar7;
+              if (iVar2 < 0) {
+                iVar2 = iVar7 - *(int *)(param_1 + 0x50);
+              }
+              if (iVar2 < iVar1) {
+                iVar3 = iVar7;
+                iVar1 = iVar2;
+              }
+            }
+            iVar7 = iVar7 + 1;
+          } while (iVar7 < *(int *)*piVar4);
+        }
+        if (iVar3 == -1) {
+          return;
+        }
+        *(int *)(param_1 + 0x50) = iVar3;
+        iVar7 = *(int *)(param_1 + 0x44);
+        iVar1 = (*DAT_0023c9f8)(iVar3,*(undefined4 *)(iVar7 + 4));
+        iVar1 = *(int *)(*(int *)(iVar7 + 8) + (iVar1 + iVar8) * 4);
+      }
+      *(int *)(param_1 + 0x54) = iVar8;
+      (*(code *)PTR_FUN_0023c9fc)(param_1,iVar1);
+      if (param_2 != 0) {
+        (*DAT_0023ca00)(2);
+      }
+    }
+  }
+  return;
+}
+
+
+-- listing head --
+0023c900 mov.l r8,@-r15
+0023c902 mov.l r9,@-r15
+0023c904 mov.l r10,@-r15
+0023c906 mov.l r11,@-r15
+0023c908 mov.l r12,@-r15
+0023c90a mov.l r13,@-r15
+0023c90c mov.l r14,@-r15
+0023c90e sts.l pr,@-r15
+0023c910 add -0x8,r15
+0023c912 mov r15,r14
+0023c914 mov r4,r10
+0023c916 mov r10,r1
+0023c918 add 0x54,r1
+0023c91a mov.l @r1,r12
+0023c91c mov.l r5,@r14
+0023c91e add r5,r12
+0023c920 cmp/pz r12
+0023c922 bf 0x0023c9e2
+0023c924 mov r10,r8
+0023c926 add 0x44,r8
+0023c928 mov.l @r8,r9
+0023c92a mov.l @(0x4,r9),r5
+0023c92c cmp/ge r5,r12
+0023c92e bt 0x0023c9e2
+0023c930 mov r10,r1
+0023c932 add 0x50,r1
+0023c934 mov.l @(0x23c9f8,pc),r0
+0023c936 jsr @r0
+
+=== MoveSelectorV_CMenuSelector @ 0023ca04 ===
+BODY [[0023ca04, 0023ca8d]]
+
+void MoveSelectorV_CMenuSelector(int param_1,int param_2)
+
+{
+  int iVar1;
+  int *piVar2;
+  int iVar3;
+  
+  iVar3 = *(int *)(param_1 + 0x50);
+  while( true ) {
+    iVar3 = iVar3 + param_2;
+    if (iVar3 < 0) {
+      return;
+    }
+    piVar2 = *(int **)(param_1 + 0x44);
+    if (*piVar2 <= iVar3) break;
+    iVar1 = (*DAT_0023ca90)(iVar3,piVar2[1]);
+    iVar1 = *(int *)((iVar1 + *(int *)(param_1 + 0x54)) * 4 + piVar2[2]);
+    if ((iVar1 != 0) && (*(int *)(iVar1 + 4) != 0)) {
+      *(int *)(param_1 + 0x50) = iVar3;
+      iVar1 = *(int *)(param_1 + 0x44);
+      iVar3 = (*DAT_0023ca90)(iVar3,*(undefined4 *)(iVar1 + 4));
+      (*(code *)PTR_FUN_0023ca94)
+                (param_1,*(undefined4 *)
+                          (*(int *)(iVar1 + 8) + (iVar3 + *(int *)(param_1 + 0x54)) * 4));
+      (*DAT_0023ca98)(2);
+      return;
+    }
+  }
+  return;
+}
+
+
+-- listing head --
+0023ca04 mov.l r8,@-r15
+0023ca06 mov.l r9,@-r15
+0023ca08 mov.l r10,@-r15
+0023ca0a mov.l r11,@-r15
+0023ca0c mov.l r12,@-r15
+0023ca0e mov.l r13,@-r15
+0023ca10 mov.l r14,@-r15
+0023ca12 sts.l pr,@-r15
+0023ca14 mov r15,r14
+0023ca16 mov r4,r10
+0023ca18 mov r5,r13
+0023ca1a mov r10,r1
+0023ca1c add 0x50,r1
+0023ca1e mov.l @r1,r9
+0023ca20 add r13,r9
+0023ca22 cmp/pz r9
+0023ca24 bf 0x0023ca7a
+0023ca26 mov r10,r12
+0023ca28 add 0x44,r12
+0023ca2a mov.l @r12,r8
+0023ca2c mov.l @r8,r1
+0023ca2e cmp/ge r1,r9
+0023ca30 bt 0x0023ca7a
+0023ca32 mov r9,r4
+0023ca34 mov.l @(0x23ca90,pc),r3
+0023ca36 jsr @r3
+0023ca38 _mov.l @(0x4,r8),r5
+0023ca3a mov r10,r11
+
+=== SetSelectedEntry_CMenuSelector @ 0023ca9c ===
+BODY [[0023ca9c, 0023cb79]]
+
+void FUN_0023ca9c(int param_1,int param_2)
+
+{
+  int iVar1;
+  undefined *puVar2;
+  
+  iVar1 = *(int *)(param_1 + 0x4c);
+  (*DAT_0023cb7c)(iVar1 + 0x20,*(undefined4 *)(iVar1 + 0x14));
+  if (*(undefined **)(param_1 + 0x4c) == PTR_DAT_0023cb80) {
+    puVar2 = PTR_LAB_0023cb8c;
+    if (*DAT_0023cb84 != 0) {
+      puVar2 = PTR_LAB_0023cb88;
+    }
+    (*(code *)PTR_FUN_0023cb90)(param_1 + 0x58,puVar2,param_1 + 0x14);
+  }
+  if (*(undefined **)(param_1 + 0x4c) == PTR_DAT_0023cb94) {
+    puVar2 = PTR_LAB_0023cba0;
+    if (*DAT_0023cb98 != 0) {
+      puVar2 = PTR_LAB_0023cb9c;
+    }
+    (*(code *)PTR_FUN_0023cb90)(DAT_0023cb7a + param_1,puVar2,param_1 + 0x14);
+  }
+  *(int *)(param_1 + 0x4c) = param_2;
+  (*DAT_0023cb7c)(param_2 + 0x20,*(undefined4 *)(param_2 + 0x18));
+  if (*(undefined **)(param_1 + 0x4c) == PTR_DAT_0023cb80) {
+    puVar2 = PTR_LAB_0023cba8;
+    if (*DAT_0023cb84 != 0) {
+      puVar2 = PTR_LAB_0023cba4;
+    }
+    (*(code *)PTR_FUN_0023cb90)(param_1 + 0x58,puVar2,param_1 + 0x14);
+  }
+  if (*(undefined **)(param_1 + 0x4c) == PTR_DAT_0023cb94) {
+    puVar2 = PTR_LAB_0023cbb0;
+    if (*DAT_0023cb98 != 0) {
+      puVar2 = PTR_LAB_0023cbac;
+    }
+    (*(code *)PTR_FUN_0023cb90)(param_1 + DAT_0023cb7a,puVar2,param_1 + 0x14);
+  }
+  return;
+}
+
+
+-- listing head --
+0023ca9c mov.l r8,@-r15
+0023ca9e mov.l r9,@-r15
+0023caa0 mov.l r10,@-r15
+0023caa2 mov.l r14,@-r15
+0023caa4 sts.l pr,@-r15
+0023caa6 mov r15,r14
+0023caa8 mov r4,r9
+0023caaa mov r9,r8
+0023caac add 0x4c,r8
+0023caae mov.l @r8,r4
+0023cab0 mov r5,r10
+0023cab2 mov.l @(0x14,r4),r5
+0023cab4 mov.l @(0x23cb7c,pc),r1
+0023cab6 jsr @r1
+0023cab8 _add 0x20,r4
+0023caba mov.l @r8,r2
+0023cabc mov.l @(0x23cb80,pc),r1
+0023cabe cmp/eq r1,r2
+0023cac0 bf 0x0023cae0
+0023cac2 mov.l @(0x23cb84,pc),r1
+0023cac4 mov.l @r1,r1
+0023cac6 tst r1,r1
+0023cac8 bt 0x0023cad2
+0023caca mov r9,r6
+0023cacc mov.l @(0x23cb88,pc),r5
+0023cace bra 0x0023cad8
+0023cad0 _add 0x14,r6
+0023cad2 mov r9,r6
+
+=== SelectMenuEntry_CMenuSelector @ 0023cbc4 ===
+BODY [[0023cbc4, 0023cc09] [0023cc1a, 0023cd23]]
+
+int SelectMenuEntry_CMenuSelector(int param_1)
+
+{
+  int *piVar1;
+  int iVar2;
+  code *pcVar3;
+  undefined4 uVar4;
+  undefined4 uVar5;
+  undefined *puVar6;
+  int iVar7;
+  int *piVar8;
+  
+  iVar7 = *(int *)(param_1 + 0x44);
+  iVar2 = (*DAT_0023cd28)(*(undefined4 *)(param_1 + 0x50),*(undefined4 *)(iVar7 + 4));
+  piVar1 = DAT_0023cd68;
+  piVar8 = DAT_0023cd58;
+  iVar2 = (iVar2 + *(int *)(param_1 + 0x54)) * 4;
+  switch(**(undefined4 **)(*(int *)(iVar7 + 8) + iVar2)) {
+  case 0:
+    (*(code *)PTR_FUN_0023cd3c)(*(undefined4 *)(*(int *)(param_1 + 0x4c) + 0xc));
+    pcVar3 = DAT_0023cd48;
+    break;
+  case 1:
+    if (**(char **)PTR_DAT_0023cd2c == '2') {
+      (*DAT_0023cd34)(PTR_s_DISK_2_0023cd30);
+      if (*DAT_0023cd38 == '\0') {
+        (*(code *)PTR_FUN_0023cd3c)(4);
+        pcVar3 = DAT_0023cd48;
+        break;
+      }
+      uVar4 = *(undefined4 *)(*(int *)(param_1 + 0x4c) + 0x10);
+      uVar5 = 0x12;
+    }
+    else {
+      (*DAT_0023cd34)(PTR_s_DISK_1_0023cd40);
+      uVar5 = *(undefined4 *)(*(int *)(param_1 + 0x4c) + 0xc);
+      uVar4 = *(undefined4 *)(*(int *)(param_1 + 0x4c) + 0x10);
+    }
+    (*(code *)PTR_FUN_0023cd44)(uVar4,uVar5);
+    pcVar3 = DAT_0023cd48;
+    break;
+  case 2:
+    puVar6 = PTR_DAT_0023cd4c;
+    goto LAB_0023cc9e;
+  case 3:
+    puVar6 = PTR_DAT_0023cd50;
+LAB_0023cc9e:
+    iVar2 = (*(code *)PTR_FUN_0023cd54)(param_1,puVar6);
+    return iVar2;
+  case 4:
+    if (*DAT_0023cd58 == 0) {
+      (*(code *)PTR_FUN_0023cd60)(param_1 + 0x58,PTR_LAB_0023cd64,param_1 + 0x14);
+      iVar2 = 1;
+    }
+    else {
+      (*(code *)PTR_FUN_0023cd60)(param_1 + 0x58,PTR_LAB_0023cd5c,param_1 + 0x14);
+      iVar2 = 0;
+    }
+    goto LAB_0023cd0e;
+  case 5:
+    piVar8 = piVar1;
+    if (*DAT_0023cd68 == 0) {
+      (*(code *)PTR_FUN_0023cd60)(param_1 + DAT_0023cd24,PTR_LAB_0023cd74,param_1 + 0x14);
+      *DAT_0023cd70 = 0x80;
+      iVar2 = 1;
+    }
+    else {
+      (*(code *)PTR_FUN_0023cd60)(param_1 + DAT_0023cd24,PTR_LAB_0023cd6c,param_1 + 0x14);
+      *DAT_0023cd70 = 0;
+      iVar2 = 0;
+    }
+LAB_0023cd0e:
+    *piVar8 = iVar2;
+    param_1 = 2;
+    pcVar3 = DAT_0023cd78;
+    break;
+  case 6:
+    (*(code *)PTR_FUN_0023cd44)
+              (*(undefined4 *)(*(int *)(param_1 + 0x4c) + 0x10),
+               *(undefined4 *)(*(int *)(param_1 + 0x4c) + 0xc));
+    pcVar3 = DAT_0023cd48;
+    break;
+  default:
+    goto switchD_0023cc06_default;
+  }
+  iVar2 = (*pcVar3)(param_1);
+switchD_0023cc06_default:
+  return iVar2;
+}
+
+
+-- listing head --
+0023cbc4 mov.l r8,@-r15
+0023cbc6 mov.l r9,@-r15
+0023cbc8 mov.l r14,@-r15
+0023cbca sts.l pr,@-r15
+0023cbcc mov r4,r9
+0023cbce mov r9,r1
+0023cbd0 add 0x44,r1
+0023cbd2 mov.l @r1,r8
+0023cbd4 mov r9,r1
+0023cbd6 add 0x50,r1
+0023cbd8 mov.l @r1,r4
+0023cbda mov r15,r14
+0023cbdc mov.l @(0x23cd28,pc),r0
+0023cbde jsr @r0
+0023cbe0 _mov.l @(0x4,r8),r5
+0023cbe2 mov r9,r1
+0023cbe4 add 0x54,r1
+0023cbe6 mov.l @r1,r1
+0023cbe8 add r1,r0
+0023cbea mov.l @(0x8,r8),r1
+0023cbec shll2 r0
+0023cbee mov.l @(r0,r1),r1
+0023cbf0 mov.l @r1,r2
+0023cbf2 mov #0x6,r1
+0023cbf4 cmp/hi r1,r2
+0023cbf6 bf 0x0023cbfc
+0023cbf8 bra 0x0023cd18
+0023cbfa _nop
+
+=== BackTrakScreen_CMenuSelector @ 0023cd7c ===
+BODY [[0023cd7c, 0023cd9b]]
+
+void BackTrakScreen_CMenuSelector(int param_1)
+
+{
+  if (*(int *)(*(int *)(param_1 + 0x44) + 0xc) != 0) {
+    (*(code *)PTR_FUN_0023cd9c)();
+  }
+  return;
+}
+
+
+-- listing head --
+0023cd7c mov.l r14,@-r15
+0023cd7e sts.l pr,@-r15
+0023cd80 mov r4,r1
+0023cd82 add 0x44,r1
+0023cd84 mov.l @r1,r1
+0023cd86 mov.l @(0xc,r1),r5
+0023cd88 mov r15,r14
+0023cd8a tst r5,r5
+0023cd8c bt 0x0023cd94
+0023cd8e mov.l @(0x23cd9c,pc),r1
+0023cd90 jsr @r1
+0023cd92 _nop
+0023cd94 mov r14,r15
+0023cd96 lds.l @r15+,pr
+0023cd98 rts
+0023cd9a _mov.l @r15+,r14
+0023ce9c mov.l r8,@-r15
+0023ce9e mov.l r9,@-r15
+0023cea0 mov.l r14,@-r15
+0023cea2 sts.l pr,@-r15
+0023cea4 mov r15,r14
+0023cea6 mov r4,r8
+0023cea8 mov.l @(0x23ced4,pc),r0
+0023ceaa mov.l @(0x23ced8,pc),r6
+0023ceac mov.w @(0x23ced0,pc),r5
+0023ceae jsr @r0
+0023ceb0 _mov #0x44,r4
+0023ceb2 mov r0,r9
+
+=== Brain_CMenuSelector @ 0023cda0 ===
+BODY [[0023cda0, 0023ce61]]
+
+void Brain_CMenuSelector(undefined4 param_1)
+
+{
+  undefined *puVar1;
+  char *pcVar2;
+  undefined *puVar3;
+  uint uVar4;
+  code *pcVar5;
+  undefined4 uVar6;
+  byte *pbVar7;
+  
+  if (*DAT_0023ce64 == 0) {
+    (*(code *)PTR_DoLeagal_CMenuSelector_0023ce68)();
+  }
+  if (*DAT_0023ce6c != 0) {
+    (*(code *)PTR_FUN_0023ce70)(param_1);
+  }
+  (*(code *)PTR_FUN_0023ce78)(param_1,PTR_DAT_0023ce74);
+  (*(code *)PTR_FUN_0023ce7c)(0);
+  puVar1 = PTR_MoveSelectorH_CMenuSelector_0023ce80;
+  (*(code *)PTR_MoveSelectorH_CMenuSelector_0023ce80)(param_1,0);
+  (*DAT_0023ce84)();
+  puVar3 = PTR_MoveSelectorV_CMenuSelector_0023ce8c;
+  pcVar2 = DAT_0023ce88;
+  pbVar7 = (byte *)(DAT_0023ce88 + 1);
+  do {
+    while( true ) {
+      (*DAT_0023ce90)();
+      (*DAT_0023ce84)();
+      uVar4 = (uint)*pcVar2;
+      if ((uVar4 & 0x40) == 0) break;
+      uVar6 = 0xffffffff;
+LAB_0023ce16:
+      (*(code *)puVar1)(param_1,uVar6);
+    }
+    if (((int)DAT_0023ce62 & uVar4) != 0) {
+      uVar6 = 1;
+      goto LAB_0023ce16;
+    }
+    if ((uVar4 & 0x10) == 0) {
+      if ((uVar4 & 0x20) != 0) {
+        uVar6 = 1;
+        goto LAB_0023ce34;
+      }
+      pcVar5 = (code *)PTR_SelectMenuEntry_CMenuSelector_0023ce94;
+      if ((((uVar4 & 0xe) != 0) ||
+          (pcVar5 = (code *)PTR_BackTrakScreen_CMenuSelector_0023ce98, (uVar4 & 1) != 0)) ||
+         ((*pbVar7 & 0x70) != 0)) {
+        (*pcVar5)(param_1);
+      }
+    }
+    else {
+      uVar6 = 0xffffffff;
+LAB_0023ce34:
+      (*(code *)puVar3)(param_1,uVar6);
+    }
+  } while( true );
+}
+
+
+-- listing head --
+0023cda0 mov.l r8,@-r15
+0023cda2 mov.l r9,@-r15
+0023cda4 mov.l r10,@-r15
+0023cda6 mov.l r11,@-r15
+0023cda8 mov.l r12,@-r15
+0023cdaa mov.l r14,@-r15
+0023cdac sts.l pr,@-r15
+0023cdae mov r15,r14
+0023cdb0 mov.l @(0x23ce64,pc),r1
+0023cdb2 mov.l @r1,r1
+0023cdb4 mov r4,r9
+0023cdb6 tst r1,r1
+0023cdb8 bf 0x0023cdc0
+0023cdba mov.l @(0x23ce68,pc),r1
+0023cdbc jsr @r1
+0023cdbe _nop
+0023cdc0 mov.l @(0x23ce6c,pc),r1
+0023cdc2 mov.l @r1,r1
+0023cdc4 tst r1,r1
+0023cdc6 bt 0x0023cdce
+0023cdc8 mov.l @(0x23ce70,pc),r1
+0023cdca jsr @r1
+0023cdcc _mov r9,r4
+0023cdce mov.l @(0x23ce74,pc),r5
+0023cdd0 mov.l @(0x23ce78,pc),r1
+0023cdd2 jsr @r1
+0023cdd4 _mov r9,r4
+0023cdd6 mov.l @(0x23ce7c,pc),r0
+
+=== BackupError_CMenuSelector @ 0023c4a0 ===
+BODY [[0023c4a0, 0023c515]]
+
+void FUN_0023c4a0(int param_1)
+
+{
+  undefined4 local_78 [13];
+  int iStack_44;
+  int local_1c;
+  int local_18;
+  int local_14;
+  
+  local_78[0] = 0;
+  local_14 = 0;
+  (*(code *)PTR_FUN_0023c520)(local_78,PTR_LAB_0023c51c,param_1 + 0x14);
+  iStack_44 = (int)DAT_0023c516;
+  (*DAT_0023c524)(param_1,(int)DAT_0023c518);
+  while ((*DAT_0023c528 & 0xe) == 0) {
+    (*DAT_0023c52c)();
+  }
+  if (local_14 != 0) {
+    *(int *)(local_18 + 0x5c) = local_1c;
+    *(int *)(local_1c + 0x60) = local_18;
+  }
+  return;
+}
+
+
+-- listing head --
+0023c4a0 mov.l r8,@-r15
+0023c4a2 mov.l r9,@-r15
+0023c4a4 mov.l r14,@-r15
+0023c4a6 sts.l pr,@-r15
+0023c4a8 add -0x68,r15
+0023c4aa mov r15,r14
+0023c4ac mov r4,r8
+0023c4ae mov #0x0,r2
+0023c4b0 mov.l r2,@r14
+0023c4b2 mov r14,r1
+0023c4b4 add 0x64,r1
+0023c4b6 mov.l r2,@r1
+0023c4b8 mov r8,r6
+0023c4ba add 0x14,r6
+0023c4bc mov.l @(0x23c51c,pc),r5
+0023c4be mov.l @(0x23c520,pc),r1
+0023c4c0 jsr @r1
+0023c4c2 _mov r14,r4
+0023c4c4 mov.w @(0x23c516,pc),r1
+0023c4c6 mov.l r1,@(0x34,r14)
+0023c4c8 mov.w @(0x23c518,pc),r5
+0023c4ca mov.l @(0x23c524,pc),r1
+0023c4cc jsr @r1
+0023c4ce _mov r8,r4
+0023c4d0 mov r14,r9
+0023c4d2 add 0x60,r9
+0023c4d4 mov r14,r8
+0023c4d6 add 0x5c,r8
+
+=== CreateJoyPad @ 00239f00 ===
+BODY [[00239f00, 00239f35]]
+
+int CreateJoyPad(void)
+
+{
+  int iVar1;
+  
+  iVar1 = (*DAT_00239f3c)(0x40,(int)DAT_00239f36,DAT_00239f38);
+  *(undefined4 *)(iVar1 + 0x30) = 0;
+  (*DAT_00239f44)(iVar1,PTR_DAT_00239f40);
+  (*DAT_00239f48)();
+  *(undefined4 *)(iVar1 + 0x3c) = 1;
+  return iVar1;
+}
+
+
+-- listing head --
+00239f00 mov.l r8,@-r15
+00239f02 mov.l r14,@-r15
+00239f04 sts.l pr,@-r15
+00239f06 mov r15,r14
+00239f08 mov.l @(0x239f38,pc),r6
+00239f0a mov.w @(0x239f36,pc),r5
+00239f0c mov.l @(0x239f3c,pc),r0
+00239f0e jsr @r0
+00239f10 _mov #0x40,r4
+00239f12 mov r0,r8
+00239f14 mov #0x0,r1
+00239f16 mov.l r1,@(0x30,r8)
+00239f18 mov.l @(0x239f40,pc),r5
+00239f1a mov.l @(0x239f44,pc),r1
+00239f1c jsr @r1
+00239f1e _mov r8,r4
+00239f20 mov.l @(0x239f48,pc),r1
+00239f22 jsr @r1
+00239f24 _nop
+00239f26 mov #0x1,r1
+00239f28 mov.l r1,@(0x3c,r8)
+00239f2a mov r14,r15
+00239f2c lds.l @r15+,pr
+00239f2e mov.l @r15+,r14
+00239f30 mov r8,r0
+00239f32 rts
+00239f34 _mov.l @r15+,r8
+00239fc4 mov.l r8,@-r15
+
+=== endgame_text_start @ 002398c0 ===
+BODY [[002398c0, 002398c1]]
+
+/* WARNING: Control flow encountered bad instruction data */
+
+void endgame_text_start(void)
+
+{
+                    /* WARNING: Bad instruction - Truncating control flow here */
+  halt_baddata();
+}
+
+
+-- listing head --
+002398c0 xtrct r2,r13
+002398c4 mov.l r8,@-r15
+002398c6 mov.l r9,@-r15
+002398c8 mov.l r14,@-r15
+002398ca sts.l pr,@-r15
+002398cc mov r15,r14
+002398ce mov r4,r8
+002398d0 mov.l @(0x2398fc,pc),r0
+002398d2 mov.l @(0x239900,pc),r6
+002398d4 mov.w @(0x2398f8,pc),r5
+002398d6 jsr @r0
+002398d8 _mov #0x50,r4
+002398da mov r0,r9
+002398dc mov.l @(0x239904,pc),r1
+002398de mov.l @(0x239908,pc),r5
+002398e0 jsr @r1
+002398e2 _mov r9,r4
+002398e4 mov.l @(0x23990c,pc),r0
+002398e6 mov r8,r5
+002398e8 jsr @r0
+002398ea _mov r9,r4
+002398ec mov r14,r15
+002398ee lds.l @r15+,pr
+002398f0 mov.l @r15+,r14
+002398f2 mov.l @r15+,r9
+002398f4 rts
+002398f6 _mov.l @r15+,r8
+00239910 mov.l r14,@-r15
+
+=== screen data words ===
+StartScreen @ 0023e0f4: 00000002 00000001 0023E0EC 00000000 00000000 00000001 00000004 00000004
+LevelSelectScreen @ 0023f4a8: 00000012 00000002 0023F418 0023E0F4 00000003 00000001 00000003 00000000
+LevelSelectEntry @ 0023f4b8: 00000003 00000001 00000003 00000000 00000000 00235614 00235DE4 002144C8
+OptionsScreen @ 0023f650: 00000003 00000001 0023F644 0023E0F4 00000000 00000000OptionsScreen @ 0023f650: UNMAPPED

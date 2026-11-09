@@ -1,0 +1,50 @@
+=== 14DRUM 00249770 ===
+
+void fmv_brain_14DRUM(int param_1)
+
+{
+  code *pcVar1;
+  int iVar2;
+  
+  if (*(int *)PTR_DAT_0024982c == 0) {
+    *(undefined4 *)PTR_DAT_0024982c = 1;
+    (*DAT_00249830)(0xfffffffb);
+    *DAT_00249834 = 0;
+    pcVar1 = DAT_00249838;
+    (*DAT_00249838)(param_1,0x32);
+    iVar2 = *DAT_0024983c;
+    if (iVar2 != 0) {
+      (**(code **)(iVar2 + 0x34))(iVar2,DAT_00249840,0,0);
+    }
+    (*pcVar1)(param_1,0xc);
+    (*DAT_00249844)();
+    if (*(int *)(param_1 + 0x4c) == -1) {
+      iVar2 = *(int *)(param_1 + 0x48);
+      pcVar1 = DAT_0024984c;
+      if (iVar2 == -1) {
+        iVar2 = *(int *)(param_1 + 0x44);
+        if (iVar2 == 1) {
+          (*DAT_00249848)(0x1c,3);
+          return;
+        }
+        if (iVar2 == 0) {
+          iVar2 = 0xf;
+          pcVar1 = DAT_00249850;
+        }
+        else {
+          if (iVar2 != 2) {
+            return;
+          }
+          iVar2 = 3;
+        }
+      }
+      (*pcVar1)(iVar2);
+    }
+    else {
+      (*DAT_00249848)(*(int *)(param_1 + 0x4c),*(undefined4 *)(param_1 + 0x48));
+    }
+  }
+  return;
+}
+
+

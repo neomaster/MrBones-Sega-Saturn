@@ -1,0 +1,9 @@
+# MAUSO: decisão de carregamento de FMV
+
+Fonte: `/05MAUSO/03CODE`, disco 1, SHA-256 `013a6edf094b91c57d39a2390bd79a4f2056307958802fc3a7d92004cbe64d12`. O binário bruto foi importado no Ghidra 12.1.4 com `SuperH:BE:32:SH-2` e base `0x00232000`; os endereços de funções foram obtidos de `MAUSO/A.MAP`. A primeira importação, em `0x00200000`, gerou instruções inválidas e foi descartada. Descompilação: [ghidra-fmv-mauso.txt](ghidra-fmv-mauso.txt).
+
+- `CEndLevel::Brain` em `0x0029d918`, quando o campo `+0x4c` e o campo `+0x48` são `-1` e o resultado em `+0x44` é 0, seleciona o diretório 6 e chama o endereço armazenado no literal `0x0029da44`. O literal contém `0x0020b4ac`, identificado no mapa do carregador como `_LoadLevel`.
+- Se o campo `+0x4c` for diferente de `-1`, a mesma função passa os campos `+0x4c` e `+0x48` ao endereço no literal `0x0029da40`, cujo valor é `0x0020b714`, `_PlayNewDuckMovie` no mapa do carregador. Isso prova dois caminhos distintos na função, não quais valores os chamadores realmente configuram durante uma partida.
+- `_LoadNewDuckMovie` em `0x0029da8c` cria o objeto de término e chama `SetNewDuckMovie` em `0x0029d904`, que define os campos `+0x4c` e `+0x48`. A busca estática do Ghidra não encontrou referência direta ao endereço `0x0029da8c`; busca adicional no binário por literal de 32 bits e instruções SH-2 BRA/BSR alinhadas também não encontrou esse alvo. Chamadas indiretas, dados e código não analisados não estão descartados.
+
+No caminho padrão da função, MAUSO carrega o diretório 6 diretamente; não se pode concluir apenas pela existência de `/06VALLEY/20AVI` que ele deva ser exibido nessa transição. A ausência de referências estáticas para o invólucro não comprova que o vídeo nunca seja chamado em tempo de execução. A etapa seguinte é acompanhar os campos e os alvos no Ymir ou analisar outros chamadores concretos antes de mudar a sequência do port.

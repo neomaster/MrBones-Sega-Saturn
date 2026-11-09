@@ -1,0 +1,73 @@
+=== 26LAFF 002951e8 ===
+
+void fmv_brain_26LAFF(int param_1)
+
+{
+  int iVar1;
+  code *pcVar2;
+  undefined4 uVar3;
+  int iVar4;
+  
+  if (*(int *)PTR_DAT_002952ec != 0) {
+    return;
+  }
+  *(undefined4 *)PTR_DAT_002952ec = 1;
+  (*DAT_002952f0)(0xfffffffb);
+  *DAT_002952f4 = 0;
+  pcVar2 = DAT_002952f8;
+  if (*(int *)(param_1 + 0x44) == 0) {
+    for (iVar4 = 0; iVar4 < 8; iVar4 = iVar4 + 1) {
+      do {
+        iVar1 = (*pcVar2)(iVar4);
+      } while (iVar1 != 0);
+    }
+    uVar3 = 0x18;
+  }
+  else {
+    if (*(int *)(param_1 + 0x44) != 1) goto LAB_0029525c;
+    for (iVar4 = 0; iVar4 < 8; iVar4 = iVar4 + 1) {
+      do {
+        iVar1 = (*pcVar2)(iVar4);
+      } while (iVar1 != 0);
+    }
+    uVar3 = 0x19;
+  }
+  (*DAT_002952fc)(uVar3);
+LAB_0029525c:
+  pcVar2 = DAT_00295300;
+  (*DAT_00295300)(param_1,0x32);
+  iVar4 = *DAT_00295304;
+  if (iVar4 != 0) {
+    (**(code **)(iVar4 + 0x34))(iVar4,DAT_00295308,0,0);
+  }
+  (*pcVar2)(param_1,0xc);
+  (*DAT_0029530c)();
+  if (*(int *)(param_1 + 0x4c) == -1) {
+    iVar4 = *(int *)(param_1 + 0x48);
+    pcVar2 = DAT_00295314;
+    if (iVar4 == -1) {
+      iVar4 = *(int *)(param_1 + 0x44);
+      if (iVar4 == 1) {
+        (*DAT_00295310)(0x1c,3);
+        return;
+      }
+      if (iVar4 == 0) {
+        iVar4 = 0x1b;
+        pcVar2 = DAT_00295318;
+      }
+      else {
+        if (iVar4 != 2) {
+          return;
+        }
+        iVar4 = 3;
+      }
+    }
+    (*pcVar2)(iVar4);
+  }
+  else {
+    (*DAT_00295310)(*(int *)(param_1 + 0x4c),*(undefined4 *)(param_1 + 0x48));
+  }
+  return;
+}
+
+

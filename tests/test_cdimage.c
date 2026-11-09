@@ -2,6 +2,8 @@
  * without needing any real disc. */
 #include "core/cdimage.h"
 #include "core/identity.h"
+#include "core/resource.h"
+#include "core/runway_assets.h"
 #include "core/sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +150,21 @@ int main(void) {
     CHECK(cd_iso_read(&cd, &e, 2040, buf, 20) == 20 && !memcmp(buf, code + 2040, 20));   /* crosses a sector */
     CHECK(cd_iso_read(&cd, &e, 2990, buf, 100) == 10);                                   /* clamped to size */
     CHECK(cd_iso_read(&cd, &e, 3000, buf, 10) == 0);
+    void *loaded = NULL;
+    size_t loaded_size = 0;
+    CHECK(resource_load(&cd, "/04RUNWAY/03CODE", &loaded, &loaded_size) == 0);
+    CHECK(loaded && loaded_size == sizeof code && !memcmp(loaded, code, sizeof code));
+    free(loaded);
+    CHECK(resource_load(&cd, "/04RUNWAY/20AVI", &loaded, &loaded_size) == 0);
+    CHECK(loaded && loaded_size == 0);
+    free(loaded);
+    CHECK(resource_load(&cd, "/missing", &loaded, &loaded_size) != 0 && !loaded && !loaded_size);
+    CHECK(resource_load(&cd, "/04RUNWAY", &loaded, &loaded_size) != 0 && !loaded && !loaded_size);
+    runway_assets assets;
+    CHECK(runway_assets_load(&cd, &assets) != 0);
+    CHECK(!assets.title && !assets.textures && !assets.title_size && !assets.textures_size);
+    CHECK(!assets.code && !assets.sound && !assets.code_size && !assets.sound_size);
+    runway_assets_free(&assets);
     walkres w = {0, "", ""};
     CHECK(cd_iso_walk(&cd, wcb, &w) == 0 && w.n == 4);
     CHECK(!strcmp(w.order, "/04RUNWAY,/04RUNWAY/03CODE,/04RUNWAY/20AVI,/02,"));

@@ -1,0 +1,54 @@
+# §24 rhythm tables + enemy/boss objs — MAP + 03CODE static extract
+# Host: rhythm_table.c / stage_enemy.c → runway_phase / sidescrl_phase / special_phase
+# Extracted 2026-11-07 from disc ISO via tools/ghidra-work/extract.exe (base VA 0x00232000)
+
+## DRUM (/14DRUM/03CODE 291020 B)
+- Objs: drum.o, drums.o, drumtab.o, dbones.o, cable.o, jacob.o, branch.o
+- _DrumSequence @ 0x0026b58c = start of drumtab.o .data (size 0x4ae0)
+- Record: 16-byte BE32 {time, kind 0..3, flags, meta}
+- kind → N/S/E/W pads (SouthDrum@235220, NorthCable/EastCable/WestCable)
+- ~1197 notes; median Δtime=7; host period 12 (§20)
+- Host embeds first 48 notes in rhythm_table.c
+
+## GUITAR (/07GUITAR/03CODE 374916 B)
+- Objs: guitar.o, gbones.o, seaskel.o, ltables.o, …
+- _guitar @ 0x00232820 (datao\GUITAR.O)
+- guitar.o .data @ 0x0028460c size 0x28
+- _SequenceTable @ 0x0028c3ac header BE32 {5,6,0xA,0xC,…} phrase lengths
+- CGBones StartLick@2611a0 StopLick@2612e8 Brain@261368
+- CSeaSkel Brain@261854; seaskel .data @283c34 (anim indices, not note grid)
+- Host: period 16; kinds remapped from DrumSequence onto beat*16 grid
+
+## RUNWAY enemies (/04RUNWAY/03CODE)
+- poofs.o .text @26ace8: CreateCBluePoof@26acf0 Brain CRedPoof@26af48 / CBluePoof@26adf0
+- lord.o  .text @26b034: CreateCLord@26b038 Brain@26b410 Gang@26b388
+- gang.o  .text @26b440: CreateCGangMember@26b448 CheckObstacle@26bbac
+  Throw@26c32c CheckForBonesHit@26c510 Start@26c890 Brain@26c934
+- tbones.o .text @26d89c: CThrown CheckForHit@26da50 range DAT@26daa6 = 0xB6DB
+  FlyBrick@26db8c Brain@26dd34
+- gang.o .data @28db68 (anim ptrs); tbones .data @28dc50
+
+## GENROOM (/25GENRM Disc2)
+- redmov@23c48c blumov@23c920 blues@23cd20 reds@23d004 zap@23d8c8 poofs@251320
+- CreateCRed@23d2a4 Brain@23d87c CheckForZap@23d448 BigCheckForBones@23d400
+- CreateCBlue@23cd28 Brain@23cfa4 CheckForBones@23ce88
+- _NbZap@2673d4 _TimingZapMax@2673d8(=0x10) _TimingZap@2673dc
+
+## FINALE (/27FINALE Disc2 CODE 600000)
+- fbones@28d004 Brain CFBones@28d310 BoltHit@28d390
+- ring.o: CreateCRing@28d468 ShootRing@28d700 Brain@28d5f4
+- bolt.o: CreateCBolt@28dc34 Brain@28dd60
+- _RingDefinitionTable @ 0x002b0158 size 0x20bc (signed BE32 offset pairs)
+- Host: first 24 words as ring spawn offsets; PRESENT steps fx without skel damage
+
+## BIGBONES (/16BIGBNS)
+- pan_coll + SkelBar; host lord/gang/poof soft set via stage_enemies_init_special
+
+## BATWOOD* sidescrl
+- poofs.o + CBlueSparkle Brain; denser enemy set on BAT1–3
+
+## Host wiring
+- rhythm_table_for_stage → special_phase RHYTHM (kind→A/B/C/RIGHT)
+- stage_enemies_init_runway → runway_phase (+ throws into runway_hazards)
+- stage_enemies_init_sidescrl → sidescrl_phase (replaces soft px bands)
+- stage_enemies_init_special → GENRM/BIGBNS action hits; FINALE PRESENT fx

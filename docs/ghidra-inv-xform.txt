@@ -1,0 +1,85 @@
+
+=== InvXform_2078C0 @ 002078c0 ===
+BODY [[002078c0, 002078fd]]
+
+int * InvXform_2078C0(int param_1,int param_2,int param_3)
+
+{
+  int *piVar1;
+  int iVar2;
+  int iVar3;
+  int iVar4;
+  
+  piVar1 = DAT_00207910;
+  iVar2 = *DAT_00207900;
+  iVar3 = *DAT_00207904;
+  iVar4 = *DAT_00207908;
+  DAT_00207910[2] = (param_3 - iVar4) * 0x100;
+  iVar4 = *(int *)(((uint)(param_3 - iVar4) >> 8) * 4 + DAT_00207914);
+  piVar1[3] = iVar4;
+  *piVar1 = (int)(short)((uint)(iVar4 * (param_1 - iVar2)) >> 0x10);
+  piVar1[1] = (int)(short)((uint)(iVar4 * (param_2 - iVar3)) >> 0x10);
+  return piVar1;
+}
+
+
+
+=== WorldXformPool @ 00206b10 ===
+BODY [[00206b10, 00206b15]]
+
+/* WARNING: Control flow encountered bad instruction data */
+
+void WorldXformPool(void)
+
+{
+                    /* WARNING: Bad instruction - Truncating control flow here */
+  halt_baddata();
+}
+
+
+
+=== WorldXform_206AB0 @ 00206ab0 ===
+BODY [[00206ab0, 00206b0d]]
+
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+int * WorldXform_206AB0(undefined4 param_1,undefined4 param_2,int param_3)
+
+{
+  int *piVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  int iVar4;
+  int iVar5;
+  
+  puVar2 = PTR_FUN_00206b18;
+  piVar1 = piRam00206b14;
+  iVar5 = *_WorldXformPool;
+  iVar4 = (*(code *)PTR_FUN_00206b18)(param_1,param_3 - iVar5);
+  puVar3 = PTR_FUN_00206b1c;
+  iVar4 = -iVar4;
+  (*(code *)PTR_FUN_00206b1c)();
+  *piVar1 = iVar4 + *DAT_00206b20;
+  iVar4 = (*(code *)puVar2)(param_2,param_3 - iVar5);
+  iVar4 = -iVar4;
+  (*(code *)puVar3)();
+  piVar1[1] = iVar4 + *DAT_00206b24;
+  piVar1[2] = param_3;
+  return piVar1;
+}
+
+
+
+=== pool 0x206b10 ===
+0x00206B10 = 0x002297B0
+0x00206B14 = 0x00220108
+0x00206B18 = 0x00213EDC
+0x00206B1C = 0x00213EC4
+0x00206B20 = 0x00228FA4
+0x00206B24 = 0x002297B4
+0x00206B28 = 0x2F862F96
+0x00206B2C = 0x2FA62FB6
+0x00206B30 = 0x2FC62FE6
+0x00206B34 = 0x4F226EF3
+0x00206B38 = 0x6B536863
+0x00206B3C = 0xDC10DA11

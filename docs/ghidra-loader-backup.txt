@@ -1,0 +1,491 @@
+Program 02LOADER.bin language SuperH:BE:32:SH-2 imagebase 00000000
+
+=== LoadFirstLevel @ 0020b91c ===
+BODY [[0020b91c, 0020b993]]
+
+void LoadFirstLevel(void)
+
+{
+  undefined1 *puVar1;
+  code *in_r0;
+  undefined4 uVar2;
+  int iVar3;
+  undefined1 *puVar4;
+  undefined1 *puVar5;
+  int iVar6;
+  
+  uVar2 = (*in_r0)();
+  *(undefined4 *)PTR_DAT_0020b9b4 = uVar2;
+  (*(code *)PTR_FUN_0020b9b8)();
+  iVar3 = (*(code *)PTR_FUN_0020b9bc)();
+  if (iVar3 != 0) {
+    puVar5 = DAT_0020b9c0 + 0x1b;
+    puVar4 = DAT_0020b9c0;
+    do {
+      *puVar4 = 0;
+      puVar1 = DAT_0020b9c0;
+      puVar4 = puVar4 + 1;
+    } while ((int)puVar4 <= (int)puVar5);
+    DAT_0020b9c0[4] = 1;
+    *(undefined4 *)(puVar1 + 0x1c) = 3;
+    *(undefined4 *)(puVar1 + 0x20) = 0;
+  }
+  (*(code *)PTR_FUN_0020b9c4)();
+  iVar3 = *DAT_0020b9c8;
+  if (iVar3 == 0) {
+    if (DAT_0020b9c8[-1] != 3) {
+      (*(code *)PTR_FUN_0020b9d0)(DAT_0020b9c8[-1]);
+      return;
+    }
+    iVar6 = 3;
+    iVar3 = 0x1d;
+  }
+  else {
+    iVar6 = DAT_0020b9c8[-1];
+  }
+  (*(code *)PTR_FUN_0020b9cc)(iVar3,iVar6);
+  return;
+}
+
+
+-- listing head --
+0020b91c jsr @r0
+0020b91e _nop
+0020b920 mov.l @(0x20b9b4,pc),r1
+0020b922 mov.l r0,@r1
+0020b924 mov.l @(0x20b9b8,pc),r1
+0020b926 jsr @r1
+0020b928 _nop
+0020b92a mov.l @(0x20b9bc,pc),r0
+0020b92c jsr @r0
+0020b92e _nop
+0020b930 tst r0,r0
+0020b932 bt 0x0020b956
+0020b934 mov #0x0,r3
+0020b936 mov.l @(0x20b9c0,pc),r1
+0020b938 mov r1,r2
+0020b93a add 0x1b,r2
+0020b93c mov.b r3,@r1
+0020b93e add 0x1,r1
+0020b940 cmp/gt r2,r1
+0020b942 bf 0x0020b93c
+0020b944 mov.l @(0x20b9c0,pc),r2
+0020b946 mov r2,r3
+0020b948 add 0x4,r3
+0020b94a mov #0x1,r1
+0020b94c mov.b r1,@r3
+0020b94e mov #0x3,r1
+0020b950 mov.l r1,@(0x1c,r2)
+0020b952 mov #0x0,r1
+
+=== BackupOpen @ 0020ba34 ===
+BODY [[0020ba34, 0020baaf]]
+
+void BackupOpen(undefined4 param_1,undefined4 param_2)
+
+{
+  byte bVar1;
+  byte *pbVar2;
+  
+  (*(code *)PTR_FUN_0020bac8)(param_1,param_2,0x3d);
+  pbVar2 = DAT_0020bacc;
+  do {
+  } while ((*DAT_0020bacc & 1) != 0);
+  *DAT_0020bacc = 1;
+  *DAT_0020bad0 = 0x1a;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  (*(code *)*DAT_0020bad4)(*DAT_0020babc,*DAT_0020bab4,DAT_0020bad8);
+  pbVar2 = DAT_0020bacc;
+  do {
+  } while ((*DAT_0020bacc & 1) != 0);
+  *DAT_0020bacc = 1;
+  *DAT_0020bad0 = 0x19;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  (*(code *)PTR_FUN_0020badc)();
+  return;
+}
+
+
+-- listing head --
+0020ba34 mov.l @(0x20bac8,pc),r1
+0020ba36 jsr @r1
+0020ba38 _mov #0x3d,r6
+0020ba3a mov.l @(0x20bacc,pc),r1
+0020ba3c mov.b @r1,r0
+0020ba3e and 0x1,r0
+0020ba40 tst r0,r0
+0020ba42 bf 0x0020ba3c
+0020ba44 mov.l @(0x20bacc,pc),r3
+0020ba46 mov #0x1,r1
+0020ba48 mov.b r1,@r3
+0020ba4a mov.l @(0x20bad0,pc),r2
+0020ba4c mov #0x1a,r1
+0020ba4e mov.b r1,@r2
+0020ba50 mov.b @r3,r0
+0020ba52 and 0x1,r0
+0020ba54 tst r0,r0
+0020ba56 bt 0x0020ba62
+0020ba58 mov r3,r1
+0020ba5a mov.b @r1,r0
+0020ba5c and 0x1,r0
+0020ba5e tst r0,r0
+0020ba60 bf 0x0020ba5a
+0020ba62 mov.l @(0x20bab4,pc),r1
+0020ba64 mov.l @r1,r5
+0020ba66 mov.l @(0x20babc,pc),r1
+0020ba68 mov.l @r1,r4
+0020ba6a mov.l @(0x20bad4,pc),r2
+
+=== BackupClose @ 0020bb0c ===
+BODY [[0020bb0c, 0020bc13]]
+
+int FUN_0020bb0c(undefined4 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)
+
+{
+  byte bVar1;
+  int *piVar2;
+  undefined *puVar3;
+  byte *pbVar4;
+  int iVar5;
+  undefined1 local_50;
+  undefined1 local_4f;
+  undefined1 local_4e;
+  undefined1 local_4d;
+  undefined1 local_4c;
+  undefined1 local_4b;
+  undefined1 auStack_48 [12];
+  undefined1 auStack_3c [11];
+  undefined1 local_31;
+  undefined4 uStack_30;
+  undefined4 uStack_2c;
+  code *pcStack_24;
+  
+  local_50 = 0x60;
+  local_4f = 1;
+  local_4e = 1;
+  local_4d = 0;
+  local_4c = 0;
+  local_4b = 0;
+  uStack_30 = (**(code **)(*DAT_0020bc14 + 0x28))(&local_50);
+  puVar3 = PTR_FUN_0020bc18;
+  (*(code *)PTR_FUN_0020bc18)(auStack_48,param_1);
+  (*(code *)puVar3)(auStack_3c,param_2);
+  pbVar4 = DAT_0020bc1c;
+  local_31 = 1;
+  do {
+  } while ((*DAT_0020bc1c & 1) != 0);
+  *DAT_0020bc1c = 1;
+  *DAT_0020bc20 = 0x1a;
+  piVar2 = DAT_0020bc14;
+  bVar1 = *pbVar4;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar4;
+  }
+  pcStack_24 = *(code **)(*DAT_0020bc14 + 0x10);
+  uStack_2c = param_4;
+  iVar5 = (*pcStack_24)(0,auStack_48,param_3,0);
+  if (iVar5 == 2) {
+    (**(code **)(*piVar2 + 8))(0);
+    iVar5 = (**(code **)(*piVar2 + 0x10))(0,auStack_48,param_3,0);
+  }
+  do {
+    pbVar4 = DAT_0020bc1c;
+  } while ((*DAT_0020bc1c & 1) != 0);
+  *DAT_0020bc1c = 1;
+  *DAT_0020bc20 = 0x19;
+  bVar1 = *pbVar4;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar4;
+  }
+  *(int *)PTR_DAT_0020bc24 = iVar5;
+  return iVar5;
+}
+
+
+-- listing head --
+0020bb0c mov.l r8,@-r15
+0020bb0e mov.l r9,@-r15
+0020bb10 mov.l r10,@-r15
+0020bb12 mov.l r11,@-r15
+0020bb14 mov.l r12,@-r15
+0020bb16 mov.l r13,@-r15
+0020bb18 mov.l r14,@-r15
+0020bb1a sts.l pr,@-r15
+0020bb1c add -0x30,r15
+0020bb1e mov r15,r14
+0020bb20 mov r4,r10
+0020bb22 mov r5,r11
+0020bb24 mov r6,r13
+0020bb26 mov #0x60,r1
+0020bb28 mov.b r1,@r14
+0020bb2a mov r14,r1
+0020bb2c add 0x1,r1
+0020bb2e mov #0x1,r9
+0020bb30 mov.b r9,@r1
+0020bb32 mov r14,r1
+0020bb34 add 0x2,r1
+0020bb36 mov.b r9,@r1
+0020bb38 mov r14,r1
+0020bb3a add 0x3,r1
+0020bb3c mov #0x0,r2
+0020bb3e mov.b r2,@r1
+0020bb40 mov r14,r1
+0020bb42 add 0x4,r1
+
+=== BackupWrite @ 0020bb38 ===
+BODY [[0020bb38, 0020bc13]]
+
+int BackupWrite(void)
+
+{
+  byte bVar1;
+  int *piVar2;
+  undefined *puVar3;
+  byte *pbVar4;
+  undefined4 uVar5;
+  int iVar6;
+  code *pcVar7;
+  undefined4 in_r7;
+  undefined1 unaff_r9;
+  int unaff_r14;
+  
+  *(undefined1 *)(unaff_r14 + 3) = 0;
+  *(undefined1 *)(unaff_r14 + 4) = 0;
+  *(undefined1 *)(unaff_r14 + 5) = 0;
+  uVar5 = (**(code **)(*DAT_0020bc14 + 0x28))();
+  *(undefined4 *)(unaff_r14 + 0x20) = uVar5;
+  puVar3 = PTR_FUN_0020bc18;
+  (*(code *)PTR_FUN_0020bc18)(unaff_r14 + 8);
+  (*(code *)puVar3)(unaff_r14 + 0x14);
+  *(undefined4 *)(unaff_r14 + 0x24) = in_r7;
+  *(undefined1 *)(unaff_r14 + 0x1f) = unaff_r9;
+  pbVar4 = DAT_0020bc1c;
+  do {
+  } while ((*DAT_0020bc1c & 1) != 0);
+  *DAT_0020bc1c = 1;
+  *DAT_0020bc20 = 0x1a;
+  piVar2 = DAT_0020bc14;
+  bVar1 = *pbVar4;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar4;
+  }
+  pcVar7 = *(code **)(*DAT_0020bc14 + 0x10);
+  *(code **)(unaff_r14 + 0x2c) = pcVar7;
+  iVar6 = (*pcVar7)(0,unaff_r14 + 8);
+  if (iVar6 == 2) {
+    (**(code **)(*piVar2 + 8))(0);
+    iVar6 = (**(code **)(*piVar2 + 0x10))(0,unaff_r14 + 8);
+  }
+  do {
+    pbVar4 = DAT_0020bc1c;
+  } while ((*DAT_0020bc1c & 1) != 0);
+  *DAT_0020bc1c = 1;
+  *DAT_0020bc20 = 0x19;
+  bVar1 = *pbVar4;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar4;
+  }
+  *(int *)PTR_DAT_0020bc24 = iVar6;
+  return iVar6;
+}
+
+
+-- listing head --
+0020bb38 mov r14,r1
+0020bb3a add 0x3,r1
+0020bb3c mov #0x0,r2
+0020bb3e mov.b r2,@r1
+0020bb40 mov r14,r1
+0020bb42 add 0x4,r1
+0020bb44 mov.b r2,@r1
+0020bb46 mov r14,r1
+0020bb48 add 0x5,r1
+0020bb4a mov.b r2,@r1
+0020bb4c mov.l @(0x20bc14,pc),r1
+0020bb4e mov.l @r1,r1
+0020bb50 mov r7,r12
+0020bb52 mov.l @(0x28,r1),r0
+0020bb54 jsr @r0
+0020bb56 _mov r14,r4
+0020bb58 mov r14,r4
+0020bb5a add 0x8,r4
+0020bb5c mov.l r0,@(0x20,r14)
+0020bb5e mov.l @(0x20bc18,pc),r8
+0020bb60 jsr @r8
+0020bb62 _mov r10,r5
+0020bb64 mov r14,r4
+0020bb66 add 0x14,r4
+0020bb68 jsr @r8
+0020bb6a _mov r11,r5
+0020bb6c mov.l r12,@(0x24,r14)
+0020bb6e mov r14,r1
+
+=== BackupRead @ 0020bc54 ===
+BODY [[0020bc54, 0020bc9b]]
+
+/* WARNING: Globals starting with '_' overlap smaller symbols at the same address */
+
+undefined4 BackupRead(undefined4 param_1,undefined4 param_2)
+
+{
+  byte bVar1;
+  byte *pbVar2;
+  uint in_r0;
+  undefined4 uVar3;
+  char *in_r1;
+  
+  while ((in_r0 & 1) != 0) {
+    in_r0 = (uint)*in_r1;
+  }
+  uVar3 = (**(code **)(*_DAT_0020bca4 + 0x14))(0,param_1,param_2);
+  pbVar2 = DAT_0020bc9c;
+  do {
+  } while ((*DAT_0020bc9c & 1) != 0);
+  *DAT_0020bc9c = 1;
+  *DAT_0020bca0 = 0x19;
+  bVar1 = *pbVar2;
+  while ((bVar1 & 1) != 0) {
+    bVar1 = *pbVar2;
+  }
+  return uVar3;
+}
+
+
+-- listing head --
+0020bc54 and 0x1,r0
+0020bc56 tst r0,r0
+0020bc58 bf 0x0020bc52
+0020bc5a mov.l @(0x20bca4,pc),r1
+0020bc5c mov r5,r6
+0020bc5e mov.l @r1,r1
+0020bc60 mov r4,r5
+0020bc62 mov.l @(0x14,r1),r0
+0020bc64 jsr @r0
+0020bc66 _mov #0x0,r4
+0020bc68 mov r0,r7
+0020bc6a mov.l @(0x20bc9c,pc),r1
+0020bc6c mov.b @r1,r0
+0020bc6e and 0x1,r0
+0020bc70 tst r0,r0
+0020bc72 bf 0x0020bc6c
+0020bc74 mov.l @(0x20bc9c,pc),r3
+0020bc76 mov #0x1,r1
+0020bc78 mov.b r1,@r3
+0020bc7a mov.l @(0x20bca0,pc),r2
+0020bc7c mov #0x19,r1
+0020bc7e mov.b r1,@r2
+0020bc80 mov.b @r3,r0
+0020bc82 and 0x1,r0
+0020bc84 tst r0,r0
+0020bc86 bt 0x0020bc92
+0020bc88 mov r3,r1
+0020bc8a mov.b @r1,r0
+
+=== BackupLoadNvmShadow @ 0020bce0 ===
+BODY [[0020bce0, 0020bce1]]
+
+/* WARNING: Control flow encountered bad instruction data */
+
+undefined4 BackupLoadNvmShadow(void)
+
+{
+  byte in_sr;
+  
+  if ((in_sr & 1) != 1) {
+                    /* WARNING: Bad instruction - Truncating control flow here */
+    halt_baddata();
+  }
+  return 0;
+}
+
+
+-- listing head --
+0020bce0 _mov.l @r15+,r8
+0020bcfc mov.l r14,@-r15
+0020bcfe sts.l pr,@-r15
+0020bd00 mov r15,r14
+0020bd02 mov.l @(0x20bd1c,pc),r6
+0020bd04 mov.l @(0x20bd20,pc),r1
+0020bd06 mov.l r1,@(0x24,r6)
+0020bd08 mov.l @(0x20bd24,pc),r5
+0020bd0a mov.l @(0x20bd28,pc),r4
+0020bd0c mov.l @(0x20bd2c,pc),r0
+0020bd0e jsr @r0
+0020bd10 _mov #0x28,r7
+0020bd12 mov r14,r15
+0020bd14 lds.l @r15+,pr
+0020bd16 rts
+0020bd18 _mov.l @r15+,r14
+0020bd3c mov.l r14,@-r15
+0020bd3e mov r15,r14
+0020bd40 mov.l @r15+,r14
+0020bd42 rts
+0020bd44 _mov #0x0,r0
+0020bd48 mov.l r7,@-r15
+0020bd4a mov.l r6,@-r15
+0020bd4c mov.l r5,@-r15
+0020bd4e mov.l r4,@-r15
+0020bd50 mov.l r14,@-r15
+0020bd52 mov r15,r14
+0020bd54 mov.l @r15+,r14
+
+=== BackupSaveNvmShadow @ 0020bd28 ===
+NO FUNCTION
+
+=== CreateLoader @ 0020b834 ===
+BODY [[0020b834, 0020b85f]]
+
+int CreateLoader(void)
+
+{
+  int iVar1;
+  
+  iVar1 = (*(code *)PTR_FUN_0020b868)(0x40,(int)DAT_0020b860,DAT_0020b864);
+  *(undefined4 *)(iVar1 + 0x30) = 0;
+  (*(code *)PTR_FUN_0020b870)(iVar1,PTR_LAB_0020b86c);
+  return iVar1;
+}
+
+
+-- listing head --
+0020b834 mov.l r8,@-r15
+0020b836 mov.l r14,@-r15
+0020b838 sts.l pr,@-r15
+0020b83a mov r15,r14
+0020b83c mov.l @(0x20b864,pc),r6
+0020b83e mov.w @(0x20b860,pc),r5
+0020b840 mov.l @(0x20b868,pc),r0
+0020b842 jsr @r0
+0020b844 _mov #0x40,r4
+0020b846 mov r0,r8
+0020b848 mov #0x0,r1
+0020b84a mov.l r1,@(0x30,r8)
+0020b84c mov.l @(0x20b86c,pc),r5
+0020b84e mov.l @(0x20b870,pc),r1
+0020b850 jsr @r1
+0020b852 _mov r8,r4
+0020b854 mov r14,r15
+0020b856 lds.l @r15+,pr
+0020b858 mov.l @r15+,r14
+0020b85a mov r8,r0
+0020b85c rts
+0020b85e _mov.l @r15+,r8
+0020b874 mov.l r8,@-r15
+0020b876 mov.l r14,@-r15
+0020b878 sts.l pr,@-r15
+0020b87a mov r15,r14
+0020b87c mov.l @(0x20b8a0,pc),r1
+0020b87e jsr @r1
+
+=== NvmShadow / Dir tables ===
+NvmShadow @ 00228980:NvmShadow @ 00228980: UNMAPPED
+DirTable @ 0022ddc0:DirTable @ 0022ddc0: UNMAPPED
+BackupStatus @ 0021daec: 0020D12A
+DirNameTable@22da00 first 64 bytes:
+UNMAPPED Address ram:0022da00 does not exist in memory

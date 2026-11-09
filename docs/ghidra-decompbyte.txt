@@ -1,0 +1,704 @@
+# Capstone: _DecompByte 16 nibble handlers + _MAPGetHixel + _AddTiles
+# Binary: tools/ghidra-work/MAUSO_03CODE.bin  (stage CODE base 0x00232000)
+# LOADER epilogue: tools/ghidra-work/02LOADER.bin (base 0x00200000)
+# Tool: Capstone SH-2 BE (CS_ARCH_SH + CS_MODE_SH2 + CS_MODE_BIG_ENDIAN)
+# Scope: READ-ONLY analysis. Companion to docs/ghidra-vdp2-tiles.txt §3.3.
+# Date: 2026-11-07
+
+==============================================================================
+0. Summary
+==============================================================================
+
+_DecompByte @ 0x002a0b4c (compress.o, size 0x4ec → 0x002a1038) is an MSB-first
+bit-pump LZ decompressor. Control bits select literal vs BE16 match; the match
+low nibble indexes a 16-entry jump table @ 0x002a0b94.
+
+Exact table (Capstone-verified copy counts):
+
+  nibble | handler VA  | copies | meaning
+  -------|-------------|--------|---------------------------
+    0    | 0x002a0bd4  | 0      | END → SCU DMA Level0 kick
+    1    | 0x002a0bf4  | 2      | back-ref length = nibble+1
+    2    | 0x002a0c10  | 3      |
+    3    | 0x002a0c32  | 4      |
+    4    | 0x002a0c5e  | 5      |
+    5    | 0x002a0c90  | 6      |
+    6    | 0x002a0cc8  | 7      |
+    7    | 0x002a0d06  | 8      |
+    8    | 0x002a0d4a  | 9      |
+    9    | 0x002a0d94  | 10     |
+   10    | 0x002a0de4  | 11     |
+   11    | 0x002a0e3a  | 12     |
+   12    | 0x002a0e92  | 13     |
+   13    | 0x002a0ef0  | 14     |
+   14    | 0x002a0f58  | 15     |
+   15    | 0x002a0fc2  | 16     |
+
+Distance for nibbles 1..15:  dist = code >> 4;  src = dst - dist.
+(Handlers: shlr2; shlr2; neg; add r3.)
+
+Also documented below:
+  _MAPGetHixel @ 0x002a3016  (scrlghix.o, inside SCROLLGetHixel@0x2a3000 size 0xbc)
+  _AddTiles    @ 0x002a1570  (size 0x204)
+
+==============================================================================
+1. Register / ABI contract (DecompByte)
+==============================================================================
+
+Caller (DecompTile) leaves:
+  r4  = compressed src pointer (advanced by DecompByte)
+  r5  = DMA destination (VDP2 / work RAM) — SURVIVES untouched through DecompByte
+  r6  = DMA byte count (typically w<<12) — SURVIVES untouched
+  DEST_GLOBAL @ 0x002c88a0  = work-buffer destination pointer (written before call)
+
+DecompByte uses:
+  r3  = live dst cursor (= *DEST_GLOBAL at entry; advanced by literals/copies)
+  r4  = live src cursor
+  r1  = control bit shift register (8 bits loaded into bits 23..16, then shll)
+  r7  = remaining bits in current control byte (init 8; dt each consume)
+  r2  = match code (BE16) while inside a handler
+  r8  = jump-table base (0x2a0b94)
+  r9  = callee-saved (pushed)
+
+On END (nibble 0):
+  pop r9, r8
+  r4 = *DEST_GLOBAL          // DMA source = work buffer start
+  jmp LOADER @ 0x002042c8    // r5=dst, r6=count still from DecompTile
+
+==============================================================================
+2. Pseudocode C — full _DecompByte
+==============================================================================
+
+```c
+/* MAUSO compress.o — _DecompByte @ 0x002a0b4c */
+
+#define DEST_GLOBAL   (*(uint8_t **)0x002c88a0)   /* pool @0x2a0b8c */
+#define JMPTAB        ((uint32_t *)0x002a0b94)    /* 16 handler VAs */
+
+/* LOADER SCU DMA Level0 program — see §5 */
+extern void SCU_DMA0_Kick(uint32_t src /*r4*/, uint32_t dst /*r5*/,
+                          uint32_t count /*r6*/);  /* @0x2042c8 */
+
+void DecompByte(uint8_t *src /*r4*/)
+{
+    /* prologue: push r8, r9 */
+    uint8_t *dst = DEST_GLOBAL;          /* r3 ← *0x2c88a0 */
+    uint32_t *jmptab = JMPTAB;           /* r8 */
+    uint32_t ctrl;                       /* r1 — shift register */
+    int bits = 8;                        /* r7 */
+
+reload_ctrl:                             /* @0x2a0b56 */
+    ctrl = (uint32_t)(*src++) << 16;
+    ctrl <<= 8;                          /* byte now in bits 23..16 */
+    bits = 8;
+
+next_bit:                                /* @0x2a0b5e */
+    ctrl <<= 1;                          /* shll r1 — MSB → T */
+    if (!/*T*/) {
+        /* bit0 → literal */
+        *dst++ = *src++;
+        if (--bits == 0) goto reload_ctrl;
+        goto next_bit;
+    }
+
+    /* bit1 → BE16 match code */
+    {
+        uint16_t code = ((uint16_t)(*src++) << 8) | *src++;
+        uint32_t nibble = code & 0xF;
+        /* jmp jmptab[nibble]  — handlers below share dst/src/bits/ctrl */
+        switch (nibble) {
+        case 0:  goto nibble0_END;
+        case 1:  goto match_copy(/*len=*/2,  code); /* fall through pattern */
+        case 2:  goto match_copy(3,  code);
+        case 3:  goto match_copy(4,  code);
+        case 4:  goto match_copy(5,  code);
+        case 5:  goto match_copy(6,  code);
+        case 6:  goto match_copy(7,  code);
+        case 7:  goto match_copy(8,  code);
+        case 8:  goto match_copy(9,  code);
+        case 9:  goto match_copy(10, code);
+        case 10: goto match_copy(11, code);
+        case 11: goto match_copy(12, code);
+        case 12: goto match_copy(13, code);
+        case 13: goto match_copy(14, code);
+        case 14: goto match_copy(15, code);
+        case 15: goto match_copy(16, code);
+        }
+    }
+
+match_copy: /* synthesized — each handler is fully unrolled mov.b */
+    /* real code: r2=code; shlr2; shlr2; neg; add r3 → src_ref = dst - (code>>4) */
+    {
+        uint32_t dist = code >> 4;           /* upper 12 bits */
+        uint8_t *ref  = dst - dist;          /* may overlap (RLE-style) */
+        int len = /* nibble + 1 for n=1..15 */;
+        while (len--)
+            *dst++ = *ref++;
+    }
+    if (--bits == 0) goto reload_ctrl;       /* n13..n15 via trampoline @0x2a0f54 */
+    goto next_bit;
+
+nibble0_END:                                 /* @0x2a0bd4 */
+    /* pop r9, r8 */
+    {
+        uint32_t dma_src = (uint32_t)DEST_GLOBAL;  /* r4 */
+        /* r5, r6 untouched from DecompTile */
+        SCU_DMA0_Kick(dma_src, /*r5*/dma_dst, /*r6*/dma_count);
+        return; /* via jmp @r0, not rts */
+    }
+}
+```
+
+==============================================================================
+3. Exact 16-nibble table (handlers)
+==============================================================================
+
+Jump table words @ 0x002a0b94 (BE32, Capstone mov.l refs):
+
+```
+JMPTAB[16] = {
+  /* 0 */ 0x002a0bd4,
+  /* 1 */ 0x002a0bf4,
+  /* 2 */ 0x002a0c10,
+  /* 3 */ 0x002a0c32,
+  /* 4 */ 0x002a0c5e,
+  /* 5 */ 0x002a0c90,
+  /* 6 */ 0x002a0cc8,
+  /* 7 */ 0x002a0d06,
+  /* 8 */ 0x002a0d4a,
+  /* 9 */ 0x002a0d94,
+  /*10 */ 0x002a0de4,
+  /*11 */ 0x002a0e3a,
+  /*12 */ 0x002a0e92,
+  /*13 */ 0x002a0ef0,
+  /*14 */ 0x002a0f58,
+  /*15 */ 0x002a0fc2,
+};
+```
+
+### 3.0 nibble 0 — END @ 0x002a0bd4 (32 B, 0 copies)
+
+```
+002a0bd4  mov.l  @r15+, r9
+002a0bd6  mov.l  @r15+, r8
+002a0bd8  mov.l  @(0x2a0bec), r4     ; → 0x002c88a0 DEST_GLOBAL addr
+002a0bda  mov.l  @r4, r4             ; r4 = *DEST_GLOBAL  (DMA src)
+002a0bdc  mov.l  @(0x2a0bf0), r0     ; → 0x002042c8 LOADER
+002a0bde  jmp    @r0
+002a0be0  nop
+```
+
+Pools: `[0x2c88a0, 0x2042c8]`.
+
+### 3.1–3.15 nibbles 1..15 — unrolled back-reference
+
+Common head (every handler 1..15):
+
+```
+shlr2  r2          ; code >>= 2
+shlr2  r2          ; code >>= 2  → dist = original_code >> 4
+neg    r2, r2
+add    r3, r2      ; r2 = dst - dist   (ref cursor)
+```
+
+Then exactly (nibble+1) times:
+
+```
+mov.b  @r2+, r0
+mov.b  r0, @r3
+add    #1, r3
+```
+
+Then bit-counter epilogue (variants for displacement range):
+
+```
+dt     r7
+bt     reload_ctrl     ; → 0x2a0b56  (or trampoline 0x2a0f54 for n13..n15)
+bra    next_bit        ; → 0x2a0b5e
+nop
+```
+
+Trampoline @ 0x002a0f54 (shared by n13/n14/n15 when `bt` can't reach 0x2a0b56):
+
+```
+002a0f54  bra  0x2a0b56
+002a0f56  nop
+```
+
+C equivalent of one handler (nibble N ∈ 1..15):
+
+```c
+void handler_N(uint16_t code, uint8_t **p_dst, int *p_bits)
+{
+    uint32_t dist = code >> 4;
+    uint8_t *dst = *p_dst;
+    uint8_t *ref = dst - dist;
+    int len = N + 1;                 /* Capstone: mov.b @r2+ count */
+    while (len--)
+        *dst++ = *ref++;
+    *p_dst = dst;
+    if (--(*p_bits) == 0)
+        goto reload_ctrl;            /* 0x2a0b56 */
+    else
+        goto next_bit;               /* 0x2a0b5e */
+}
+```
+
+Verified copy counts (pattern `60 24` = `mov.b @r2+,r0` per handler span):
+
+```
+n 1 →  2   n 2 →  3   n 3 →  4   n 4 →  5
+n 5 →  6   n 6 →  7   n 7 →  8   n 8 →  9
+n 9 → 10   n10 → 11   n11 → 12   n12 → 13
+n13 → 14   n14 → 15   n15 → 16
+```
+
+Match code layout (BE16):
+
+```
+  bits 15..4 : distance (0..4095)
+  bits  3..0 : nibble = length-1  (1..15)  or 0 = END
+```
+
+Overlap is intentional: `ref` can sit inside the bytes just written (RLE of
+a repeated run via dist=1).
+
+==============================================================================
+4. Bit-pump Capstone (prologue @ 0x002a0b4c)
+==============================================================================
+
+```
+002a0b4c  mov.l  r8, @-r15
+002a0b4e  mov.l  r9, @-r15
+002a0b50  mov.l  @(0x2a0b8c), r3     ; → &DEST_GLOBAL = 0x2c88a0
+002a0b52  mov.l  @r3, r3             ; r3 = *DEST_GLOBAL
+002a0b54  mov.l  @(0x2a0b90), r8     ; → jmptab 0x2a0b94
+002a0b56  mov.b  @r4+, r1            ; reload_ctrl
+002a0b58  shll16 r1
+002a0b5a  shll8  r1
+002a0b5c  mov    #8, r7
+002a0b5e  shll   r1                  ; next_bit — T = old MSB
+002a0b60  bt     0x2a0b72            ; bit1 → match
+002a0b62  nop
+002a0b64  mov.b  @r4+, r0            ; bit0 → literal
+002a0b66  mov.b  r0, @r3
+002a0b68  add    #1, r3
+002a0b6a  dt     r7
+002a0b6c  bt     0x2a0b56            ; bits exhausted → reload
+002a0b6e  bra    0x2a0b5e
+002a0b70  nop
+002a0b72  mov.b  @r4+, r0            ; match: read BE16
+002a0b74  and    #255, r0
+002a0b76  shll8  r0
+002a0b78  mov    r0, r2
+002a0b7a  mov.b  @r4+, r0
+002a0b7c  and    #255, r0
+002a0b7e  or     r2, r0
+002a0b80  mov    r0, r2              ; r2 = full code (kept for handlers)
+002a0b82  and    #15, r0             ; nibble
+002a0b84  shll2  r0                  ; ×4
+002a0b86  mov.l  @(r0, r8), r0       ; load handler VA
+002a0b88  jmp    @r0
+002a0b8a  nop
+; pools:
+002a0b8c  .long  0x002c88a0          ; DEST_GLOBAL
+002a0b90  .long  0x002a0b94          ; JMPTAB
+002a0b94  .long  handler0..handler15 ; 16 × BE32
+```
+
+==============================================================================
+5. LOADER SCU DMA Level0 @ 0x002042c8  (nibble0 tail-call)
+==============================================================================
+
+Capstone on 02LOADER.bin. Programs SCU DMA channel 0 registers at 0x25FE0000.
+
+```c
+/* LOADER @0x2042c8 — kicked with r4=src, r5=dst, r6=count */
+void SCU_DMA0_Kick(uint32_t src, uint32_t dst, uint32_t count)
+{
+    volatile uint32_t *D0R  = (void *)0x25FE0000;
+    volatile uint32_t *D0W  = (void *)0x25FE0004;
+    volatile uint32_t *D0C  = (void *)0x25FE0008;
+    volatile uint32_t *D0AD = (void *)0x25FE000C;
+    volatile uint32_t *D0EN = (void *)0x25FE0010;
+    volatile uint32_t *D0MD = (void *)0x25FE0014;
+    volatile uint32_t *DSTA = (void *)0x25FE007C;   /* DMA status */
+
+    while ((*DSTA & 0x30) != 0)        /* wait levels busy bits */
+        ;
+
+    *D0R  = src;                       /* r4 = *DEST_GLOBAL */
+    *D0W  = dst;                       /* r5 from DecompTile */
+    *D0C  = count;                     /* r6 from DecompTile */
+    *D0AD = 0x00000101;                /* pool halfword 0x0101 → long */
+    *D0MD = 7;
+    *D0EN = 0x00000101;                /* enable */
+}
+```
+
+Pools @ 0x2042fc..0x204318:
+
+```
+0x2042fc  .word  0x0101
+0x204300  .long  0x25FE007C   ; DSTA
+0x204304  .long  0x25FE0000   ; D0R
+0x204308  .long  0x25FE0004   ; D0W
+0x20430c  .long  0x25FE0008   ; D0C
+0x204310  .long  0x25FE000C   ; D0AD
+0x204314  .long  0x25FE0014   ; D0MD
+0x204318  .long  0x25FE0010   ; D0EN
+```
+
+==============================================================================
+6. _MAPGetHixel @ 0x002a3016
+==============================================================================
+
+Part of scrlghix.o. SCROLLGetHixel @ 0x2a3000 adds camera/scroll bias then
+falls into MAPGetHixel. MAPGetHixel alone: r4=x, r5=y → returns 2-bit hixel
+in r0 (0..3), or -1 on miss / OOB.
+
+### 6.1 SCROLLGetHixel bias (0x2a3000 → falls through)
+
+```c
+/* @0x2a3000 */
+void SCROLLGetHixel(int x /*r4*/, int y /*r5*/)
+{
+    tagMAP_DEF *map = *(tagMAP_DEF **)0x002c87b8;  /* pool */
+    x += map[+72/4] + 80 + 80;   /* +0x48 dword + 0xA0 */
+    y += map[+76/4] + 112;       /* +0x4c dword + 0x70 */
+    /* fall into MAPGetHixel */
+}
+```
+
+### 6.2 MAPGetHixel pseudocode
+
+```c
+/* @0x002a3016 — pools @0x2a30a0..0x2a30b8 */
+#define MAP_PTR     (*(void **)0x002c87b8)
+#define MASK_1F     0x0000001f
+#define HI_OK       0x06000000          /* Work RAM mirror hi gate */
+#define BOUND_A     0xf9f00003
+#define BOUND_B     0xf9f00000
+#define MISS_CTR    (*(uint32_t *)0x002c8eec)
+
+int MAPGetHixel(int x /*r4*/, int y /*r5*/)
+{
+    void *map = MAP_PTR;                         /* r3 */
+    int tx = x >> 5;                             /* tile X */
+    int ty = y >> 5;                             /* tile Y */
+    uint32_t stride = *(uint32_t *)((uint8_t *)map + 104);  /* map[+0x68] */
+    uint32_t idx = (uint32_t)(ty * (uint16_t)stride + tx);
+    uint32_t *cellp = *(uint32_t **)((uint8_t *)map + 4) + idx;
+    /* cellp = map->tile_table + idx  (each entry 4 bytes) */
+
+    /* OOB / wrong bank → miss */
+    if ((uint32_t)cellp & BOUND_A) goto miss;    /* tst BOUND_A */
+    if ((uint32_t)cellp >= HI_OK)   goto miss;    /* cmp/hi HI_OK */
+
+    uint32_t tile = *cellp;
+    if (tile == 0) return -1;                    /* empty cell */
+
+    /* nibble/byte inside the 32×32 tile's hixel plane */
+    uint8_t *hp = (uint8_t *)(tile + 72);        /* +0x48 into tile */
+    int lx = x & 0x1f;
+    int ly = y & 0x1f;
+    int off = (ly >> 1) * 4 /*? via shlr; shll2 on ly*/ ;
+    /* Capstone: ly>>=1; ly<<=2;  lx_hi = (lx>>2)>>1 = lx>>3;
+       off = lx_hi + ly_scaled; hp += off */
+    {
+        int ly2 = (ly >> 1) << 2;
+        int lx3 = (lx >> 2) >> 1;                /* lx >> 3 */
+        hp += ly2 + lx3;
+    }
+
+    if ((uint32_t)hp & BOUND_B) goto miss;
+    if ((uint32_t)hp >= HI_OK)  goto miss;
+
+    uint8_t b = *hp;
+    /* extract 2-bit field via rotcr on x (same spirit as PANCOLL BitExtract) */
+    /* Capstone:
+         shlr r4; rotcr r4; bf skip1; shlr2 r0;
+         rotcr r4; bf skip2; shlr2; shlr2;
+         and #3, r0
+       Uses original x bits to pick which of 4 2-bit slots in the byte. */
+    {
+        uint32_t t = x;
+        t >>= 1;
+        int c1 = t & 1; t = (t >> 1) | (/*old bit0 into C via rotcr*/);
+        if (c1) b >>= 2;
+        int c2 = /* next rotcr carry */;
+        if (c2) b >>= 4;
+        return b & 3;
+    }
+
+miss:
+    MISS_CTR++;
+    return -1;
+}
+```
+
+Pools (BE32 @ 0x2a30a0):
+
+```
+0x2a30a0  0x002c87b8   ; &MAP_PTR
+0x2a30a4  0xffffffff   ; miss / empty return
+0x2a30a8  0x0000001f   ; low 5-bit mask
+0x2a30ac  0x06000000   ; Work RAM hi bound
+0x2a30b0  0xf9f00003   ; cell pointer bank mask
+0x2a30b4  0xf9f00000   ; hixel pointer bank mask
+0x2a30b8  0x002c8eec   ; miss counter
+```
+
+Bit-extract detail (Capstone exact @ 0x2a306e..0x2a3082):
+
+```
+602a306e  mov.b   @r3, r0          ; b = *hp
+002a3070  shlr    r4               ; x >>= 1, T=old bit0
+002a3072  rotcr   r4               ; rotate T into bit31, new T=old bit0 of shifted
+002a3074  bf      0x2a3078         ; if !T skip
+002a3076  shlr2   r0               ; b >>= 2
+002a3078  rotcr   r4
+002a307a  bf      0x2a3080
+002a307c  shlr2   r0
+002a307e  shlr2   r0               ; b >>= 4 total when second T set
+002a3080  rts
+002a3082  and     #3, r0           ; delay slot — return b&3
+```
+
+So the 2-bit field index is driven by bits of x after `x>>1` via two `rotcr`
+carries: field = ((x>>1)&1) + 2*((next carry)). Same family as loader
+`BitExtract` used by PANCOLL.
+
+==============================================================================
+7. _AddTiles @ 0x002a1570  (size 0x204)
+==============================================================================
+
+Mangled: `_AddTiles__FP10tagMAP_DEFllll`
+ABI: `AddTiles(map=r4, x=r5, y=r6, w=r7, h=stack)`.
+
+### 7.1 Pseudocode C
+
+```c
+/* Capstone MAUSO @0x2a1570 — pools @0x2a1734..0x2a1750 */
+
+extern int  TileIndexCalc(void *base, int y);          /* @0x213edc */
+extern void AllocTileSlot(/*...*/);                    /* @0x20bd5c */
+extern void *TileSlotInit(tagMAP_DEF *m, ...);         /* @0x2a1554 */
+extern int  MapMode4_GetBase(tagMAP_DEF *m);           /* @0x2a1334 */
+extern int  MapModeOther_GetBase(tagMAP_DEF *m);       /* @0x2a12a4 */
+extern void DecompAddTile(tagMAP_DEF *m, void *tile);  /* @0x2a1488 */
+
+#define MASK_VDP2_CELL  0x08000000
+#define MASK_0F3C       0x0f3c
+#define STEP_0100       0x0100
+
+void AddTiles(tagMAP_DEF *map /*r4*/,
+              int x /*r5*/, int y /*r6*/,
+              int w /*r7*/, int h /*stack*/)
+{
+    /* frame: save r8-r14,pr; locals 32 B; h at @(64,fp) */
+
+    int map_w = map->field_68;               /* dword +104 */
+    int map_h = map->field_6c;               /* dword +108 */
+
+    /* clamp width */
+    if (x + w > map_w) {
+        w = map_w - x;
+        if (w == 0) return;
+    }
+    /* clamp height */
+    if (y + h > map_h) {
+        h = map_h - y;
+        if (h == 0) return;
+    }
+
+    /* row base into map tile pointer table */
+    uint32_t *row = (uint32_t *)(
+        (uint8_t *)map->tile_rows /*map[+4]*/
+        + (TileIndexCalc(x, y) << 2)
+        + (TileIndexCalc(x, y) /*returned*/ << 2) /* Capstone: jsr; shll2; add */
+    );
+    /* Capstone sequence @0x2a15d4..0x2a15e8:
+         r1=x; r13=map[+4]; jsr TileIndexCalc(y?);
+         r1=r0<<2; r13+=r1; store row ptr @(12,fp)
+       Exact args: r4=y (from @(4,fp)), r1=x<<2 added into map[+4] before jsr
+       via delay-slot `add r1,r13`. Treat as row = map->tiles + f(x,y). */
+
+    int w4 = w << 2;
+    uint32_t *row_end = (uint32_t *)((uint8_t *)row + w4);
+
+    /* VDP2 cell cursor from (x&63, y&63) */
+    int cell = ((y & 63) << 6 /*via 3×shll2*/) + (x & 63);
+    cell = (cell << 2) & MASK_0F3C;          /* @(28,fp) */
+
+    uint16_t *map_u16 = (uint16_t *)((uint8_t *)map + 16);  /* @(24,fp) */
+
+    /* outer: for each row of height h */
+    uint32_t *row_limit = row + (TileIndexCalc(/*h*/) << 2) / 4;
+    /* Capstone: second jsr TileIndexCalc with r4=h, r5=map_w → scale into @(16,fp) */
+
+    for (;;) {                               /* @0x2a1638 */
+        uint32_t *slot = (uint32_t *)*row;   /* *r11 */
+        if (slot == 0) {
+            /* allocate fresh tile slot */
+            AllocTileSlot(TileSlotInit(map, x, y, w), h, y, x);
+            return;                          /* early via epilogue path */
+        }
+
+        /* update existing slot */
+        if (*(int16_t *)((uint8_t *)slot + 2) != 0) {
+            int base = (map->field_44 /*+68*/ == 4)
+                     ? MapMode4_GetBase(map)
+                     : MapModeOther_GetBase(map);
+            *(int16_t *)((uint8_t *)slot + 6) = (int16_t)base;
+            DecompAddTile(map, slot);
+        }
+
+        /* 4×16 nested write of VDP2 cell pointers into slot */
+        {
+            uint32_t *dst_base = *(uint32_t **)((uint8_t *)map + 8) + cell;
+            int row_i, col_i;
+            for (row_i = 0; row_i < 4; row_i++) {          /* r6 = 0..3 */
+                for (col_i = 0; col_i < 16; col_i += 4) {  /* r7 = 0,4,..15 */
+                    uint32_t *entry = (uint32_t *)((uint8_t *)slot
+                                                   + ((row_i + col_i) << 2)
+                                                   + 8);
+                    uint32_t cellptr = *entry;
+                    uint32_t out;
+                    if (cellptr & MASK_VDP2_CELL) {
+                        /* already VDP2-tagged: add map[+18] ushort + *map_u16 */
+                        out = cellptr
+                            + 2 * (uint16_t)map->field_12
+                            + (uint16_t)*map_u16;
+                    } else {
+                        /* use slot[+6] ushort instead of map[+18] */
+                        out = cellptr
+                            + 2 * (uint16_t)(*(int16_t *)((uint8_t *)slot + 6))
+                            + (uint16_t)*map_u16;
+                    }
+                    dst_base[(row_i << 6) /* +64 per row via add #64,r3 */ / 1
+                             /* Capstone stores via mov.l r2,@(r0,r5) with
+                                r0 = row_i<<2, r3 += 64 each inner */ ] = out;
+                    /* exact: r3 starts 0, +=64 each of 16 iters; r7+=4;
+                       after 16: r6++, r7=0; stop r6>3 */
+                }
+            }
+        }
+
+        cell = (cell + STEP_0100) & MASK_0F3C;
+        row += map_w;                        /* advance by stride (<<2 already) */
+        if ((uint32_t)row >= (uint32_t)row_limit)
+            break;
+
+        /* next column group inside width */
+        cell = (cell + 4) & MASK_0F3C;
+        row = (uint32_t *)((uint8_t *)row + 4);
+        if ((uint32_t)row >= (uint32_t)row_end)
+            break;
+    }
+}
+```
+
+### 7.2 Capstone pools @ 0x2a1734
+
+```
+0x2a1734  .word  0x0f3c          ; cell cursor mask
+0x2a1736  .word  0x0100          ; cell row step
+0x2a1738  .long  0x00213edc      ; TileIndexCalc (loader)
+0x2a173c  .long  0x0020bd5c      ; AllocTileSlot (loader)
+0x2a1740  .long  0x002a1554      ; TileSlotInit (local)
+0x2a1744  .long  0x002a1334      ; MapMode4_GetBase
+0x2a1748  .long  0x002a12a4      ; MapModeOther_GetBase
+0x2a174c  .long  0x002a1488      ; DecompAddTile
+0x2a1750  .long  0x08000000      ; VDP2 cell tag mask
+```
+
+### 7.3 Call graph (from DrawMap / DecompAddTile path)
+
+```
+DrawMap
+  └─ AddTiles(map, x, y, w, h)           @0x2a1570
+       ├─ TileIndexCalc                   @0x213edc
+       ├─ AllocTileSlot ← TileSlotInit    @0x20bd5c ← @0x2a1554
+       ├─ MapMode4_GetBase / Other        @0x2a1334 / @0x2a12a4
+       └─ DecompAddTile                   @0x2a1488
+            └─ (queue) DecompTile
+                 └─ DecompByte            @0x2a0b4c
+                      └─ SCU_DMA0_Kick    @0x2042c8
+```
+
+==============================================================================
+8. Host port notes
+==============================================================================
+
+Bit-exact DecompByte for host:
+
+```c
+/* drop-in reconstruction — no jump table needed */
+static void decomp_byte(uint8_t *src, uint8_t *dst_base,
+                        uint8_t *dma_dst, uint32_t dma_count)
+{
+    uint8_t *dst = dst_base;
+    for (;;) {
+        uint32_t ctrl = *src++;
+        for (int bit = 7; bit >= 0; bit--) {
+            if (((ctrl >> bit) & 1) == 0) {
+                *dst++ = *src++;
+            } else {
+                uint16_t code = ((uint16_t)src[0] << 8) | src[1];
+                src += 2;
+                uint32_t n = code & 0xF;
+                if (n == 0) {
+                    /* END — host: memcpy(dma_dst, dst_base, dma_count)
+                       Saturn: SCU DMA0 with D0AD/D0EN = 0x101, D0MD = 7 */
+                    memcpy(dma_dst, dst_base, dma_count);
+                    return;
+                }
+                uint32_t dist = code >> 4;
+                uint8_t *ref = dst - dist;
+                int len = (int)n + 1;
+                while (len--)
+                    *dst++ = *ref++;
+            }
+        }
+    }
+}
+```
+
+Caveats vs Saturn:
+  - Bit order: Capstone uses `shll` (MSB first). Host loop above uses
+    `bit = 7..0` which matches MSB-first on the control byte.
+  - DEST_GLOBAL must equal `dst_base` at call time (DecompTile writes it).
+  - r5/r6 DMA args come from DecompTile (`len = w<<12`), not from DecompByte.
+  - Overlapping copies (dist < len) must be byte-by-byte, not memcpy.
+
+MAPGetHixel / AddTiles still depend on live tagMAP_DEF layout (+4 tile table,
++8 VDP2 plane, +16/+18 ushorts, +68 mode, +104/+108 dims) filled by LoadMap /
+CreateCSideScroll — see ghidra-vdp2-tiles.txt §§3–5.
+
+==============================================================================
+9. Evidence checklist
+==============================================================================
+
+| Item                         | VA / pool              | Verified how                          |
+|------------------------------|------------------------|---------------------------------------|
+| DecompByte range             | 0x2a0b4c..0x2a1038     | Capstone full dump                    |
+| JMPTAB 16 entries            | 0x2a0b94               | BE32 read + jmp @r0                   |
+| Copy counts n1..n15 = n+1    | handlers               | count of opcode 0x6024 per span       |
+| dist = code>>4               | every n1..n15 head     | shlr2; shlr2; neg; add r3             |
+| nibble0 → SCU DMA            | 0x2a0bd4 → 0x2042c8    | pool 0x2a0bf0; LOADER Capstone        |
+| DEST_GLOBAL                  | 0x2c88a0               | pools 0x2a0b8c / 0x2a0bec             |
+| refill trampoline            | 0x2a0f54 → 0x2a0b56    | n13/n14/n15 bt target                 |
+| MAPGetHixel                  | 0x2a3016               | Capstone + pools 0x2a30a0..b8         |
+| AddTiles                     | 0x2a1570 size 0x204    | Capstone + pools 0x2a1734..50         |
+| AddTiles callees             | 213edc/20bd5c/2a1554/… | mov.l pools + jsr @Rn                 |
+
+Scratch dumps (session):
+  %TEMP%\decompbyte_raw.txt
+  %TEMP%\decompbyte_n14.txt
+  %TEMP%\decompbyte_add.txt
+  %TEMP%\decompbyte_finish.txt
+  %TEMP%\dump_decompbyte.py
+
+END.
+)

@@ -1,0 +1,206 @@
+imagebase 00000000 lang SuperH:BE:32:SH-2
+
+=== MsgProbe_20B308 @ 0020b308 ===
+BODY [[0020b308, 0020b355]]
+
+void MsgProbe_20B308(int *param_1,int param_2,int param_3)
+
+{
+  undefined *puVar1;
+  undefined4 *puVar2;
+  
+  param_1[2] = param_2;
+  param_1[3] = param_3;
+  puVar1 = PTR_FUN_0020b358;
+  param_1[1] = param_1[4];
+  puVar2 = (undefined4 *)(*(code *)puVar1)();
+  if (puVar2 != (undefined4 *)0x0) {
+    *param_1 = *param_1 + -1;
+    if (puVar2[7] == 0) {
+      param_1[4] = puVar2[6];
+    }
+    else {
+      *(undefined4 *)(puVar2[7] + 0x18) = puVar2[6];
+    }
+    if (puVar2[6] == 0) {
+      param_1[5] = puVar2[7];
+    }
+    else {
+      *(undefined4 *)(puVar2[6] + 0x1c) = puVar2[7];
+    }
+    *puVar2 = 0;
+  }
+  return;
+}
+
+
+0020b308 mov.l r8,@-r15
+0020b30a mov.l r14,@-r15
+0020b30c sts.l pr,@-r15
+0020b30e mov r15,r14
+0020b310 mov r4,r8
+0020b312 mov.l @(0x10,r8),r1
+0020b314 mov.l r5,@(0x8,r8)
+0020b316 mov.l r6,@(0xc,r8)
+0020b318 mov.l @(0x20b358,pc),r0
+0020b31a jsr @r0
+0020b31c _mov.l r1,@(0x4,r8)
+0020b31e tst r0,r0
+0020b320 bt 0x0020b34c
+0020b322 mov.l @r8,r1
+0020b324 add -0x1,r1
+0020b326 mov.l r1,@r8
+0020b328 mov.l @(0x1c,r0),r2
+0020b32a tst r2,r2
+0020b32c bt 0x0020b334
+0020b32e mov.l @(0x18,r0),r1
+0020b330 bra 0x0020b338
+0020b332 _mov.l r1,@(0x18,r2)
+0020b334 mov.l @(0x18,r0),r1
+0020b336 mov.l r1,@(0x10,r8)
+0020b338 mov.l @(0x18,r0),r2
+0020b33a tst r2,r2
+0020b33c bt 0x0020b344
+0020b33e mov.l @(0x1c,r0),r1
+0020b340 bra 0x0020b348
+0020b342 _mov.l r1,@(0x1c,r2)
+0020b344 mov.l @(0x1c,r0),r1
+0020b346 mov.l r1,@(0x14,r8)
+0020b348 mov #0x0,r1
+0020b34a mov.l r1,@r0
+0020b34c mov r14,r15
+0020b34e lds.l @r15+,pr
+0020b350 mov.l @r15+,r14
+0020b352 rts
+0020b354 _mov.l @r15+,r8
+0020b35c mov.l r14,@-r15
+
+=== Fn_20B264 @ 0020b264 ===
+BODY [[0020b264, 0020b2a3]]
+
+void Fn_20B264(int *param_1,int param_2,int param_3)
+
+{
+  int *piVar1;
+  int iVar2;
+  
+  piVar1 = param_1 + 6;
+  iVar2 = *piVar1;
+  while (iVar2 != 0) {
+    piVar1 = piVar1 + 8;
+    iVar2 = *piVar1;
+  }
+  if (param_1[5] != 0) {
+    *(int **)(param_1[5] + 0x18) = piVar1;
+  }
+  if (param_1[4] == 0) {
+    param_1[4] = (int)piVar1;
+  }
+  piVar1[7] = param_1[5];
+  piVar1[6] = 0;
+  param_1[5] = (int)piVar1;
+  *param_1 = *param_1 + 1;
+  *piVar1 = param_2;
+  piVar1[5] = param_3;
+  return;
+}
+
+
+0020b264 mov.l r14,@-r15
+0020b266 mov r4,r0
+0020b268 add 0x18,r0
+0020b26a mov.l @r0,r1
+0020b26c mov r15,r14
+0020b26e tst r1,r1
+0020b270 bt 0x0020b27a
+0020b272 add 0x20,r0
+0020b274 mov.l @r0,r1
+0020b276 tst r1,r1
+0020b278 bf 0x0020b272
+0020b27a mov.l @(0x14,r4),r1
+0020b27c tst r1,r1
+0020b27e bt 0x0020b282
+0020b280 mov.l r0,@(0x18,r1)
+0020b282 mov.l @(0x10,r4),r1
+0020b284 tst r1,r1
+0020b286 bf 0x0020b28a
+0020b288 mov.l r0,@(0x10,r4)
+0020b28a mov.l @(0x14,r4),r1
+0020b28c mov r14,r15
+0020b28e mov.l r1,@(0x1c,r0)
+0020b290 mov #0x0,r1
+0020b292 mov.l r1,@(0x18,r0)
+0020b294 mov.l @r4,r1
+0020b296 mov.l r0,@(0x14,r4)
+0020b298 add 0x1,r1
+0020b29a mov.l r1,@r4
+0020b29c mov.l r5,@r0
+0020b29e mov.l r6,@(0x14,r0)
+0020b2a0 rts
+0020b2a2 _mov.l @r15+,r14
+0020b308 mov.l r8,@-r15
+0020b30a mov.l r14,@-r15
+0020b30c sts.l pr,@-r15
+0020b30e mov r15,r14
+0020b310 mov r4,r8
+0020b312 mov.l @(0x10,r8),r1
+0020b314 mov.l r5,@(0x8,r8)
+0020b316 mov.l r6,@(0xc,r8)
+
+=== ObjYeild @ 002050b0 ===
+BODY [[002050b0, 002050df]]
+
+void FUN_002050b0(void)
+
+{
+  undefined *puVar1;
+  undefined4 *puVar2;
+  
+  puVar1 = PTR_PTR_00205128;
+  puVar2 = *(undefined4 **)PTR_PTR_00205128;
+  *(undefined1 **)*puVar2 = &stack0xffffffe0;
+  *(undefined4 **)puVar1 = puVar2 + 2;
+  return;
+}
+
+
+002050b0 sts.l pr,@-r15
+002050b2 mov.l r8,@-r15
+002050b4 mov.l r9,@-r15
+002050b6 mov.l r10,@-r15
+002050b8 mov.l r11,@-r15
+002050ba mov.l r12,@-r15
+002050bc mov.l r13,@-r15
+002050be mov.l r14,@-r15
+002050c0 mov.l @(0x205128,pc),r2
+002050c2 mov.l @r2,r1
+002050c4 mov.l @r1+,r4
+002050c6 mov.l r15,@(0x0,r4)
+002050c8 mov.l @r1+,r15
+002050ca mov.l r1,@r2
+002050cc mov.l @r15+,r14
+002050ce mov.l @r15+,r13
+002050d0 mov.l @r15+,r12
+002050d2 mov.l @r15+,r11
+002050d4 mov.l @r15+,r10
+002050d6 mov.l @r15+,r9
+002050d8 mov.l @r15+,r8
+002050da lds.l @r15+,pr
+002050dc rts
+002050de _nop
+002050e0 sts.l pr,@-r15
+002050e2 mov.l r8,@-r15
+002050e4 mov.l r9,@-r15
+002050e6 mov.l r10,@-r15
+002050e8 mov.l r11,@-r15
+002050ea mov.l r12,@-r15
+002050ec mov.l r13,@-r15
+002050ee mov.l r14,@-r15
+002050f0 mov.l @(0x205128,pc),r2
+002050f2 mov.l @r2,r1
+002050f4 mov.l r15,@-r1
+002050f6 mov.l r4,@-r1
+002050f8 mov.l @(0x0,r4),r15
+002050fa jsr @r6
+002050fc _mov.l r1,@r2
+002050fe mov.l @(0x205128,pc),r2

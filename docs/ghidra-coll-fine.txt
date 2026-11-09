@@ -1,0 +1,217 @@
+imagebase=00000000 lang=SuperH:BE:32:SH-2
+
+=== BitExtract_213FA0 @ 00213fa0 ===
+BODY [[00213fa0, 00213faf] [00213fd0, 00214021]]
+
+uint BitExtract_213FA0(uint param_1,uint param_2)
+
+{
+  uint uVar1;
+  uint uVar2;
+  
+  uVar2 = 0;
+  if (param_2 < 0x20) {
+    uVar1 = (int)param_1 >> 1;
+    uVar2 = param_1;
+    switch(param_2) {
+    case 0:
+      return param_1;
+    case 0xf:
+      param_1 = uVar1;
+    case 0xe:
+      param_1 = (int)param_1 >> 1;
+    case 0xd:
+      param_1 = (int)param_1 >> 1;
+    case 0xc:
+      param_1 = (int)param_1 >> 1;
+    case 0xb:
+      param_1 = (int)param_1 >> 1;
+    case 10:
+      param_1 = (int)param_1 >> 1;
+    case 9:
+      param_1 = (int)param_1 >> 1;
+    case 8:
+      param_1 = (int)param_1 >> 1;
+    case 7:
+      param_1 = (int)param_1 >> 1;
+    case 6:
+      param_1 = (int)param_1 >> 1;
+    case 5:
+      param_1 = (int)param_1 >> 1;
+    case 4:
+      param_1 = (int)param_1 >> 1;
+    case 3:
+      param_1 = (int)param_1 >> 1;
+    case 2:
+      param_1 = (int)param_1 >> 1;
+    case 1:
+      return (int)param_1 >> 1;
+    case 0x17:
+      param_1 = uVar1;
+    case 0x16:
+      param_1 = (int)param_1 >> 1;
+    case 0x15:
+      param_1 = (int)param_1 >> 1;
+    case 0x14:
+      param_1 = (int)param_1 >> 1;
+    case 0x13:
+      param_1 = (int)param_1 >> 1;
+    case 0x12:
+      param_1 = (int)param_1 >> 1;
+    case 0x11:
+      param_1 = (int)param_1 >> 1;
+    case 0x10:
+      return (int)(short)(param_1 >> 0x10);
+    case 0x1e:
+      param_1 = uVar1;
+    case 0x1d:
+      param_1 = (int)param_1 >> 1;
+    case 0x1c:
+      param_1 = (int)param_1 >> 1;
+    case 0x1b:
+      param_1 = (int)param_1 >> 1;
+    case 0x1a:
+      param_1 = (int)param_1 >> 1;
+    case 0x19:
+      param_1 = (int)param_1 >> 1;
+    case 0x18:
+      return (int)(char)(param_1 >> 0x18);
+    }
+  }
+  return -(uint)((uVar2 & 0x80000000) != 0);
+}
+
+
+00213fa0 mov #0x1f,r0
+00213fa2 cmp/hi r0,r5
+00213fa4 bt 0x00213fd0
+00213fa6 mova @(0x213fb0,pc),r0
+00213fa8 mov.b @(r0,r5),r5
+00213faa add r5,r0
+00213fac jmp @r0
+00213fae _mov r4,r0
+00213fd0 rotcl r0
+00213fd2 rts
+00213fd4 _subc r0,r0
+00213fd6 shar r0
+00213fd8 shar r0
+00213fda shar r0
+00213fdc shar r0
+00213fde shar r0
+00213fe0 shar r0
+00213fe2 shlr16 r0
+00213fe4 shlr8 r0
+00213fe6 rts
+00213fe8 _exts.b r0,r0
+00213fea shar r0
+00213fec shar r0
+00213fee shar r0
+00213ff0 shar r0
+00213ff2 shar r0
+00213ff4 shar r0
+00213ff6 shar r0
+00213ff8 shlr16 r0
+00213ffa rts
+00213ffc _exts.w r0,r0
+00213ffe shar r0
+00214000 shar r0
+00214002 shar r0
+00214004 shar r0
+00214006 shar r0
+00214008 shar r0
+0021400a shar r0
+0021400c shar r0
+0021400e shar r0
+00214010 shar r0
+00214012 shar r0
+00214014 shar r0
+00214016 shar r0
+00214018 shar r0
+0021401a rts
+0021401c _shar r0
+0021401e rts
+00214020 _nop
+00214024 mov #0x1f,r0
+00214026 cmp/hi r0,r5
+00214028 bt 0x002140ac
+0021402a mova @(0x214034,pc),r0
+0021402c mov.b @(r0,r5),r5
+0021402e add r5,r0
+00214030 jmp @r0
+00214032 _mov r4,r0
+00214054 shll2 r0
+00214056 shll2 r0
+00214058 rts
+
+=== BitExtract_alt @ 00213fd0 ===
+BODY [[00213fd0, 00213fd5]]
+
+int BitExtract_alt(void)
+
+{
+  uint in_r0;
+  
+  return -(uint)((in_r0 & 0x80000000) != 0);
+}
+
+
+00213fd0 rotcl r0
+00213fd2 rts
+00213fd4 _subc r0,r0
+00213fd6 shar r0
+00213fd8 shar r0
+00213fda shar r0
+00213fdc shar r0
+00213fde shar r0
+00213fe0 shar r0
+00213fe2 shlr16 r0
+00213fe4 shlr8 r0
+00213fe6 rts
+00213fe8 _exts.b r0,r0
+00213fea shar r0
+00213fec shar r0
+00213fee shar r0
+00213ff0 shar r0
+00213ff2 shar r0
+00213ff4 shar r0
+00213ff6 shar r0
+00213ff8 shlr16 r0
+00213ffa rts
+00213ffc _exts.w r0,r0
+00213ffe shar r0
+00214000 shar r0
+00214002 shar r0
+00214004 shar r0
+00214006 shar r0
+00214008 shar r0
+0021400a shar r0
+0021400c shar r0
+0021400e shar r0
+00214010 shar r0
+00214012 shar r0
+00214014 shar r0
+00214016 shar r0
+00214018 shar r0
+0021401a rts
+0021401c _shar r0
+0021401e rts
+00214020 _nop
+00214024 mov #0x1f,r0
+00214026 cmp/hi r0,r5
+00214028 bt 0x002140ac
+0021402a mova @(0x214034,pc),r0
+0021402c mov.b @(r0,r5),r5
+0021402e add r5,r0
+00214030 jmp @r0
+00214032 _mov r4,r0
+00214054 shll2 r0
+00214056 shll2 r0
+00214058 rts
+0021405a _shll2 r0
+0021405c shll2 r0
+0021405e shll2 r0
+00214060 shll2 r0
+00214062 rts
+00214064 _shll r0
+00214066 shll2 r0
+00214068 shll2 r0

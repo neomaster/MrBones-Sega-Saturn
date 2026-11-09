@@ -1,0 +1,577 @@
+loader /02 base expect 0x00200000; imagebase=00000000
+
+=== BbsMatch_20B35C @ 0020b35c ===
+BODY [[0020b35c, 0020b38b]]
+
+uint * BbsMatch_20B35C(int param_1)
+
+{
+  uint *puVar1;
+  
+  puVar1 = *(uint **)(param_1 + 4);
+  if (puVar1 != (uint *)0x0) {
+    do {
+      if ((*puVar1 & *(uint *)(param_1 + 8)) == *(uint *)(param_1 + 0xc)) {
+        *(uint *)(param_1 + 4) = puVar1[6];
+        return puVar1;
+      }
+      puVar1 = (uint *)puVar1[6];
+      *(uint **)(param_1 + 4) = puVar1;
+    } while (puVar1 != (uint *)0x0);
+  }
+  return (uint *)0x0;
+}
+
+
+0020b35c mov.l r14,@-r15
+0020b35e mov.l @(0x4,r4),r2
+0020b360 mov r15,r14
+0020b362 tst r2,r2
+0020b364 bt 0x0020b384
+0020b366 mov.l @(0x8,r4),r7
+0020b368 mov.l @(0xc,r4),r3
+0020b36a mov.l @r2,r1
+0020b36c and r7,r1
+0020b36e cmp/eq r3,r1
+0020b370 bf 0x0020b37a
+0020b372 mov.l @(0x18,r2),r1
+0020b374 mov r2,r0
+0020b376 bra 0x0020b386
+0020b378 _mov.l r1,@(0x4,r4)
+0020b37a mov.l @(0x18,r2),r0
+0020b37c mov.l r0,@(0x4,r4)
+0020b37e mov r0,r2
+0020b380 tst r0,r0
+0020b382 bf 0x0020b36a
+0020b384 mov #0x0,r0
+0020b386 mov r14,r15
+0020b388 rts
+0020b38a _mov.l @r15+,r14
+0020b4ac mov.l r8,@-r15
+0020b4ae mov.l r9,@-r15
+0020b4b0 mov.l r10,@-r15
+0020b4b2 mov.l r14,@-r15
+0020b4b4 sts.l pr,@-r15
+0020b4b6 mov r15,r14
+0020b4b8 mov.l @(0x20b58c,pc),r0
+0020b4ba jsr @r0
+0020b4bc _mov r4,r9
+0020b4be mov.l @(0x20b590,pc),r2
+0020b4c0 mov #0x1,r1
+0020b4c2 mov r9,r0
+0020b4c4 mov.b r1,@(r0,r2)
+0020b4c6 mov #0x3,r1
+0020b4c8 mov.l r1,@(0x1c,r2)
+0020b4ca mov #0x0,r1
+0020b4cc mov.l r1,@(0x20,r2)
+0020b4ce mov.l @(0x20b594,pc),r2
+0020b4d0 mov #0x1,r1
+0020b4d2 mov.l r1,@r2
+0020b4d4 stc sr,r1
+0020b4d6 mov.w @(0x20b58a,pc),r0
+0020b4d8 or r0,r1
+0020b4da ldc r1,sr
+0020b4dc mov.l @(0x20b598,pc),r1
+0020b4de mov.l @r1,r1
+0020b4e0 mov.l @(0x20b59c,pc),r4
+0020b4e2 jsr @r1
+0020b4e4 _nop
+0020b4e6 mov.l @(0x20b5a0,pc),r1
+0020b4e8 mov.l @r1,r2
+0020b4ea mov r2,r0
+
+=== BbsHelper_20B38C @ 0020b38c ===
+BODY [[0020b38c, 0020b3e5]]
+
+uint * BbsHelper_20B38C(int *param_1)
+
+{
+  uint *puVar1;
+  
+  puVar1 = (uint *)param_1[1];
+  while( true ) {
+    if (puVar1 == (uint *)0x0) {
+      return (uint *)0x0;
+    }
+    if ((*puVar1 & param_1[2]) == param_1[3]) break;
+    puVar1 = (uint *)puVar1[6];
+    param_1[1] = (int)puVar1;
+  }
+  param_1[1] = puVar1[6];
+  *param_1 = *param_1 + -1;
+  if (puVar1[7] == 0) {
+    param_1[4] = puVar1[6];
+  }
+  else {
+    *(uint *)(puVar1[7] + 0x18) = puVar1[6];
+  }
+  if (puVar1[6] == 0) {
+    param_1[5] = puVar1[7];
+  }
+  else {
+    *(uint *)(puVar1[6] + 0x1c) = puVar1[7];
+  }
+  *puVar1 = 0;
+  return puVar1;
+}
+
+
+0020b38c mov.l r14,@-r15
+0020b38e mov.l @(0x4,r4),r3
+0020b390 mov r15,r14
+0020b392 tst r3,r3
+0020b394 bt 0x0020b3de
+0020b396 mov.l @r3,r1
+0020b398 mov.l @(0x8,r4),r2
+0020b39a and r2,r1
+0020b39c mov.l @(0xc,r4),r2
+0020b39e cmp/eq r2,r1
+0020b3a0 bf 0x0020b3d4
+0020b3a2 mov.l @(0x18,r3),r1
+0020b3a4 mov.l r1,@(0x4,r4)
+0020b3a6 mov.l @r4,r1
+0020b3a8 add -0x1,r1
+0020b3aa mov.l r1,@r4
+0020b3ac mov.l @(0x1c,r3),r2
+0020b3ae mov r3,r0
+0020b3b0 tst r2,r2
+0020b3b2 bt 0x0020b3ba
+0020b3b4 mov.l @(0x18,r3),r1
+0020b3b6 bra 0x0020b3be
+0020b3b8 _mov.l r1,@(0x18,r2)
+0020b3ba mov.l @(0x18,r3),r1
+0020b3bc mov.l r1,@(0x10,r4)
+0020b3be mov.l @(0x18,r0),r2
+0020b3c0 tst r2,r2
+0020b3c2 bt 0x0020b3ca
+0020b3c4 mov.l @(0x1c,r0),r1
+0020b3c6 bra 0x0020b3ce
+0020b3c8 _mov.l r1,@(0x1c,r2)
+0020b3ca mov.l @(0x1c,r0),r1
+0020b3cc mov.l r1,@(0x14,r4)
+0020b3ce mov #0x0,r1
+0020b3d0 bra 0x0020b3e0
+0020b3d2 _mov.l r1,@r0
+0020b3d4 mov.l @(0x18,r3),r1
+0020b3d6 mov.l r1,@(0x4,r4)
+0020b3d8 mov r1,r3
+0020b3da tst r1,r1
+0020b3dc bf 0x0020b396
+0020b3de mov #0x0,r0
+0020b3e0 mov r14,r15
+0020b3e2 rts
+0020b3e4 _mov.l @r15+,r14
+0020b4ac mov.l r8,@-r15
+0020b4ae mov.l r9,@-r15
+0020b4b0 mov.l r10,@-r15
+0020b4b2 mov.l r14,@-r15
+0020b4b4 sts.l pr,@-r15
+0020b4b6 mov r15,r14
+0020b4b8 mov.l @(0x20b58c,pc),r0
+0020b4ba jsr @r0
+0020b4bc _mov r4,r9
+0020b4be mov.l @(0x20b590,pc),r2
+0020b4c0 mov #0x1,r1
+
+=== BbsPost_20B264 @ 0020b264 ===
+BODY [[0020b264, 0020b2a3]]
+
+void BbsPost_20B264(int *param_1,int param_2,int param_3)
+
+{
+  int *piVar1;
+  int iVar2;
+  
+  piVar1 = param_1 + 6;
+  iVar2 = *piVar1;
+  while (iVar2 != 0) {
+    piVar1 = piVar1 + 8;
+    iVar2 = *piVar1;
+  }
+  if (param_1[5] != 0) {
+    *(int **)(param_1[5] + 0x18) = piVar1;
+  }
+  if (param_1[4] == 0) {
+    param_1[4] = (int)piVar1;
+  }
+  piVar1[7] = param_1[5];
+  piVar1[6] = 0;
+  param_1[5] = (int)piVar1;
+  *param_1 = *param_1 + 1;
+  *piVar1 = param_2;
+  piVar1[5] = param_3;
+  return;
+}
+
+
+0020b264 mov.l r14,@-r15
+0020b266 mov r4,r0
+0020b268 add 0x18,r0
+0020b26a mov.l @r0,r1
+0020b26c mov r15,r14
+0020b26e tst r1,r1
+0020b270 bt 0x0020b27a
+0020b272 add 0x20,r0
+0020b274 mov.l @r0,r1
+0020b276 tst r1,r1
+0020b278 bf 0x0020b272
+0020b27a mov.l @(0x14,r4),r1
+0020b27c tst r1,r1
+0020b27e bt 0x0020b282
+0020b280 mov.l r0,@(0x18,r1)
+0020b282 mov.l @(0x10,r4),r1
+0020b284 tst r1,r1
+0020b286 bf 0x0020b28a
+0020b288 mov.l r0,@(0x10,r4)
+0020b28a mov.l @(0x14,r4),r1
+0020b28c mov r14,r15
+0020b28e mov.l r1,@(0x1c,r0)
+0020b290 mov #0x0,r1
+0020b292 mov.l r1,@(0x18,r0)
+0020b294 mov.l @r4,r1
+0020b296 mov.l r0,@(0x14,r4)
+0020b298 add 0x1,r1
+0020b29a mov.l r1,@r4
+0020b29c mov.l r5,@r0
+0020b29e mov.l r6,@(0x14,r0)
+0020b2a0 rts
+0020b2a2 _mov.l @r15+,r14
+0020b35c mov.l r14,@-r15
+0020b35e mov.l @(0x4,r4),r2
+0020b360 mov r15,r14
+0020b362 tst r2,r2
+0020b364 bt 0x0020b384
+0020b366 mov.l @(0x8,r4),r7
+0020b368 mov.l @(0xc,r4),r3
+0020b36a mov.l @r2,r1
+0020b36c and r7,r1
+0020b36e cmp/eq r3,r1
+0020b370 bf 0x0020b37a
+0020b372 mov.l @(0x18,r2),r1
+0020b374 mov r2,r0
+0020b376 bra 0x0020b386
+0020b378 _mov.l r1,@(0x4,r4)
+0020b37a mov.l @(0x18,r2),r0
+0020b37c mov.l r0,@(0x4,r4)
+0020b37e mov r0,r2
+0020b380 tst r0,r0
+0020b382 bf 0x0020b36a
+0020b384 mov #0x0,r0
+0020b386 mov r14,r15
+0020b388 rts
+0020b38a _mov.l @r15+,r14
+
+=== BbsProbe_20B308 @ 0020b308 ===
+BODY [[0020b308, 0020b355]]
+
+void BbsProbe_20B308(int *param_1,int param_2,int param_3)
+
+{
+  undefined *puVar1;
+  undefined4 *puVar2;
+  
+  param_1[2] = param_2;
+  param_1[3] = param_3;
+  puVar1 = PTR_BbsMatch_20B35C_0020b358;
+  param_1[1] = param_1[4];
+  puVar2 = (undefined4 *)(*(code *)puVar1)();
+  if (puVar2 != (undefined4 *)0x0) {
+    *param_1 = *param_1 + -1;
+    if (puVar2[7] == 0) {
+      param_1[4] = puVar2[6];
+    }
+    else {
+      *(undefined4 *)(puVar2[7] + 0x18) = puVar2[6];
+    }
+    if (puVar2[6] == 0) {
+      param_1[5] = puVar2[7];
+    }
+    else {
+      *(undefined4 *)(puVar2[6] + 0x1c) = puVar2[7];
+    }
+    *puVar2 = 0;
+  }
+  return;
+}
+
+
+0020b308 mov.l r8,@-r15
+0020b30a mov.l r14,@-r15
+0020b30c sts.l pr,@-r15
+0020b30e mov r15,r14
+0020b310 mov r4,r8
+0020b312 mov.l @(0x10,r8),r1
+0020b314 mov.l r5,@(0x8,r8)
+0020b316 mov.l r6,@(0xc,r8)
+0020b318 mov.l @(0x20b358,pc),r0
+0020b31a jsr @r0
+0020b31c _mov.l r1,@(0x4,r8)
+0020b31e tst r0,r0
+0020b320 bt 0x0020b34c
+0020b322 mov.l @r8,r1
+0020b324 add -0x1,r1
+0020b326 mov.l r1,@r8
+0020b328 mov.l @(0x1c,r0),r2
+0020b32a tst r2,r2
+0020b32c bt 0x0020b334
+0020b32e mov.l @(0x18,r0),r1
+0020b330 bra 0x0020b338
+0020b332 _mov.l r1,@(0x18,r2)
+0020b334 mov.l @(0x18,r0),r1
+0020b336 mov.l r1,@(0x10,r8)
+0020b338 mov.l @(0x18,r0),r2
+0020b33a tst r2,r2
+0020b33c bt 0x0020b344
+0020b33e mov.l @(0x1c,r0),r1
+0020b340 bra 0x0020b348
+0020b342 _mov.l r1,@(0x1c,r2)
+0020b344 mov.l @(0x1c,r0),r1
+0020b346 mov.l r1,@(0x14,r8)
+0020b348 mov #0x0,r1
+0020b34a mov.l r1,@r0
+0020b34c mov r14,r15
+0020b34e lds.l @r15+,pr
+0020b350 mov.l @r15+,r14
+0020b352 rts
+0020b354 _mov.l @r15+,r8
+0020b35c mov.l r14,@-r15
+0020b35e mov.l @(0x4,r4),r2
+0020b360 mov r15,r14
+0020b362 tst r2,r2
+0020b364 bt 0x0020b384
+0020b366 mov.l @(0x8,r4),r7
+0020b368 mov.l @(0xc,r4),r3
+0020b36a mov.l @r2,r1
+0020b36c and r7,r1
+0020b36e cmp/eq r3,r1
+0020b370 bf 0x0020b37a
+0020b372 mov.l @(0x18,r2),r1
+0020b374 mov r2,r0
+0020b376 bra 0x0020b386
+0020b378 _mov.l r1,@(0x4,r4)
+0020b37a mov.l @(0x18,r2),r0
+0020b37c mov.l r0,@(0x4,r4)
+
+=== BbsNear_20B1C0 @ 0020b1c0 ===
+BODY [[0020b1c0, 0020b249]]
+
+void BbsNear_20B1C0(int param_1,int param_2)
+
+{
+  int in_r0;
+  ushort in_r2;
+  
+  *(ushort *)(param_1 + in_r0) = (ushort)*(byte *)(param_2 + 0x14) << 8 | in_r2 & 0xff;
+  *(ushort *)(param_1 + DAT_0020b25a) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x15),*(undefined1 *)(param_2 + 0x13));
+  *(ushort *)(param_1 + DAT_0020b25c) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x18),*(undefined1 *)(param_2 + 0x16));
+  *(ushort *)(param_1 + DAT_0020b25e) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x19),*(undefined1 *)(param_2 + 0x17));
+  *(ushort *)(param_1 + DAT_0020b260) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x1c),*(undefined1 *)(param_2 + 0x1a));
+  *(ushort *)(param_1 + DAT_0020b262) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x1d),*(undefined1 *)(param_2 + 0x1b));
+  return;
+}
+
+
+0020b1c0 mov r5,r1
+0020b1c2 add 0x14,r1
+0020b1c4 mov.b @r1,r1
+0020b1c6 extu.b r2,r2
+0020b1c8 extu.b r1,r1
+0020b1ca shll8 r1
+0020b1cc or r2,r1
+0020b1ce mov.w r1,@(r0,r4)
+0020b1d0 mov r5,r1
+0020b1d2 add 0x13,r1
+0020b1d4 mov.b @r1,r2
+0020b1d6 mov.w @(0x20b25a,pc),r0
+0020b1d8 mov r5,r1
+0020b1da add 0x15,r1
+0020b1dc mov.b @r1,r1
+0020b1de extu.b r2,r2
+0020b1e0 extu.b r1,r1
+0020b1e2 shll8 r1
+0020b1e4 or r2,r1
+0020b1e6 mov.w r1,@(r0,r4)
+0020b1e8 mov r5,r1
+0020b1ea add 0x16,r1
+0020b1ec mov.b @r1,r2
+0020b1ee mov.w @(0x20b25c,pc),r0
+0020b1f0 mov r5,r1
+0020b1f2 add 0x18,r1
+0020b1f4 mov.b @r1,r1
+0020b1f6 extu.b r2,r2
+0020b1f8 extu.b r1,r1
+0020b1fa shll8 r1
+0020b1fc or r2,r1
+0020b1fe mov.w r1,@(r0,r4)
+0020b200 mov r5,r1
+0020b202 add 0x17,r1
+0020b204 mov.b @r1,r2
+0020b206 mov.w @(0x20b25e,pc),r0
+0020b208 mov r5,r1
+0020b20a add 0x19,r1
+0020b20c mov.b @r1,r1
+0020b20e extu.b r2,r2
+0020b210 extu.b r1,r1
+0020b212 shll8 r1
+0020b214 or r2,r1
+0020b216 mov.w r1,@(r0,r4)
+0020b218 mov r5,r1
+0020b21a add 0x1a,r1
+0020b21c mov.b @r1,r2
+0020b21e mov.w @(0x20b260,pc),r0
+0020b220 mov r5,r1
+0020b222 add 0x1c,r1
+0020b224 mov.b @r1,r1
+0020b226 extu.b r2,r2
+0020b228 extu.b r1,r1
+0020b22a shll8 r1
+0020b22c or r2,r1
+0020b22e mov.w r1,@(r0,r4)
+
+=== BbsNear_20B200 @ 0020b200 ===
+BODY [[0020b200, 0020b249]]
+
+void BbsNear_20B200(int param_1,int param_2)
+
+{
+  *(ushort *)(param_1 + DAT_0020b25e) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x19),*(undefined1 *)(param_2 + 0x17));
+  *(ushort *)(param_1 + DAT_0020b260) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x1c),*(undefined1 *)(param_2 + 0x1a));
+  *(ushort *)(param_1 + DAT_0020b262) =
+       CONCAT11(*(undefined1 *)(param_2 + 0x1d),*(undefined1 *)(param_2 + 0x1b));
+  return;
+}
+
+
+0020b200 mov r5,r1
+0020b202 add 0x17,r1
+0020b204 mov.b @r1,r2
+0020b206 mov.w @(0x20b25e,pc),r0
+0020b208 mov r5,r1
+0020b20a add 0x19,r1
+0020b20c mov.b @r1,r1
+0020b20e extu.b r2,r2
+0020b210 extu.b r1,r1
+0020b212 shll8 r1
+0020b214 or r2,r1
+0020b216 mov.w r1,@(r0,r4)
+0020b218 mov r5,r1
+0020b21a add 0x1a,r1
+0020b21c mov.b @r1,r2
+0020b21e mov.w @(0x20b260,pc),r0
+0020b220 mov r5,r1
+0020b222 add 0x1c,r1
+0020b224 mov.b @r1,r1
+0020b226 extu.b r2,r2
+0020b228 extu.b r1,r1
+0020b22a shll8 r1
+0020b22c or r2,r1
+0020b22e mov.w r1,@(r0,r4)
+0020b230 mov.w @(0x20b262,pc),r0
+0020b232 mov r5,r1
+0020b234 add 0x1b,r1
+0020b236 mov.b @r1,r2
+0020b238 add 0x1d,r5
+0020b23a mov.b @r5,r1
+0020b23c extu.b r2,r2
+0020b23e extu.b r1,r1
+0020b240 shll8 r1
+0020b242 or r2,r1
+0020b244 mov.w r1,@(r0,r4)
+0020b246 rts
+0020b248 _mov.l @r15+,r14
+0020b264 mov.l r14,@-r15
+0020b266 mov r4,r0
+0020b268 add 0x18,r0
+0020b26a mov.l @r0,r1
+0020b26c mov r15,r14
+0020b26e tst r1,r1
+0020b270 bt 0x0020b27a
+0020b272 add 0x20,r0
+0020b274 mov.l @r0,r1
+0020b276 tst r1,r1
+0020b278 bf 0x0020b272
+0020b27a mov.l @(0x14,r4),r1
+0020b27c tst r1,r1
+0020b27e bt 0x0020b282
+0020b280 mov.l r0,@(0x18,r1)
+0020b282 mov.l @(0x10,r4),r1
+0020b284 tst r1,r1
+0020b286 bf 0x0020b28a
+0020b288 mov.l r0,@(0x10,r4)
+
+=== BbsNear_20B400 @ 0020b400 ===
+BODY [[0020b400, 0020b403]]
+
+/* WARNING: Control flow encountered bad instruction data */
+
+void BbsNear_20B400(void)
+
+{
+                    /* WARNING: Bad instruction - Truncating control flow here */
+  halt_baddata();
+}
+
+
+0020b400 mov.l @r15+,r14
+0020b402 mov.b @r0,r0
+0020b4ac mov.l r8,@-r15
+0020b4ae mov.l r9,@-r15
+0020b4b0 mov.l r10,@-r15
+0020b4b2 mov.l r14,@-r15
+0020b4b4 sts.l pr,@-r15
+0020b4b6 mov r15,r14
+0020b4b8 mov.l @(0x20b58c,pc),r0
+0020b4ba jsr @r0
+0020b4bc _mov r4,r9
+0020b4be mov.l @(0x20b590,pc),r2
+0020b4c0 mov #0x1,r1
+0020b4c2 mov r9,r0
+0020b4c4 mov.b r1,@(r0,r2)
+0020b4c6 mov #0x3,r1
+0020b4c8 mov.l r1,@(0x1c,r2)
+0020b4ca mov #0x0,r1
+0020b4cc mov.l r1,@(0x20,r2)
+0020b4ce mov.l @(0x20b594,pc),r2
+0020b4d0 mov #0x1,r1
+0020b4d2 mov.l r1,@r2
+0020b4d4 stc sr,r1
+0020b4d6 mov.w @(0x20b58a,pc),r0
+0020b4d8 or r0,r1
+0020b4da ldc r1,sr
+0020b4dc mov.l @(0x20b598,pc),r1
+0020b4de mov.l @r1,r1
+0020b4e0 mov.l @(0x20b59c,pc),r4
+0020b4e2 jsr @r1
+0020b4e4 _nop
+0020b4e6 mov.l @(0x20b5a0,pc),r1
+0020b4e8 mov.l @r1,r2
+0020b4ea mov r2,r0
+0020b4ec cmp/eq -0x1,r0
+0020b4ee bt 0x0020b502
+0020b4f0 mov.l @(0x20b5a4,pc),r10
+0020b4f2 mov r1,r8
+0020b4f4 mov.l @r8+,r4
+0020b4f6 mov.l @r10,r1
+0020b4f8 jsr @r1
+0020b4fa _mov #0x0,r5
+0020b4fc mov.l @r8,r0
+0020b4fe cmp/eq -0x1,r0
+0020b500 bf 0x0020b4f4
+0020b502 mov.l @(0x20b5a8,pc),r1
+0020b504 mov.l r9,@r1
+0020b506 mov.l @(0x20b5ac,pc),r1
+0020b508 mov #0x0,r10
+0020b50a mov.l r10,@r1
+0020b50c mov.l @(0x20b5b0,pc),r4
+0020b50e mov.l @(0x20b5b4,pc),r0
+0020b510 jsr @r0
+0020b512 _mov r9,r5
+0020b514 mov.l @(0x20b5b8,pc),r8
+0020b516 mov.l r10,@r8

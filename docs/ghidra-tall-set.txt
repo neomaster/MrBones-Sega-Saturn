@@ -1,0 +1,339 @@
+
+=== TallBrain_26D68C @ 0026d68c ===
+BODY [[0026d68c, 0026d751]]
+
+void TallBrain_26D68C(int param_1)
+
+{
+  undefined *puVar1;
+  code *pcVar2;
+  int iVar3;
+  int *piVar4;
+  
+  puVar1 = PTR_DAT_0026d75c;
+  piVar4 = (int *)(param_1 + 0x4c);
+  if (*(int *)PTR_DAT_0026d75c + *(int *)PTR_DAT_0026d758 * -0x2c54 + DAT_0026d764 <
+      *(int *)(PTR_DAT_0026d760 + *piVar4 * 8)) {
+    *(undefined4 *)(param_1 + 0x50) = *(undefined4 *)(PTR_DAT_0026d760 + *piVar4 * 8 + 4);
+    *piVar4 = *piVar4 + 1;
+  }
+  iVar3 = *(int *)(param_1 + 0x50);
+  if (*(int *)(puVar1 + 4) < iVar3) {
+    if (*(int *)PTR_DAT_0026d768 != 0) {
+      iVar3 = iVar3 + DAT_0026d76c;
+    }
+    if (*(int *)(puVar1 + 4) < iVar3) {
+      iVar3 = 9;
+      (*(code *)PTR_FUN_0026d770)();
+      (*(code *)PTR_FUN_0026d774)((int)DAT_0026d752);
+      puVar1 = PTR_FUN_0026d778;
+      (*(code *)PTR_FUN_0026d778)(param_1);
+      pcVar2 = DAT_0026d77c;
+      (*DAT_0026d77c)();
+      (*(code *)PTR_FUN_0026d780)(param_1 + 100,(int)DAT_0026d754,0,10);
+      do {
+        (*(code *)puVar1)(param_1);
+        iVar3 = iVar3 + -1;
+        (*pcVar2)();
+      } while (iVar3 != -1);
+    }
+  }
+  return;
+}
+
+
+0026d68c mov.l r8,@-r15
+0026d68e mov.l r9,@-r15
+0026d690 mov.l r10,@-r15
+0026d692 mov.l r11,@-r15
+0026d694 mov.l r14,@-r15
+0026d696 sts.l pr,@-r15
+0026d698 mov r4,r11
+0026d69a mov.l @(0x26d758,pc),r1
+0026d69c mov.l @(0x26d75c,pc),r5
+0026d69e mov.l @r1,r1
+0026d6a0 mov.l @(0x26d760,pc),r6
+0026d6a2 mov.l @r5,r2
+0026d6a4 mov r1,r3
+0026d6a6 add r3,r3
+0026d6a8 add r1,r3
+0026d6aa shll2 r3
+0026d6ac sub r1,r3
+0026d6ae shll2 r3
+0026d6b0 shll2 r3
+0026d6b2 add r1,r3
+0026d6b4 shll2 r3
+0026d6b6 add r1,r3
+0026d6b8 shll2 r3
+0026d6ba add r1,r3
+0026d6bc shll2 r3
+0026d6be sub r3,r2
+0026d6c0 mov.l @(0x26d764,pc),r1
+0026d6c2 mov r11,r3
+0026d6c4 add 0x4c,r3
+0026d6c6 mov.l @r3,r7
+0026d6c8 add r1,r2
+0026d6ca mov r7,r0
+0026d6cc shll2 r0
+0026d6ce add r0,r0
+0026d6d0 mov.l @(r0,r6),r1
+0026d6d2 mov r15,r14
+0026d6d4 cmp/ge r1,r2
+0026d6d6 bt 0x0026d6ee
+0026d6d8 mov r11,r1
+0026d6da shll2 r7
+
+=== TallSet_26D784 @ 0026d784 ===
+BODY [[0026d784, 0026d7cd]]
+
+void TallSet_26D784(void)
+
+{
+  undefined4 uVar1;
+  undefined *puVar2;
+  
+  puVar2 = *(undefined **)PTR_DAT_0026d7d0;
+  if (((((puVar2 == PTR_PTR_0026d7d4) || (puVar2 == PTR_PTR_0026d7d8)) ||
+       (puVar2 == PTR_PTR_0026d7dc)) ||
+      ((puVar2 == PTR_PTR_0026d7e0 || (puVar2 == PTR_PTR_0026d7e4)))) ||
+     ((puVar2 == PTR_PTR_0026d7e8 || ((puVar2 == PTR_PTR_0026d7ec || (puVar2 == PTR_PTR_0026d7f0))))
+     )) {
+    uVar1 = 1;
+  }
+  else {
+    uVar1 = 0;
+  }
+  *(undefined4 *)PTR_DAT_0026d7f4 = uVar1;
+  return;
+}
+
+
+0026d784 mov.l r14,@-r15
+0026d786 mov.l @(0x26d7d0,pc),r1
+0026d788 mov.l @r1,r2
+0026d78a mov r15,r14
+0026d78c mov.l @(0x26d7d4,pc),r1
+0026d78e cmp/eq r1,r2
+0026d790 bt 0x0026d7bc
+0026d792 mov.l @(0x26d7d8,pc),r1
+0026d794 cmp/eq r1,r2
+0026d796 bt 0x0026d7bc
+0026d798 mov.l @(0x26d7dc,pc),r1
+0026d79a cmp/eq r1,r2
+0026d79c bt 0x0026d7bc
+0026d79e mov.l @(0x26d7e0,pc),r1
+0026d7a0 cmp/eq r1,r2
+0026d7a2 bt 0x0026d7bc
+0026d7a4 mov.l @(0x26d7e4,pc),r1
+0026d7a6 cmp/eq r1,r2
+0026d7a8 bt 0x0026d7bc
+0026d7aa mov.l @(0x26d7e8,pc),r1
+0026d7ac cmp/eq r1,r2
+0026d7ae bt 0x0026d7bc
+0026d7b0 mov.l @(0x26d7ec,pc),r1
+0026d7b2 cmp/eq r1,r2
+0026d7b4 bt 0x0026d7bc
+0026d7b6 mov.l @(0x26d7f0,pc),r1
+0026d7b8 cmp/eq r1,r2
+0026d7ba bf 0x0026d7c2
+0026d7bc mov.l @(0x26d7f4,pc),r2
+0026d7be bra 0x0026d7c6
+0026d7c0 _mov #0x1,r1
+0026d7c2 mov.l @(0x26d7f4,pc),r2
+0026d7c4 mov #0x0,r1
+0026d7c6 mov.l r1,@r2
+0026d7c8 mov r14,r15
+0026d7ca rts
+0026d7cc _mov.l @r15+,r14
+0026d7f8 mov.l r8,@-r15
+0026d7fa mov.l r14,@-r15
+0026d7fc sts.l pr,@-r15
+
+=== TallSet_26D7A0 @ 0026d7a0 ===
+BODY [[0026d7a0, 0026d7cd]]
+
+void TallSet_26D7A0(void)
+
+{
+  undefined *in_r1;
+  undefined4 uVar1;
+  undefined *in_r2;
+  
+  if ((((in_r2 == in_r1) || (in_r2 == PTR_PTR_0026d7e4)) || (in_r2 == PTR_PTR_0026d7e8)) ||
+     ((in_r2 == PTR_PTR_0026d7ec || (in_r2 == PTR_PTR_0026d7f0)))) {
+    uVar1 = 1;
+  }
+  else {
+    uVar1 = 0;
+  }
+  *(undefined4 *)PTR_DAT_0026d7f4 = uVar1;
+  return;
+}
+
+
+0026d7a0 cmp/eq r1,r2
+0026d7a2 bt 0x0026d7bc
+0026d7a4 mov.l @(0x26d7e4,pc),r1
+0026d7a6 cmp/eq r1,r2
+0026d7a8 bt 0x0026d7bc
+0026d7aa mov.l @(0x26d7e8,pc),r1
+0026d7ac cmp/eq r1,r2
+0026d7ae bt 0x0026d7bc
+0026d7b0 mov.l @(0x26d7ec,pc),r1
+0026d7b2 cmp/eq r1,r2
+0026d7b4 bt 0x0026d7bc
+0026d7b6 mov.l @(0x26d7f0,pc),r1
+0026d7b8 cmp/eq r1,r2
+0026d7ba bf 0x0026d7c2
+0026d7bc mov.l @(0x26d7f4,pc),r2
+0026d7be bra 0x0026d7c6
+0026d7c0 _mov #0x1,r1
+0026d7c2 mov.l @(0x26d7f4,pc),r2
+0026d7c4 mov #0x0,r1
+0026d7c6 mov.l r1,@r2
+0026d7c8 mov r14,r15
+0026d7ca rts
+0026d7cc _mov.l @r15+,r14
+0026d7f8 mov.l r8,@-r15
+0026d7fa mov.l r14,@-r15
+0026d7fc sts.l pr,@-r15
+0026d7fe mov r4,r8
+0026d800 mov r8,r6
+0026d802 add 0x44,r6
+0026d804 mov.l @r6,r3
+0026d806 mov.l @(0x26d86c,pc),r1
+0026d808 mov.l @r1,r2
+0026d80a mov.l @r3,r1
+0026d80c mov r15,r14
+0026d80e cmp/eq r1,r2
+0026d810 bf 0x0026d85e
+0026d812 mov.l @(0x4,r3),r7
+0026d814 mov #0x1,r1
+0026d816 add 0x8,r3
+0026d818 mov.l r3,@r6
+
+=== TallSet_26D7B0 @ 0026d7b0 ===
+BODY [[0026d7b0, 0026d7cd]]
+
+void TallSet_26D7B0(void)
+
+{
+  undefined4 uVar1;
+  undefined *in_r2;
+  
+  if ((in_r2 == PTR_PTR_0026d7ec) || (in_r2 == PTR_PTR_0026d7f0)) {
+    uVar1 = 1;
+  }
+  else {
+    uVar1 = 0;
+  }
+  *(undefined4 *)PTR_DAT_0026d7f4 = uVar1;
+  return;
+}
+
+
+0026d7b0 mov.l @(0x26d7ec,pc),r1
+0026d7b2 cmp/eq r1,r2
+0026d7b4 bt 0x0026d7bc
+0026d7b6 mov.l @(0x26d7f0,pc),r1
+0026d7b8 cmp/eq r1,r2
+0026d7ba bf 0x0026d7c2
+0026d7bc mov.l @(0x26d7f4,pc),r2
+0026d7be bra 0x0026d7c6
+0026d7c0 _mov #0x1,r1
+0026d7c2 mov.l @(0x26d7f4,pc),r2
+0026d7c4 mov #0x0,r1
+0026d7c6 mov.l r1,@r2
+0026d7c8 mov r14,r15
+0026d7ca rts
+0026d7cc _mov.l @r15+,r14
+0026d7f8 mov.l r8,@-r15
+0026d7fa mov.l r14,@-r15
+0026d7fc sts.l pr,@-r15
+0026d7fe mov r4,r8
+0026d800 mov r8,r6
+0026d802 add 0x44,r6
+0026d804 mov.l @r6,r3
+0026d806 mov.l @(0x26d86c,pc),r1
+0026d808 mov.l @r1,r2
+0026d80a mov.l @r3,r1
+0026d80c mov r15,r14
+0026d80e cmp/eq r1,r2
+0026d810 bf 0x0026d85e
+0026d812 mov.l @(0x4,r3),r7
+0026d814 mov #0x1,r1
+0026d816 add 0x8,r3
+0026d818 mov.l r3,@r6
+0026d81a and r7,r1
+0026d81c tst r1,r1
+0026d81e bt 0x0026d82a
+0026d820 mov.l @(0x26d870,pc),r1
+0026d822 mov.l @(0x26d874,pc),r2
+0026d824 mov.l r2,@r1
+0026d826 mov.w @(0x26d868,pc),r2
+0026d828 mov.l r2,@(0x4,r1)
+
+=== TallSet_26D790 @ 0026d790 ===
+BODY [[0026d790, 0026d79f]]
+
+void TallSet_26D790(void)
+
+{
+  undefined4 uVar1;
+  undefined *in_r2;
+  byte in_sr;
+  
+  if ((((((in_sr & 1) == 1) || (in_r2 == PTR_PTR_0026d7d8)) || (in_r2 == PTR_PTR_0026d7dc)) ||
+      ((in_r2 == PTR_PTR_0026d7e0 || (in_r2 == PTR_PTR_0026d7e4)))) ||
+     ((in_r2 == PTR_PTR_0026d7e8 || ((in_r2 == PTR_PTR_0026d7ec || (in_r2 == PTR_PTR_0026d7f0))))))
+  {
+    uVar1 = 1;
+  }
+  else {
+    uVar1 = 0;
+  }
+  *(undefined4 *)PTR_DAT_0026d7f4 = uVar1;
+  return;
+}
+
+
+0026d790 bt 0x0026d7bc
+0026d792 mov.l @(0x26d7d8,pc),r1
+0026d794 cmp/eq r1,r2
+0026d796 bt 0x0026d7bc
+0026d798 mov.l @(0x26d7dc,pc),r1
+0026d79a cmp/eq r1,r2
+0026d79c bt 0x0026d7bc
+0026d79e mov.l @(0x26d7e0,pc),r1
+0026d7a0 cmp/eq r1,r2
+0026d7a2 bt 0x0026d7bc
+0026d7a4 mov.l @(0x26d7e4,pc),r1
+0026d7a6 cmp/eq r1,r2
+0026d7a8 bt 0x0026d7bc
+0026d7aa mov.l @(0x26d7e8,pc),r1
+0026d7ac cmp/eq r1,r2
+0026d7ae bt 0x0026d7bc
+0026d7b0 mov.l @(0x26d7ec,pc),r1
+0026d7b2 cmp/eq r1,r2
+0026d7b4 bt 0x0026d7bc
+0026d7b6 mov.l @(0x26d7f0,pc),r1
+0026d7b8 cmp/eq r1,r2
+0026d7ba bf 0x0026d7c2
+0026d7bc mov.l @(0x26d7f4,pc),r2
+0026d7be bra 0x0026d7c6
+0026d7c0 _mov #0x1,r1
+0026d7c2 mov.l @(0x26d7f4,pc),r2
+0026d7c4 mov #0x0,r1
+0026d7c6 mov.l r1,@r2
+0026d7c8 mov r14,r15
+0026d7ca rts
+0026d7cc _mov.l @r15+,r14
+0026d7f8 mov.l r8,@-r15
+0026d7fa mov.l r14,@-r15
+0026d7fc sts.l pr,@-r15
+0026d7fe mov r4,r8
+0026d800 mov r8,r6
+0026d802 add 0x44,r6
+0026d804 mov.l @r6,r3
+0026d806 mov.l @(0x26d86c,pc),r1
+0026d808 mov.l @r1,r2

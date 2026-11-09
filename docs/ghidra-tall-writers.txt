@@ -1,0 +1,492 @@
+03CODE imagebase=00000000
+
+=== Fn_26D51C @ 0026d51c ===
+BODY [[0026d51c, 0026d55b]]
+
+void FUN_0026d51c(void)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  int iVar3;
+  
+  puVar2 = PTR_DAT_0026d564;
+  puVar1 = PTR_DAT_0026d560;
+  *(int *)PTR_DAT_0026d560 = *(int *)PTR_DAT_0026d560 + 1;
+  if (*(int *)puVar2 != 0) {
+    *(int *)PTR_DAT_0026d568 = *(int *)PTR_DAT_0026d568 + 1;
+  }
+  iVar3 = *(int *)puVar2;
+  if (iVar3 == *(int *)PTR_DAT_0026d56c) {
+    *(undefined4 *)PTR_DAT_0026d570 = 0;
+  }
+  else {
+    *(int *)PTR_DAT_0026d56c = iVar3;
+    *(int *)PTR_DAT_0026d570 = (int)DAT_0026d55c;
+    *(undefined4 *)puVar1 = 0;
+  }
+  return;
+}
+
+
+0026d51c mov.l r14,@-r15
+0026d51e mov.l @(0x26d560,pc),r7
+0026d520 mov.l @r7,r1
+0026d522 mov.l @(0x26d564,pc),r6
+0026d524 add 0x1,r1
+0026d526 mov.l r1,@r7
+0026d528 mov.l @r6,r1
+0026d52a mov r15,r14
+0026d52c tst r1,r1
+0026d52e bt 0x0026d538
+0026d530 mov.l @(0x26d568,pc),r1
+0026d532 mov.l @r1,r2
+0026d534 add 0x1,r2
+0026d536 mov.l r2,@r1
+0026d538 mov.l @r6,r2
+0026d53a mov.l @(0x26d56c,pc),r3
+0026d53c mov.l @r3,r1
+0026d53e cmp/eq r1,r2
+0026d540 bt 0x0026d550
+0026d542 mov.l r2,@r3
+0026d544 mov.l @(0x26d570,pc),r1
+0026d546 mov.w @(0x26d55c,pc),r2
+0026d548 mov.l r2,@r1
+0026d54a mov #0x0,r1
+
+=== Fn_26D7F8 @ 0026d7f8 ===
+BODY [[0026d7f8, 0026d867]]
+
+void Fn_26D7F8(int param_1)
+
+{
+  undefined *puVar1;
+  undefined4 uVar2;
+  int *piVar3;
+  uint uVar4;
+  
+  piVar3 = *(int **)(param_1 + 0x44);
+  if (*(int *)PTR_DAT_0026d86c == *piVar3) {
+    uVar4 = piVar3[1];
+    *(int **)(param_1 + 0x44) = piVar3 + 2;
+    puVar1 = PTR_DAT_0026d870;
+    if ((uVar4 & 1) != 0) {
+      *(undefined4 *)PTR_DAT_0026d870 = DAT_0026d874;
+      *(int *)(puVar1 + 4) = (int)DAT_0026d868;
+    }
+    if ((uVar4 & 0x40) == 0) {
+      if ((uVar4 & 4) == 0) {
+        if ((uVar4 & (int)DAT_0026d86a) != 0) {
+          (*(code *)PTR_FUN_0026d880)(param_1);
+        }
+      }
+      else {
+        (*(code *)PTR_FUN_0026d87c)(0);
+      }
+    }
+    else {
+      uVar2 = (*(code *)PTR_FUN_0026d878)(0);
+      *(undefined4 *)(param_1 + 0x48) = uVar2;
+    }
+  }
+  return;
+}
+
+
+0026d7f8 mov.l r8,@-r15
+0026d7fa mov.l r14,@-r15
+0026d7fc sts.l pr,@-r15
+0026d7fe mov r4,r8
+0026d800 mov r8,r6
+0026d802 add 0x44,r6
+0026d804 mov.l @r6,r3
+0026d806 mov.l @(0x26d86c,pc),r1
+0026d808 mov.l @r1,r2
+0026d80a mov.l @r3,r1
+0026d80c mov r15,r14
+0026d80e cmp/eq r1,r2
+0026d810 bf 0x0026d85e
+0026d812 mov.l @(0x4,r3),r7
+0026d814 mov #0x1,r1
+0026d816 add 0x8,r3
+0026d818 mov.l r3,@r6
+0026d81a and r7,r1
+0026d81c tst r1,r1
+0026d81e bt 0x0026d82a
+0026d820 mov.l @(0x26d870,pc),r1
+0026d822 mov.l @(0x26d874,pc),r2
+0026d824 mov.l r2,@r1
+0026d826 mov.w @(0x26d868,pc),r2
+
+=== Fn_25E0F4 @ 0025e0f4 ===
+BODY [[0025e0f4, 0025e10f]]
+
+void FUN_0025e0f4(void)
+
+{
+  (*DAT_0025e114)(PTR_DAT_0025e110);
+  (*DAT_0025e11c)(PTR_DAT_0025e118,2);
+  return;
+}
+
+
+0025e0f4 mov.l r14,@-r15
+0025e0f6 sts.l pr,@-r15
+0025e0f8 mov.l @(0x25e110,pc),r4
+0025e0fa mov.l @(0x25e114,pc),r1
+0025e0fc jsr @r1
+0025e0fe _mov r15,r14
+0025e100 mov.l @(0x25e118,pc),r4
+0025e102 mov.l @(0x25e11c,pc),r1
+0025e104 jsr @r1
+0025e106 _mov #0x2,r5
+0025e108 mov r14,r15
+0025e10a lds.l @r15+,pr
+0025e10c rts
+0025e10e _mov.l @r15+,r14
+0025e31c mov.l r14,@-r15
+0025e31e mov r15,r14
+0025e320 mov.l @(0x25e32c,pc),r2
+0025e322 mov #0x0,r1
+0025e324 mov.l r1,@r2
+0025e326 rts
+0025e328 _mov.l @r15+,r14
+0025e330 mov.l r14,@-r15
+0025e332 mov r15,r14
+0025e334 mov.l @r15+,r14
+
+=== Fn_2686C0 @ 002686c0 ===
+BODY [[002686c0, 00268705]]
+
+bool FUN_002686c0(int param_1)
+
+{
+  int *piVar1;
+  int iVar2;
+  
+  iVar2 = *(int *)PTR_DAT_00268708;
+  piVar1 = (int *)(iVar2 + 0x48);
+  param_1 = *piVar1 - param_1;
+  *piVar1 = param_1;
+  if (param_1 < 0) {
+    *piVar1 = 0;
+    (*(code *)PTR_FUN_0026870c)(1);
+  }
+  *(undefined4 *)(iVar2 + 0x4c) = 0;
+  (*(code *)PTR_FUN_00268710)(iVar2,0);
+  return param_1 < 0;
+}
+
+
+002686c0 mov.l r8,@-r15
+002686c2 mov.l r9,@-r15
+002686c4 mov.l r14,@-r15
+002686c6 sts.l pr,@-r15
+002686c8 mov.l @(0x268708,pc),r1
+002686ca mov.l @r1,r8
+002686cc mov r15,r14
+002686ce mov r8,r2
+002686d0 add 0x48,r2
+002686d2 mov.l @r2,r1
+002686d4 mov #0x0,r9
+002686d6 sub r4,r1
+002686d8 mov.l r1,@r2
+002686da cmp/pz r1
+002686dc bt 0x002686e8
+002686de mov.l r9,@r2
+002686e0 mov.l @(0x26870c,pc),r1
+002686e2 jsr @r1
+002686e4 _mov #0x1,r4
+002686e6 mov #0x1,r9
+002686e8 mov r8,r1
+002686ea add 0x4c,r1
+002686ec mov #0x0,r2
+002686ee mov.l r2,@r1
+
+=== Fn_265B2C @ 00265b2c ===
+BODY [[00265b2c, 00265b91]]
+
+bool FUN_00265b2c(undefined4 param_1,undefined4 param_2,undefined4 param_3,undefined4 param_4)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  undefined *puVar3;
+  int iVar4;
+  int iVar5;
+  
+  iVar4 = (*(code *)PTR_FUN_00265b94)();
+  puVar1 = PTR_PTR_00265b9c;
+  if (iVar4 != 0) {
+    iVar5 = *(int *)(*(int *)PTR_DAT_00265b98 + 0x10);
+    *(undefined4 *)(PTR_PTR_00265b9c + 0xc) = *(undefined4 *)(iVar5 + 0xc);
+    *(undefined4 *)(puVar1 + 0x10) = *(undefined4 *)(iVar5 + 0x10);
+    *(undefined4 *)(puVar1 + 0x14) = *(undefined4 *)(iVar5 + 0x14);
+    puVar2 = PTR_FUN_00265ba0;
+    *(undefined4 *)(puVar1 + 0x18) = *(undefined4 *)(iVar5 + 0x18);
+    *(undefined4 *)(puVar1 + 0x1c) = *(undefined4 *)(iVar5 + 0x1c);
+    *(undefined4 *)(puVar1 + 0x14) = param_2;
+    *(undefined4 *)(puVar1 + 0x18) = param_4;
+    puVar3 = PTR_PTR_00265ba4;
+    *(undefined4 *)(PTR_PTR_00265ba4 + 0x10) = param_3;
+    *(undefined4 *)(puVar3 + 0x1c) = 0;
+    *(undefined **)PTR_DAT_00265ba8 = puVar1;
+    (*(code *)puVar2)(param_1);
+  }
+  return iVar4 != 0;
+}
+
+
+00265b2c mov.l r8,@-r15
+00265b2e mov.l r9,@-r15
+00265b30 mov.l r10,@-r15
+00265b32 mov.l r11,@-r15
+00265b34 mov.l r14,@-r15
+00265b36 sts.l pr,@-r15
+00265b38 mov r15,r14
+00265b3a mov r4,r8
+00265b3c mov r5,r10
+00265b3e mov r6,r11
+00265b40 mov.l @(0x265b94,pc),r0
+00265b42 jsr @r0
+00265b44 _mov r7,r9
+00265b46 tst r0,r0
+00265b48 bf 0x00265b4e
+00265b4a bra 0x00265b82
+00265b4c _mov #0x0,r0
+00265b4e mov.l @(0x265b98,pc),r1
+00265b50 mov.l @r1,r1
+00265b52 mov.l @(0x10,r1),r2
+00265b54 mov.l @(0xc,r2),r1
+00265b56 mov.l @(0x265b9c,pc),r3
+00265b58 mov.l r1,@(0xc,r3)
+00265b5a mov.l @(0x10,r2),r1
+
+=== CPanScroll_257320 @ 00257320 ===
+BODY [[00257320, 00257409]]
+
+void CPanScroll_257320(undefined4 param_1)
+
+{
+  code *pcVar1;
+  code *pcVar2;
+  short *psVar3;
+  undefined *puVar4;
+  int *piVar5;
+  undefined4 *puVar6;
+  short *psVar7;
+  
+  pcVar1 = DAT_0025740c;
+  (*DAT_0025740c)(4);
+  (*(code *)PTR_FUN_00257410)(param_1);
+  (*DAT_0025741c)(0xf,*DAT_00257418,0,DAT_00257414);
+  pcVar2 = DAT_00257420;
+  (*DAT_00257420)(4);
+  (*pcVar1)(9);
+  (*(code *)PTR_FUN_00257424)(param_1);
+  (*(code *)PTR_FUN_00257428)(param_1);
+  (*(code *)PTR_FUN_0025742c)(param_1);
+  (*(code *)PTR_FUN_00257430)(param_1);
+  (*pcVar2)(9);
+  puVar4 = PTR_DAT_00257438;
+  psVar3 = DAT_00257434;
+  psVar7 = DAT_00257434 + 2;
+  do {
+    (*DAT_0025743c)();
+    puVar6 = (undefined4 *)(puVar4 + 4);
+    *psVar3 = (short)*(undefined4 *)puVar4 + *(short *)PTR_DAT_00257440;
+    piVar5 = DAT_00257444;
+    *psVar7 = (short)*puVar6;
+    if (*piVar5 != 0) {
+      (*(code *)PTR_FUN_00257448)(param_1,2);
+    }
+    (*DAT_0025743c)();
+    *psVar3 = (short)*(undefined4 *)puVar4 + *(short *)PTR_DAT_00257440;
+    *psVar7 = (short)*puVar6;
+    if (*piVar5 != 0) {
+      (*(code *)PTR_FUN_00257448)(param_1,2);
+    }
+    (*DAT_0025743c)();
+    *psVar3 = (short)*(undefined4 *)puVar4 + *(short *)PTR_DAT_00257440;
+    *psVar7 = (short)*puVar6;
+    if (*piVar5 != 0) {
+      (*(code *)PTR_FUN_00257448)(param_1,2);
+    }
+    (*DAT_0025743c)();
+    *psVar3 = (short)*(undefined4 *)puVar4 + *(short *)PTR_DAT_00257440;
+    *psVar7 = (short)*puVar6;
+    if (*piVar5 != 0) {
+      (*(code *)PTR_FUN_00257448)(param_1,2);
+    }
+  } while( true );
+}
+
+
+00257320 mov.l r8,@-r15
+00257322 mov.l r9,@-r15
+00257324 mov.l r10,@-r15
+00257326 mov.l r11,@-r15
+00257328 mov.l r12,@-r15
+0025732a mov.l r13,@-r15
+0025732c mov.l r14,@-r15
+0025732e sts.l pr,@-r15
+00257330 mov r15,r14
+00257332 mov r4,r10
+00257334 mov.l @(0x25740c,pc),r9
+00257336 jsr @r9
+00257338 _mov #0x4,r4
+0025733a mov.l @(0x257410,pc),r1
+0025733c jsr @r1
+0025733e _mov r10,r4
+00257340 mov.l @(0x257414,pc),r7
+00257342 mov.l @(0x257418,pc),r1
+00257344 mov.l @r1,r5
+00257346 mov.l @(0x25741c,pc),r0
+00257348 mov #0x0,r6
+0025734a jsr @r0
+0025734c _mov #0xf,r4
+0025734e mov.l @(0x257420,pc),r8
+
+=== RWorldSprite_268A64 @ 00268a64 ===
+BODY [[00268a64, 00268be7]]
+
+void RWorldSprite_268A64(int *param_1,int param_2)
+
+{
+  code *pcVar1;
+  short sVar2;
+  short sVar3;
+  short sVar4;
+  short sVar5;
+  undefined2 *extraout_r2;
+  undefined2 *puVar6;
+  undefined4 *puVar7;
+  undefined2 *puVar8;
+  int iVar9;
+  int iVar10;
+  
+  puVar6 = *(undefined2 **)(param_2 + 0xc);
+  param_1[9] = (int)(short)(((*DAT_00268bf4 - *(int *)*param_1) * 7 & 0x3fffffffU) >> 0xe);
+  param_1[10] = (int)(short)(((*DAT_00268bf8 - *(int *)(*param_1 + 4)) * 7 & 0x3fffffffU) >> 0xe);
+  param_1[0xb] = DAT_00268bfc;
+  if (((uint)(int)DAT_00268bea < (uint)(param_1[9] + (int)DAT_00268be8)) ||
+     ((uint)(int)DAT_00268bee < (uint)(param_1[10] + (int)DAT_00268bec))) {
+    param_1[0x13] = param_1[0x13] & 0xfffffffe;
+  }
+  else {
+    param_1[0x13] = param_1[0x13] | 1;
+    iVar10 = -*(int *)(*DAT_00268c00 + (short)(DAT_00268bf0 & *(ushort *)(*param_1 + 0xc)) * 4);
+    iVar9 = -*(int *)(*DAT_00268c00 + (short)(DAT_00268bf0 & *(ushort *)(*param_1 + 0xe)) * 4);
+    sVar2 = (*DAT_00268c04)(*puVar6,iVar9);
+    pcVar1 = DAT_00268c08;
+    (*DAT_00268c08)();
+    sVar3 = (*DAT_00268c04)(puVar6[1],iVar10);
+    (*pcVar1)();
+    puVar8 = *(undefined2 **)(puVar6 + 4);
+    sVar4 = (*DAT_00268c04)(*puVar8,iVar9);
+    (*pcVar1)();
+    sVar5 = (*DAT_00268c04)(puVar8[1],iVar10);
+    puVar7 = DAT_00268c0c;
+    (*pcVar1)();
+    extraout_r2[6] = (short)param_1[9] + sVar2;
+    extraout_r2[10] = (short)param_1[9] - (sVar4 - sVar2);
+    extraout_r2[7] = (short)param_1[10] + sVar3;
+    extraout_r2[0xb] = (short)param_1[10] - (sVar5 - sVar3);
+    *extraout_r2 = puVar6[7];
+    extraout_r2[2] = puVar6[8];
+    extraout_r2[3] = (ushort)param_1[0xd] | puVar6[9];
+    extraout_r2[4] = puVar6[10];
+    extraout_r2[5] = puVar6[0xb];
+    *puVar7 = extraout_r2 + 0x10;
+  }
+  return;
+}
+
+
+00268a64 mov.l r8,@-r15
+00268a66 mov.l r9,@-r15
+00268a68 mov.l r10,@-r15
+00268a6a mov.l r11,@-r15
+00268a6c mov.l r12,@-r15
+00268a6e mov.l r13,@-r15
+00268a70 mov.l r14,@-r15
+00268a72 sts.l pr,@-r15
+00268a74 add -0x8,r15
+00268a76 mov r15,r14
+00268a78 mov r4,r13
+00268a7a mov.l @(0xc,r5),r5
+00268a7c mov.l @(0x268bf4,pc),r1
+00268a7e mov.l @r13,r2
+00268a80 mov.l r5,@r14
+00268a82 mov.l @r1,r3
+00268a84 mov.l @r2,r1
+00268a86 sub r1,r3
+00268a88 mov r3,r1
+00268a8a shll2 r1
+00268a8c add r1,r1
+00268a8e sub r3,r1
+00268a90 shll2 r1
+00268a92 swap.w r1,r1
+
+=== CollProbe_25C900 @ 0025c900 ===
+BODY [[0025c900, 0025c98b]]
+
+undefined4 CollProbe_25C900(void)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  int iVar3;
+  undefined4 uVar4;
+  int *piVar5;
+  
+  puVar2 = PTR_FUN_0025c998;
+  puVar1 = PTR_DAT_0025c98c;
+  piVar5 = (int *)(PTR_DAT_0025c98c + -4);
+  iVar3 = (*(code *)PTR_FUN_0025c998)
+                    (*piVar5 + *(int *)PTR_DAT_0025c994,
+                     *(int *)PTR_DAT_0025c98c + *(int *)PTR_DAT_0025c990);
+  if ((iVar3 != 3) ||
+     (iVar3 = (*(code *)puVar2)(*piVar5 + *(int *)PTR_DAT_0025c9a0,
+                                *(int *)puVar1 + *(int *)PTR_DAT_0025c99c), iVar3 == 3)) {
+    puVar2 = PTR_FUN_0025c998;
+    puVar1 = PTR_DAT_0025c98c;
+    piVar5 = (int *)(PTR_DAT_0025c98c + -4);
+    iVar3 = (*(code *)PTR_FUN_0025c998)
+                      (*piVar5 + *(int *)PTR_DAT_0025c9a8,
+                       *(int *)PTR_DAT_0025c98c + *(int *)PTR_DAT_0025c9a4);
+    if ((iVar3 != 3) ||
+       (iVar3 = (*(code *)puVar2)(*piVar5 + *(int *)PTR_DAT_0025c9b0,
+                                  *(int *)puVar1 + *(int *)PTR_DAT_0025c9ac), iVar3 == 3)) {
+      uVar4 = (*(code *)PTR_FUN_0025c9b4)();
+      return uVar4;
+    }
+  }
+  return 1;
+}
+
+
+0025c900 mov.l r8,@-r15
+0025c902 mov.l r9,@-r15
+0025c904 mov.l r10,@-r15
+0025c906 mov.l r14,@-r15
+0025c908 sts.l pr,@-r15
+0025c90a mov r15,r14
+0025c90c mov.l @(0x25c98c,pc),r8
+0025c90e mov.l @(0x25c990,pc),r1
+0025c910 mov.l @r8,r5
+0025c912 mov r8,r9
+0025c914 mov.l @r1,r1
+0025c916 add -0x4,r9
+0025c918 mov.l @r9,r4
+0025c91a add r1,r5
+0025c91c mov.l @(0x25c994,pc),r1
+0025c91e mov.l @r1,r1
+0025c920 mov.l @(0x25c998,pc),r10
+0025c922 jsr @r10
+0025c924 _add r1,r4
+0025c926 cmp/eq 0x3,r0
+0025c928 bf 0x0025c940
+0025c92a mov.l @r8,r5
+0025c92c mov.l @(0x25c99c,pc),r1
+0025c92e mov.l @r1,r1

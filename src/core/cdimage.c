@@ -152,15 +152,22 @@ int cd_open(cdimage *cd, const char *path, char *err, size_t errlen) {
 }
 
 void cd_close(cdimage *cd) {
-    for (int i = 0; i < cd->ntracks; i++)
-        if (cd->tracks[i].fp) { fclose(cd->tracks[i].fp); cd->tracks[i].fp = NULL; }
+    if (!cd) return;
+    for (int i = 0; i < cd->ntracks; i++) {
+        cd->tracks[i].available = 0;
+        if (cd->tracks[i].fp) {
+            fclose(cd->tracks[i].fp);
+            cd->tracks[i].fp = NULL;
+        }
+    }
 }
 
-uint32_t cd_data_sectors(const cdimage *cd) { return cd->ntracks ? cd->tracks[0].sectors : 0; }
+uint32_t cd_data_sectors(const cdimage *cd) { return (cd && cd->ntracks) ? cd->tracks[0].sectors : 0; }
 
 int cd_read_raw(cdimage *cd, uint32_t lba, uint8_t out[CD_RAW_SECTOR]) {
+    if (!cd || cd->ntracks <= 0) return -1;
     cd_track *t = &cd->tracks[0];
-    if (!t->available || lba >= t->sectors) return -1;
+    if (!t->available || !t->fp || lba >= t->sectors) return -1;
     if (seek64(t->fp, (uint64_t)lba * CD_RAW_SECTOR) != 0) return -1;
     return fread(out, 1, CD_RAW_SECTOR, t->fp) == CD_RAW_SECTOR ? 0 : -1;
 }
@@ -172,18 +179,20 @@ int cd_read_user(cdimage *cd, uint32_t lba, uint8_t out[CD_USER_SECTOR]) {
     return 0;
 }
 
-int cd_track_count(const cdimage *cd) { return cd->ntracks; }
+int cd_track_count(const cdimage *cd) { return cd ? cd->ntracks : 0; }
 
 const cd_track *cd_track_get(const cdimage *cd, int number) {
+    if (!cd) return NULL;
     for (int i = 0; i < cd->ntracks; i++)
         if (cd->tracks[i].number == number) return &cd->tracks[i];
     return NULL;
 }
 
 int cd_read_audio(cdimage *cd, int number, uint32_t frame, uint8_t out[CD_RAW_SECTOR]) {
+    if (!cd) return -1;
     cd_track *t = NULL;
     for (int i = 0; i < cd->ntracks; i++) if (cd->tracks[i].number == number) t = &cd->tracks[i];
-    if (!t || t->type != CD_TRACK_AUDIO || !t->available) return -1;
+    if (!t || t->type != CD_TRACK_AUDIO || !t->available || !t->fp) return -1;
     uint64_t sec = (uint64_t)t->index01_frame + frame;
     if (sec >= t->sectors) return -1;
     if (seek64(t->fp, sec * CD_RAW_SECTOR) != 0) return -1;

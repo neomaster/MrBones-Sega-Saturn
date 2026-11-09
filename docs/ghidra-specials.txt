@@ -1,0 +1,34 @@
+# §15/§18 special-stage MAP notes (mr-bones-maps) — static, not full Ghidra decomp
+# Host §18: special_phase RHYTHM/ACTION/PRESENT — soft stand-in, see docs/coverage.md
+
+## GUITAR (Disc1 /07GUITAR 03CODE=374916)
+- Objs: guitar.o, gbones.o, seaskel.o, manager.o, endgame.o, scroller.o, scrlcoll.o, SkelBar.o, sidescrl.o, bnscore
+- Kind: rhythm + side-scroll collision (pFloorHixels)
+- Assets: 20AVI~3.7MB, 19DUCK, no 15PAN
+
+## DRUM (Disc1 /14DRUM 03CODE=291020)
+- Objs: drum.o, drums.o, drumtab.o, dbones.o, cable.o, jacob.o, branch.o, endgame.o, scrlcoll.o
+- Kind: rhythm; 20AVI~6.8MB
+
+## GENROOM (Disc2 /25GENRM 03CODE=264068; Disc1 stub 19800)
+- Objs: pan_coll.o, panscrl.o, redmov/blumov, reds/blues, zap.o, endgame.o, pscroll.o
+- Kind: pan room; 15PAN~14MB, 20AVI~7MB
+
+## BIGBONES (Disc1 /16BIGBNS 03CODE=272260)
+- Objs: pan_coll.o, panscrl.o, skelbar.o, scroller.o, endgame.o, bnscore
+- Kind: pan + skel; 15PAN~15MB, 20AVI~26MB
+
+## FINALE (Disc2 /27FINALE 03CODE=600000; Disc1 stub)
+- Objs: finale.o, fbones.o, ring.o, bolt.o, cplatsvr.o, manager.o, endgame.o, scrlcoll.o
+- Kind: finale boss-style side-scroll; 20AVI~36MB; no 15PAN
+
+## DUKMOVIE (MAP only — not a top-level ISO dir)
+- Objs: DUCKPLAY.o, DUCKFILE.o, DUCK_SND.o, DUCK_SBL.o, DUCK_SLV.o; mfp_avi / DXL video
+- Host stand-in: per-stage 19DUCK + 20AVI load (smoke size check)
+
+## LOSE (/28LOSE)
+- No 03CODE; 19DUCK=134744, 20AVI=1289996 on both discs
+- Host: stage_assets allow_avi_only; lose route from stage_progress
+
+## TROLL1/2
+- No real 03CODE (Disc1 missing; Disc2 stub 19800) → STAGE_KIND_EMPTY skip

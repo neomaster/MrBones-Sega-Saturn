@@ -1,0 +1,11 @@
+# Encaminhamento dos filmes de VALLEY e GUITAR
+
+**Correção da versão anterior:** o argumento de `_PlayDuckMovie` é a próxima fase; ele não identifica por si só o filme a ser reproduzido. O port anteriormente associou equivocadamente o AVI de GUITAR à vitória de VALLEY.
+
+O carregador `/02`, SHA-256 `02faf276ff9892d82c4b41dbfd8e6515f79b87f8883c731fa3d8aa1610d33704`, foi analisado no Ghidra em `0x00200000` (`ghidra-fmv-loader.txt`). Em `_LoadLevel` (`0x0020b4ac`), os literais em `0x0020b5a8` e `0x0020b5ac` apontam respectivamente para `0x0021d9e4` e `0x0021d9e8`: a rotina define o primeiro como o nível solicitado e zera o segundo. `_PlayDuckMovie` (`0x0020b61c`) copia `0x0021d9e4` para `0x0021d9e8`, define o primeiro como o argumento, executa o leitor e chama `_LoadLevel` com esse argumento. `_PlayNewDuckMovie` atribui separadamente a origem do filme e a fase seguinte. Os endereços de dados do mapa diferem dos literais observados, por isso a identificação deriva também do comportamento das três funções.
+
+- `/06VALLEY/03CODE`, SHA-256 `98da3f5ccbd44012281db4c98d1dac60a9ec58ef8a5580e69f7ad35b8a7dc46c`, base `0x00232000`: o ramo padrão de vitória em `CEndLevel::Brain` (`0x002be75c`) chama `_PlayDuckMovie(7)`. O filme é o da fase corrente, `/06VALLEY/20AVI`; depois o carregador inicia `/07GUITAR`. Descompilação: `ghidra-fmv-valley.txt`.
+- `/07GUITAR/03CODE`, SHA-256 `ef567508e6b7b6988177c068853cca150735f51c52d73a59f014598eb0ed8e3a`, mesma base: o prólogo observado do cérebro está em `0x00261ed8`, 16 bytes antes de `0x00261ee8` no mapa. A ramificação equivalente chama `_PlayDuckMovie(8)`, ou seja, filme da fase corrente `/07GUITAR/20AVI` antes de `/08BAT1`. Descompilação: `ghidra-fmv-guitar.txt`.
+- BAT3: o prólogo observado está em `0x002b5858`, 12 bytes após o endereço do mapa. No ramo padrão de vitória, o literal `0x002b5998` aponta para `_LoadLevel` com argumento 11; não há evidência, nesse ramo, de um filme antes de LOGS. Descompilação: `ghidra-fmv-bat3.txt`.
+
+O teste `test_fmv_transition` simula cada vitória, confere qual diretório fornece o AVI, decodifica a apresentação inteira com relógio simulado e verifica a próxima fase. A observação visual das transições no Ymir, o comando de salto e o uso do AVI como fundo da fase GUITAR permanecem pendentes.

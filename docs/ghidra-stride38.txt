@@ -1,0 +1,281 @@
+
+=== Near_mov38_a probe@002675ba fun=FUN_002674f0@002674f0 ===
+BODY [[002674f0, 00267633] [0026764c, 0026770d]]
+
+void FUN_002674f0(int param_1,int param_2)
+
+{
+  code *pcVar1;
+  int *piVar2;
+  int *piVar3;
+  code *extraout_r1;
+  code *extraout_r1_00;
+  undefined4 *puVar4;
+  undefined4 extraout_r2;
+  undefined4 extraout_r2_00;
+  int iVar5;
+  undefined4 *puVar6;
+  int *piVar7;
+  int iVar8;
+  int iVar9;
+  int *piVar10;
+  int iVar11;
+  int iVar12;
+  int iStack_30;
+  
+  iVar5 = *(int *)(param_1 + 0x50);
+  *(int *)(param_1 + 0x50) = iVar5 + 1;
+  if ((10 < iVar5) && (0x15 < *DAT_00267640)) {
+    (*DAT_00267644)();
+  }
+  *(undefined4 *)(param_1 + 0x14) = *(undefined4 *)(param_1 + 0x14);
+  iStack_30 = param_2 + -1;
+  *(undefined4 *)(param_1 + 0x18) = *(undefined4 *)(param_1 + 0x18);
+  *(undefined4 *)(param_1 + 0x1c) = 0;
+  if (iStack_30 != -1) {
+    piVar3 = (int *)(DAT_00267634 + param_1);
+    iVar5 = (int)DAT_00267636;
+    piVar10 = (int *)(iVar5 + param_1);
+    do {
+      iVar8 = *piVar3;
+      if (iVar8 != 0) {
+        if (*(int *)(iVar8 + 0x1c) == 0) {
+          *piVar10 = *(int *)(param_1 + 0x14);
+          piVar10[1] = *(int *)(param_1 + 0x18);
+          piVar10[2] = *(int *)(param_1 + 0x1c);
+        }
+        else {
+          piVar2 = (int *)(*DAT_00267648)(iVar8 + 4,param_1 + DAT_00267638);
+          *piVar10 = *piVar2;
+          piVar10[1] = piVar2[1];
+          piVar10[2] = piVar2[2];
+          *piVar10 = *piVar10 + *(int *)(param_1 + 0x14);
+          piVar10[1] = piVar10[1] + *(int *)(param_1 + 0x18);
+          puVar6 = (undefined4 *)(param_1 + 0x14);
+          piVar10[2] = piVar10[2] + *(int *)(param_1 + 0x1c);
+          puVar4 = (undefined4 *)(DAT_0026763a + param_1);
+          *puVar4 = *puVar6;
+          puVar4[1] = *(undefined4 *)(param_1 + 0x18);
+          puVar4[2] = *(undefined4 *)(param_1 + 0x1c);
+          if (*(int *)(*piVar3 + 0x38) != 0) {
+            iVar8 = 0x38;
+            iVar9 = param_1 + 0x28;
+            iVar12 = 0x1c;
+            iVar11 = 0x24;
+            do {
+              piVar2 = (int *)(*DAT_00267648)(*piVar3 + iVar12 + 4,DAT_00267638 + iVar11 + param_1);
+              piVar7 = (int *)(iVar5 + iVar9);
+              *piVar7 = *piVar2;
+              piVar7[1] = piVar2[1];
+              piVar7[2] = piVar2[2];
+              *piVar7 = *piVar7 + *(int *)((int)puVar6 + iVar5);
+              piVar2 = (int *)(iVar9 + DAT_0026763c);
+              iVar12 = iVar12 + 0x1c;
+              *piVar2 = *piVar2 + *(int *)((int)DAT_0026763c + (int)puVar6);
+              piVar2 = (int *)(iVar9 + DAT_0026763e);
+              iVar11 = iVar11 + 0x24;
+              iVar8 = iVar8 + 0x1c;
+              *piVar2 = *piVar2 + *(int *)((int)DAT_0026763e + (int)puVar6);
+              puVar6 = puVar6 + 5;
+              iVar9 = iVar9 + 0x14;
+            } while (*(int *)(*piVar3 + iVar8) != 0);
+          }
+        }
+      }
+      (*DAT_00267714)(param_1 + 0x48);
+      (*DAT_00267718)();
+      iStack_30 = iStack_30 + -1;
+    } while (iStack_30 != -1);
+  }
+  piVar3 = (int *)(*(int *)(param_1 + 0x74) + (int)DAT_0026770e);
+  *(int *)(param_1 + 0x78) = *piVar3;
+  *(int *)(param_1 + 0x7c) = piVar3[1];
+  piVar10 = (int *)(param_1 + 0x5c);
+  *(int *)(param_1 + 0x80) = piVar3[2];
+  *(int *)(param_1 + 0x58) = *(int *)(param_1 + 0x78) - *(int *)(param_1 + 0x14);
+  pcVar1 = DAT_0026771c;
+  iVar5 = (int)DAT_00267710;
+  *piVar10 = *(int *)(param_1 + 0x7c) - *(int *)(param_1 + 0x18);
+  piVar3 = (int *)(param_1 + 0x60);
+  *piVar3 = *(int *)(param_1 + iVar5) - *(int *)(param_1 + 0x1c);
+  (*DAT_00267720)();
+  iVar8 = *piVar10;
+  (*extraout_r1)();
+  iVar9 = *piVar3;
+  (*extraout_r1_00)(iVar9,extraout_r2);
+  iVar5 = (*pcVar1)(extraout_r2_00);
+  iVar8 = (*pcVar1)(iVar8,iVar8);
+  iVar9 = (*pcVar1)(iVar9,iVar9);
+  *(int *)(param_1 + 0x54) = iVar5 + iVar8 + iVar9;
+  return;
+}
+
+
+
+=== Near_mov38_b probe@0026eb0e fun=null ===
+
+=== Fn_near_7500 probe@00267500 fun=FUN_002674f0@002674f0 ===
+BODY [[002674f0, 00267633] [0026764c, 0026770d]]
+
+void FUN_002674f0(int param_1,int param_2)
+
+{
+  code *pcVar1;
+  int *piVar2;
+  int *piVar3;
+  code *extraout_r1;
+  code *extraout_r1_00;
+  undefined4 *puVar4;
+  undefined4 extraout_r2;
+  undefined4 extraout_r2_00;
+  int iVar5;
+  undefined4 *puVar6;
+  int *piVar7;
+  int iVar8;
+  int iVar9;
+  int *piVar10;
+  int iVar11;
+  int iVar12;
+  int iStack_30;
+  
+  iVar5 = *(int *)(param_1 + 0x50);
+  *(int *)(param_1 + 0x50) = iVar5 + 1;
+  if ((10 < iVar5) && (0x15 < *DAT_00267640)) {
+    (*DAT_00267644)();
+  }
+  *(undefined4 *)(param_1 + 0x14) = *(undefined4 *)(param_1 + 0x14);
+  iStack_30 = param_2 + -1;
+  *(undefined4 *)(param_1 + 0x18) = *(undefined4 *)(param_1 + 0x18);
+  *(undefined4 *)(param_1 + 0x1c) = 0;
+  if (iStack_30 != -1) {
+    piVar3 = (int *)(DAT_00267634 + param_1);
+    iVar5 = (int)DAT_00267636;
+    piVar10 = (int *)(iVar5 + param_1);
+    do {
+      iVar8 = *piVar3;
+      if (iVar8 != 0) {
+        if (*(int *)(iVar8 + 0x1c) == 0) {
+          *piVar10 = *(int *)(param_1 + 0x14);
+          piVar10[1] = *(int *)(param_1 + 0x18);
+          piVar10[2] = *(int *)(param_1 + 0x1c);
+        }
+        else {
+          piVar2 = (int *)(*DAT_00267648)(iVar8 + 4,param_1 + DAT_00267638);
+          *piVar10 = *piVar2;
+          piVar10[1] = piVar2[1];
+          piVar10[2] = piVar2[2];
+          *piVar10 = *piVar10 + *(int *)(param_1 + 0x14);
+          piVar10[1] = piVar10[1] + *(int *)(param_1 + 0x18);
+          puVar6 = (undefined4 *)(param_1 + 0x14);
+          piVar10[2] = piVar10[2] + *(int *)(param_1 + 0x1c);
+          puVar4 = (undefined4 *)(DAT_0026763a + param_1);
+          *puVar4 = *puVar6;
+          puVar4[1] = *(undefined4 *)(param_1 + 0x18);
+          puVar4[2] = *(undefined4 *)(param_1 + 0x1c);
+          if (*(int *)(*piVar3 + 0x38) != 0) {
+            iVar8 = 0x38;
+            iVar9 = param_1 + 0x28;
+            iVar12 = 0x1c;
+            iVar11 = 0x24;
+            do {
+              piVar2 = (int *)(*DAT_00267648)(*piVar3 + iVar12 + 4,DAT_00267638 + iVar11 + param_1);
+              piVar7 = (int *)(iVar5 + iVar9);
+              *piVar7 = *piVar2;
+              piVar7[1] = piVar2[1];
+              piVar7[2] = piVar2[2];
+              *piVar7 = *piVar7 + *(int *)((int)puVar6 + iVar5);
+              piVar2 = (int *)(iVar9 + DAT_0026763c);
+              iVar12 = iVar12 + 0x1c;
+              *piVar2 = *piVar2 + *(int *)((int)DAT_0026763c + (int)puVar6);
+              piVar2 = (int *)(iVar9 + DAT_0026763e);
+              iVar11 = iVar11 + 0x24;
+              iVar8 = iVar8 + 0x1c;
+              *piVar2 = *piVar2 + *(int *)((int)DAT_0026763e + (int)puVar6);
+              puVar6 = puVar6 + 5;
+              iVar9 = iVar9 + 0x14;
+            } while (*(int *)(*piVar3 + iVar8) != 0);
+          }
+        }
+      }
+      (*DAT_00267714)(param_1 + 0x48);
+      (*DAT_00267718)();
+      iStack_30 = iStack_30 + -1;
+    } while (iStack_30 != -1);
+  }
+  piVar3 = (int *)(*(int *)(param_1 + 0x74) + (int)DAT_0026770e);
+  *(int *)(param_1 + 0x78) = *piVar3;
+  *(int *)(param_1 + 0x7c) = piVar3[1];
+  piVar10 = (int *)(param_1 + 0x5c);
+  *(int *)(param_1 + 0x80) = piVar3[2];
+  *(int *)(param_1 + 0x58) = *(int *)(param_1 + 0x78) - *(int *)(param_1 + 0x14);
+  pcVar1 = DAT_0026771c;
+  iVar5 = (int)DAT_00267710;
+  *piVar10 = *(int *)(param_1 + 0x7c) - *(int *)(param_1 + 0x18);
+  piVar3 = (int *)(param_1 + 0x60);
+  *piVar3 = *(int *)(param_1 + iVar5) - *(int *)(param_1 + 0x1c);
+  (*DAT_00267720)();
+  iVar8 = *piVar10;
+  (*extraout_r1)();
+  iVar9 = *piVar3;
+  (*extraout_r1_00)(iVar9,extraout_r2);
+  iVar5 = (*pcVar1)(extraout_r2_00);
+  iVar8 = (*pcVar1)(iVar8,iVar8);
+  iVar9 = (*pcVar1)(iVar9,iVar9);
+  *(int *)(param_1 + 0x54) = iVar5 + iVar8 + iVar9;
+  return;
+}
+
+
+
+=== Fn_near_eb00 probe@0026eb00 fun=null ===
+
+=== Mplaynext probe@0025df78 fun=Mplaynext@0025df78 ===
+BODY [[0025df78, 0025dfcd]]
+
+void Mplaynext(undefined4 *param_1)
+
+{
+  ushort uVar1;
+  undefined4 *puVar2;
+  ushort *puVar3;
+  
+  if (((*DAT_0025dfd0 & 3) == 3) && (-1 < *(short *)((int)param_1 + 0xe))) {
+    puVar3 = (ushort *)(param_1 + 2);
+    uVar1 = *puVar3;
+    *puVar3 = uVar1 + 1;
+    puVar2 = (undefined4 *)((uint)(ushort)(uVar1 + 1) * 0xc + *(int *)*param_1);
+    (*(code *)PTR_FUN_0025dfd4)(puVar2[2],(int)(short)*puVar2,(int)(short)puVar2[1],0);
+    *puVar3 = *puVar3 - 1;
+  }
+  return;
+}
+
+
+
+=== Mnext probe@0025dea4 fun=Mnext@0025dea4 ===
+BODY [[0025dea4, 0025dec1]]
+
+void Mnext(int param_1)
+
+{
+  if ((*DAT_0025dec4 & 3) == 3) {
+    *(short *)(param_1 + 8) = *(short *)(param_1 + 8) + 1;
+  }
+  return;
+}
+
+
+
+=== Manimend probe@0025df00 fun=Manimend@0025df00 ===
+BODY [[0025df00, 0025df2b]]
+
+void Manimend(int param_1)
+
+{
+  if (((*DAT_0025df2c & 3) == 3) && (-1 < *(short *)(param_1 + 0xe))) {
+    (*DAT_0025df38)(*DAT_0025df34,DAT_0025df30,2);
+  }
+  return;
+}
+
+

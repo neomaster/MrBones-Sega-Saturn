@@ -1,0 +1,630 @@
+# VDP2 / tile pipeline + guitar.o / finale.o — SH-2 static analysis
+# Extracted 2026-11-07 from stage 03CODE blobs (base VA 0x00232000)
+# Sources: tools/ghidra-work/{MAUSO,GUITAR,FINALE}_03CODE.bin
+#          Neomaster/mr-bones-maps/{MAUSO,GUITAR,FINALE}/A.MAP
+# Disassembly: Capstone CS_ARCH_SH + CS_MODE_SH2|BIG_ENDIAN
+# Host stand-in (soft): src/core/scrl_map.c — this file is RE evidence only.
+
+================================================================================
+0. Binaries / load map
+================================================================================
+
+| Stage   | ISO path            | 03CODE size | Disc | Shared objs (sidescrl stack)      |
+|---------|---------------------|------------:|------|-----------------------------------|
+| MAUSO   | /05MAUSO/03CODE     |      651840 | 1    | sidescrl.o compress.o scrlcoll.o scrlghix.o bkgdata.o |
+| GUITAR  | /07GUITAR/03CODE    |      374916 | 1    | same + guitar.o gbones.o seaskel.o |
+| FINALE  | /27FINALE/03CODE    |      600000 | 2    | same + fbones.o ring.o bolt.o; finale.o = COMMON only |
+
+Stage CODE load base = **0x00232000** (file_offset = VA − 0x00232000).
+SH-2 BE; Hitachi SHC C++ mangling (`_Name__Ftypes`).
+
+**GUITAR MAP quirk:** absolute symbols for sidescrl/scrlcoll/compress in
+`GUITAR/A.MAP` sit **+0x10** into the real function body (past the 8-instruction
+prologue `mov.l r8..r14 / sts.l pr`). Corrected VA = MAP_VA − 0x10. MAUSO and
+FINALE MAP VAs match Capstone prologues byte-for-byte.
+
+Code identity (excluding trailing literal pools that hold stage-local BSS/ROM
+addresses): DecompTile / DrawMap / LoadCDB bodies are **byte-identical** across
+MAUSO ↔ GUITAR(corrected) ↔ FINALE. TileHeapInit is fully identical including
+pools that only reference loader `malloc@0x204b30`. InitGetFloor / DecompByte
+differ only in relocated absolute addresses.
+
+================================================================================
+1. Symbol table (real sizes = distance to next MAP symbol)
+================================================================================
+
+### 1.1 MAUSO (canonical — use these VAs for algorithm notes)
+
+| VA         | Size   | Symbol |
+|------------|-------:|--------|
+| 0x002a0b4c | 0x4ec  | `_DecompByte`                          (compress.o) |
+| 0x002a1038 | —      | `_SH2FillBuffer__FPUllUl` |
+| 0x002a1124 | 0x10c  | `_TileCheckHeap__FP10tagMAP_DEF` |
+| 0x002a1230 | 0x74   | `_TileHeapClean__FP10tagMAP_DEF` |
+| 0x002a12a4 | 0x90   | `_TileValloc__FP10tagMAP_DEFl` |
+| 0x002a1334 | 0x94   | `_TileVallocStatic__FP10tagMAP_DEFl` |
+| 0x002a13c8 | 0x1c   | `_TileFree__FP10tagMAP_DEFUs` |
+| 0x002a13e4 | 0x38   | `_TileHeapInit__FP10tagMAP_DEFlPA8_A8_Uc` |
+| 0x002a141c | 0x6c   | `_DecompTile__FP10tagMAP_DEFP11tagTILE_DEF` |
+| 0x002a1488 | 0x54   | `_DecompAddTile__FP10tagMAP_DEFP11tagTILE_DEF` |
+| 0x002a14dc | —      | `_FlushDecompStack__Fl` |
+| 0x002a1570 | 0x204  | `_AddTiles__FP10tagMAP_DEFllll` |
+| 0x002a1774 | 0x11c  | `_RemoveTiles__FP10tagMAP_DEFllll` |
+| 0x002a1890 | 0xf4   | `_TestTiles__FP10tagMAP_DEFllll` |
+| 0x002a1984 | 0x70   | `_InitMapCoords__FP10tagMAP_DEF` |
+| 0x002a19f4 | 0x64   | `_DrawMap__FP10tagMAP_DEF` |
+| 0x002a1a58 | 0x220  | `_UpdateMap__FP10tagMAP_DEF` |
+| 0x002a1c78 | 0x8c   | `_LoadMap__FP10tagMAP_DEFl` |
+| 0x002a1d04 | 0x34   | `_LoadBitMap__FP10tagMAP_DEFlPUc` |
+| 0x002a1d38 | 0xfc   | `_LoadCDB__FP10tagMAP_DEFl` |
+| 0x002a1e34 | 0x48   | `_CreateCSideScroll` |
+| 0x002a25d4 | 0xac   | `_CheckScroll__11CSideScrollP10tagMAP_DEFP13tagINIT_NBG01` |
+| 0x002a27a8 | 0x1d4  | `_InitMaps__11CSideScroll` |
+| 0x002a297c | 0xc0   | `_DrawSmallMaps__11CSideScroll` |
+| 0x002a2e6c | 0x7c   | `_SCRLCOLLInitGetFloor` |
+| 0x002a2ee8 | 0x24   | `_SCRLCOLLGetHixel3D` |
+| 0x002a2f0c | 0x60   | `_SCRLCOLLfindfloor` |
+| 0x002a2f6c | 0x54   | `_SCRLCOLLfindceiling` |
+| 0x002a2fc0 | 0x40   | `_SCRLCOLLfindtop` |
+| 0x002a3000 | 0xbc   | `_SCROLLGetHixel` / `_MAPGetHixel@002a3016` (scrlghix.o) |
+
+Globals (MAUSO .data / COMMON):
+
+| VA         | Symbol |
+|------------|--------|
+| 0x002c888c | `_pMapDefA` |
+| 0x002c8890 | `_pMapDefB` |
+| 0x002c8894 | `_pMapDefC` |
+| 0x002c8898 | `_pMapDefD` |
+| 0x002c889c | `_pSideScroll` |
+| 0x002d43a0 | `_pFloorHixels` (COMMON ptr; InitGetFloor writes here) |
+
+### 1.2 GUITAR (MAP VA → corrected = MAP−0x10 for tile/coll)
+
+| MAP VA     | Corrected  | Symbol |
+|------------|------------|--------|
+| 0x00263028 | 0x00263018 | `_DecompByte` |
+| 0x002638c0 | 0x002638b0 | `_TileHeapInit` |
+| 0x002638f8 | 0x002638e8 | `_DecompTile` |
+| 0x00263ed0 | 0x00263ec0 | `_DrawMap` |
+| 0x00264154 | 0x00264144 | `_LoadMap` |
+| 0x00264214 | 0x00264204 | `_LoadCDB` |
+| 0x0026533c | 0x0026532c | `_SCRLCOLLInitGetFloor` |
+| 0x002653b8 | 0x002653a8 | `_SCRLCOLLGetHixel3D` |
+| 0x002653dc | 0x002653cc | `_SCRLCOLLfindfloor` |
+
+`_pMapDefA..D` @ 0x00284bfc..08; `_pFloorHixels` @ 0x002903b8.
+
+guitar.o / gbones (MAP VAs exact — no −0x10):
+
+| VA         | Size   | Symbol |
+|------------|-------:|--------|
+| 0x00232820 | 0x1a0  | `_guitar` (.text-labeled; **data** phrase table — see §5) |
+| 0x00260fa4 | —      | `_CreateCGBones` |
+| 0x00260ff0 | 0x50   | `___7CGBonesPv` |
+| 0x002611a0 | 0x148  | `_StartLick__7CGBonesP10LickStruct` |
+| 0x002612e8 | 0x80   | `_StopLick__7CGBonesP10LickStruct` |
+| 0x00261368 | 0x3c8  | `_Brain__7CGBones` |
+| 0x002616d4 | —      | `_CreateCSeaSkel` |
+| 0x00261854 | 0x184  | `_Brain__8CSeaSkel` |
+| 0x0028460c | 0x28   | guitar.o `.data` |
+| 0x0028c3ac | 0xe0   | `_SequenceTable` |
+| 0x00290370 | 0x28   | `_FirstNumenStruct` (COMMON, guitar.o) |
+
+### 1.3 FINALE
+
+| VA         | Size   | Symbol |
+|------------|-------:|--------|
+| 0x002909f8 | 0x4ec  | `_DecompByte` |
+| 0x00291290 | 0x38   | `_TileHeapInit` |
+| 0x002912c8 | 0x6c   | `_DecompTile` |
+| 0x002918a0 | 0x64   | `_DrawMap` |
+| 0x00291b24 | 0x8c   | `_LoadMap` |
+| 0x00291be4 | 0xfc   | `_LoadCDB` |
+| 0x00292d18 | 0x7c   | `_SCRLCOLLInitGetFloor` |
+| 0x00292d94 | 0x24   | `_SCRLCOLLGetHixel3D` |
+| 0x00292db8 | 0x60   | `_SCRLCOLLfindfloor` |
+
+`_pMapDefA..D` @ 0x002b35ac..b8; `_pFloorHixels` @ 0x002c03a8.
+
+finale stack (MAP VAs exact):
+
+| VA         | Obj .text | Symbol |
+|------------|-----------|--------|
+| 0x0028d004 | fbones.o 0x460 | `_CreateCFBones@28d008` `_Brain__7CFBones@28d310` |
+| 0x0028d464 | ring.o 0x3ac   | `_CreateCRing@28d468` `_Brain__5CRing@28d5f4` `_ShootRing__5CRingi@28d700` |
+| 0x0028dafc | bolt.o 0x6a4   | `_CreateCBolt@28dc34` `_Brain__5CBolt@28dd60` (+ face/shot helpers) |
+| 0x002b0158 | ring .data 0x3ac | `_RingDefinitionTable` (117 signed BE32 pairs) |
+| 0x002c0360 | finale.o COMMON 0x28 | `_FirstNumenStruct` only — **no finale.o .text** |
+
+================================================================================
+2. tagMAP_DEF / tagTILE_DEF field map (from SH-2 offsets)
+================================================================================
+
+Inferred from LoadCDB / DecompTile / DrawMap / TileHeapInit / InitGetFloor.
+Sizes are SH-2 pointer = 4 B; BE16 fields zero-extended before store into s32 slots.
+
+### 2.1 tagMAP_DEF (r4 to almost every sidescrl fn)
+
+| Off | Access pattern | Role |
+|----:|----------------|------|
+| +0x04 | LoadMap stores malloc result | cell / tile-index table pointer |
+| +0x0c | TileHeapInit arg r6; DecompTile dst base; LoadCDB blit dst | VRAM/heap tile pixel base (`uint8 (*)[8][8]` in mangled TileHeapInit) |
+| +0x12 | LoadCDB stores TileVallocStatic return (u16) | allocated tile slot / bank id |
+| +0x14 | TileHeapInit stores malloc(count*2) | secondary heap bookkeeping |
+| +0x18 | TileHeapInit stores count (u16) | heap capacity |
+| +0x1c | LoadCDB ← CDB[+8] | tile/payload count |
+| +0x20 | DecompTile reads | non-NULL → “heap mode” (src offset +0x88 vs +0x48) |
+| +0x44 | DrawMap / LoadMap mode word | 4 = small-map path; 6 = skip LoadBitMap chain; ≤3 = DrawMap no-op |
+| +0x50 | DrawMap | scroll/window X-ish (minus 4, >>2) |
+| +0x54 | DrawMap | scroll/window Y-ish (minus 4, >>2) |
+| +0x58 | InitGetFloor | **width** (column count for floor array) |
+| +0x5c | InitGetFloor | **height** (start Y walk-down) |
+| +0x68 | LoadMap reads CDB-derived | plane pixel_w (raw) |
+| +0x6c | | plane pixel_h (raw) |
+| +0x70 | | pixel_w >> 3 (tile columns) |
+| +0x74 | | pixel_h >> 3 (tile rows) |
+| +0x68/+0x6c | also DrawMap mode==4 uses these as blit args | |
+| +0x70 | DrawMap else-path | primary blit extent (clamped ≤12) |
+| +0x74 | DrawMap else-path | secondary extent (clamped ≤9) |
+
+### 2.2 tagTILE_DEF (r5 to DecompTile)
+
+| Off | Role |
+|----:|------|
+| +0x02 | BE16 width-related (`w`); scaled `w<<12` as DecompByte length/pitch arg |
+| +0x06 | BE16 flags; `0xFFFF` = skip (already decompressed / empty); else index into heap (`flag<<12` byte offset) |
+| +0x48 | compressed payload (no-heap mode) |
+| +0x88 | compressed payload (heap mode, when map[+0x20] ≠ 0) |
+
+================================================================================
+3. Algorithms (MAUSO SH-2 → pseudocode)
+================================================================================
+
+### 3.1 `_TileHeapInit(map, count, pixels)` @ 0x2a13e4  (size 0x38)
+
+```
+map[+0x18] = (u16)count;
+map[+0x0c] = pixels;                 // caller-supplied 8×8 tile RAM
+buf = malloc(count * 2);             // loader _malloc @ 0x204b30
+map[+0x14] = buf;
+*buf = (u16)(count | 0x8000);        // high bit marks heap live
+```
+
+### 3.2 `_DecompTile(map, tile)` @ 0x2a141c  (size 0x6c)
+
+```
+flag = *(u16*)(tile + 6);
+if (flag == 0xFFFF) return;          // sentinel
+
+w = *(u16*)(tile + 2);
+dst = *(u8**)(map + 0x0c) + (flag << 12);   // 4096 B per tile index
+len = (w << 12);                             // passed in r6 (DecompByte ABI)
+
+if (*(void**)(map + 0x20) != NULL)
+    src = tile + 0x88;               // heap / streamed form
+else
+    src = tile + 0x48;               // packed form
+
+DecompByte(src);                     // @0x2a0b4c; uses global dest ptr
+// r4=src, r5=dst, r6=len on entry to jsr (SH delay-slot setup)
+```
+
+Pool: `[0xFFFF, &_DecompByte, imm 0x0088]`.
+
+### 3.3 `_DecompByte` @ 0x2a0b4c  (size 0x4ec) — compress.o
+
+Custom bitstream tile decompressor (not raw RLE1).
+
+Prologue:
+```
+dst = *DEST_GLOBAL;          // MAUSO: word @0x2a0b8c → 0x002c88a0
+jmptab = 0x2a0b94;           // 16 entries (nibble → handler)
+```
+
+Bit pump (simplified from first block):
+```
+load next control byte into high bits of r1 (<<16, <<8);
+for bit = 0..7:
+  r1 <<= 1;
+  if (carry == 0):
+      *dst++ = *src++;       // literal
+  else:
+      code = read_be16(src); src += 2;
+      nibble = code & 0xF;
+      jmp jmptab[nibble];    // match/copy handlers 0..15
+```
+
+Jump table (MAUSO):
+```
+0x2a0bd4 0x2a0bf4 0x2a0c10 0x2a0c32
+0x2a0c5e 0x2a0c90 0x2a0cc8 0x2a0d06
+0x2a0d4a 0x2a0d94 0x2a0de4 0x2a0e3a
+0x2a0e92 0x2a0ef0 0x2a0f58 0x2a0fc2
+```
+Handlers decode length/distance variants (back-reference into already written
+tile bytes). Full per-nibble semantics still open for host bit-exact port;
+host `scrl_map` currently blits TIL as soft decode, not this engine.
+
+### 3.4 `_DecompAddTile(map, tile)` @ 0x2a1488  (size 0x54)
+
+Ring-queue of pending (map,tile) pairs before flush:
+```
+idx = *Q_HEAD;                       // @0x2c8888
+slot = Q_BASE + idx * 8;             // @0x2c88a4, stride 8
+next = idx + 1;
+if (next > 0xC8) next = 0;           // wrap 200 entries
+if (next == *Q_TAIL)                 // @0x2c8884
+    DecompTile(map, tile);           // queue full → decompress immediately
+else {
+    slot[0] = map; slot[1] = tile;
+    *Q_HEAD = next;
+}
+```
+
+### 3.5 `_LoadCDB(map, file_id)` @ 0x2a1d38  (size 0xfc)
+
+```
+cdb = CD_Read(file_id, /*flags*/0);  // @0x2030f0 (loader GFS/CD helper)
+n   = *(u16*)(cdb + 8);
+bank = TileVallocStatic(map, n);     // @0x2a1334
+*(u16*)(map + 0x12) = bank;
+
+dst = *(u8**)(map + 0x0c) + (bank << 12);
+MemcpyLike(dst, cdb + 10, n << 12);  // @0x2042c8 — may be raw or pre-sized
+
+map[+0x1c] = *(u16*)(cdb + 8);       // n
+map[+0x58] = *(u16*)(cdb + 0);       // pix_w
+map[+0x5c] = *(u16*)(cdb + 2);       // pix_h
+map[+0x60] = pix_w >> 3;             // tile columns
+map[+0x64] = pix_h >> 3;             // tile rows
+map[+0x68] = *(u16*)(cdb + 4);       // tw-ish
+map[+0x6c] = *(u16*)(cdb + 6);       // th-ish
+
+map[+0x70] = min(map[+0x68], 12);    // DrawMap clamp
+map[+0x74] = min(map[+0x6c], 9);
+
+FreeHelper(cdb);                     // @0x204b50
+NullHelper(0);                       // @0x204b60
+```
+
+**CDB on-disk header (BE16) — matches host `scrl_cdb_parse` A-style:**
+
+```
++0  pix_w     (e.g. MAUSO 1176)
++2  pix_h     (e.g. MAUSO 608)
++4  param_a   (clamped ≤12 → DrawMap)
++6  param_b   (clamped ≤9)
++8  tile_n    (TileVallocStatic count; payload bytes ≈ n<<12)
++10 payload…
+```
+
+B-style CDBs (VORTEX flags=0x0200…) are consumed by the same loader; host
+already branches on w0 range.
+
+### 3.6 `_LoadMap(map, layer)` @ 0x2a1c78  (size 0x8c)
+
+```
+cells = BuildCellCount(map[+0x68], map[+0x6c]);  // @0x213edc
+tab   = malloc(cells << 2);                       // @0x204b30
+map[+0x04] = tab;
+SH2FillBuffer(tab, cells, 0);                     // @0x2a1038 zero-fill
+
+if (map[+0x44] == 6) return;                      // already resident
+
+ptr = LoadBitMapPath(layer);                      // @0x2030f0
+// walk linked records: each record { u16 size_at_+0; u16 id_at_+2; ... }
+for (i = cells-1; i != (u32)-1; --i) {
+    id = *(u16*)(ptr + 4);
+    tab[id << 2 / 4] = ptr;                       // index by id
+    ptr = (u8*)ptr + *(u16*)ptr;                  // advance by size
+}
+```
+
+### 3.7 `_DrawMap(map)` @ 0x2a19f4  (size 0x64)
+
+Thin wrapper → `_AddTiles` @ 0x2a1570:
+
+```
+if (!map) return;
+mode = map[+0x44];
+if (mode <= 3) return;
+
+if (mode == 4) {
+    // small / DrawSmallMaps path
+    AddTiles(map, /*r7*/map[+0x68], /*r6*/0, /*r5*/0, /*stack*/map[+0x6c]);
+} else {
+    x = (map[+0x54] - 4) >> 2;
+    y = (map[+0x50] - 4) >> 2;
+    AddTiles(map, map[+0x70], x, y, map[+0x74]);
+}
+```
+
+Multi-layer parallax (A near → D far, factors 1/2/3/4) is applied by
+`CheckScroll` / `InitMaps` / `DrawSmallMaps` callers that adjust map[+0x50/54]
+before each `DrawMap` — not inside DrawMap itself.
+
+### 3.8 `_SCRLCOLLInitGetFloor` @ 0x2a2e6c  (size 0x7c)
+
+```
+map = **(tagMAP_DEF***)0x2c87b8;     // active map def indirection
+w   = map[+0x58];                    // width in columns
+h0  = map[+0x5c];                    // start height
+
+*_pFloorHixels = malloc(w << 2);     // array of s32 floor Y per column
+
+for (x = 0; x < w; x++) {
+    y = h0;
+    while (y != 0) {
+        if (MAPGetHixel(x, y) == 0) break;   // @0x2a3016 — empty cell
+        y--;
+    }
+    pFloorHixels[x] = y;
+}
+```
+
+Pools: `0x2c87b8`, `_pFloorHixels@2d43a0`, `_malloc@204b30`, `_MAPGetHixel@2a3016`.
+
+### 3.9 `_SCRLCOLLGetHixel3D(x,y)` @ 0x2a2ee8  (size 0x24)
+
+```
+sc = RENDgetSCxy();                  // loader @0x2078c0 → {screen_x, screen_y}
+return SCROLLGetHixel(sc->x, sc->y); // @0x2a3000 (scrlghix.o)
+```
+
+### 3.10 `_SCRLCOLLfindfloor(x, y)` @ 0x2a2f0c  (size 0x60)
+
+```
+// r10 = &_SCROLLGetHixel
+delta = 0;
+h = SCROLLGetHixel(x, y);
+if (h == 3 || h == 1) {              // solid / floor class
+    do {
+        y -= 2; delta -= 2;
+        h = SCROLLGetHixel(x, y);
+    } while (h == 3 || h == 1);
+} else {
+    do {
+        y += 2; delta += 2;
+        h = SCROLLGetHixel(x, y);
+    } while (!(h == 3 || h == 1));
+}
+return delta;                        // r0
+```
+
+`findceiling` / `findtop` are the vertical mirrors (same size class 0x54 / 0x40).
+
+Hixel classes observed: **0** empty (InitGetFloor stop), **1** and **3** solid
+for findfloor (matches pan-coll solid=3 convention elsewhere).
+
+================================================================================
+4. Call graph (tile path)
+================================================================================
+
+```
+CSideScroll::InitMaps
+  └─ LoadCDB(pMapDefX, file_id)           × planes A/B/C/D
+       ├─ CD_Read / GFS
+       ├─ TileVallocStatic
+       └─ header → map[+0x58..]
+  └─ LoadMap(pMapDefX, layer)
+       ├─ malloc cell table
+       └─ LoadBitMap chain
+  └─ TileHeapInit / AddTiles / DecompAddTile
+       └─ DecompTile → DecompByte
+
+CSideScroll::CheckScroll / Brain
+  └─ DrawMap → AddTiles
+  └─ DrawSmallMaps
+
+SCRLCOLLInitGetFloor
+  └─ MAPGetHixel loop → pFloorHixels[]
+
+physics (bnscore / sidescrl)
+  └─ SCRLCOLLGetHixel3D → RENDgetSCxy + SCROLLGetHixel
+  └─ SCRLCOLLfindfloor / findceiling / findtop
+```
+
+Loader ABS helpers reused: `_malloc@204b30`, `_RENDgetSCxy@2078c0`,
+CD/GFS `@2030f0`, memcpy-class `@2042c8`.
+
+================================================================================
+5. guitar.o (GUITAR /07GUITAR/03CODE)
+================================================================================
+
+### 5.1 `_guitar` @ 0x00232820 (0x1a0 B) — phrase descriptor table
+
+Not executable code. Eight fixed-stride records (~0x34 B) of sequencer /
+numen metadata. Non-zero fields (first record):
+
+```
++00  00232808   self/prev link
++04  000000ff   flags
++08  0020714c   loader fn / bank
++0c  0018000c   (BE16 pair)
++14  25c0dc40   Saturn work RAM pointer (runtime)
++1c  04a00000
++20  00000214   phrase id / length
++24  ffffffff   sentinel
++28  002068dc   helper
++34  0023282c   next record
+… (repeats; last ids 0x214,0x117,0x20c,0x20b,0x113,0x20f,0x112,0x115)
+```
+
+### 5.2 `_SequenceTable` @ 0x0028c3ac (0xe0)
+
+BE32 header phrase lengths then function pointers:
+
+```
+00000005 00000006 0000000a 0000000c   // lengths 5,6,10,12
+00203b6c 0028c39c 00208628 00000000
+0020b3e8 00228988 0020b3e8 00228984
+0020b3e8 00228980 0020b3e8 00228978
+…
+```
+Host `rhythm_table` uses period-16 grid remapped from DrumSequence kinds;
+full lick graph still open.
+
+### 5.3 guitar.o `.data` @ 0x0028460c (0x28)
+
+```
+fff76400  03e80000  03e80000  00284bf0
+00284640  00000000  00000000  00000000
+fff85ee0  00000000
+```
+Fixed-point / anim rates (`0x03e80000` = 1000<<16) plus ptrs into pMapDef area.
+
+### 5.4 `_StartLick__7CGBonesP10LickStruct(this, lick)` @ 0x2611a0
+
+Object field offsets (from imm pool):
+
+| Off | Use |
+|----:|-----|
+| +0xa4 | current LickStruct* |
+| +0xa8 | active flag / secondary lick ptr |
+| +0xac | state word (set 1 on start, 0 on fail path) |
+| +0xb0 | scratch |
+| +0xb4 | anim/state const 0x0c80 written on arm |
+| +0xb8 | bones sub-object for message |
+| +0x44 | passed to memcpy-class helper with lick[+8] |
+
+Flow:
+1. If `this[+0xa4]` set → `StopLick(this, old)`.
+2. If `this[+0xa8]` set and ≠ new lick → sound/FX cancel (`@262a60`).
+3. Branch A (already armed): reset counters, `ObjNewBrain`-class `@205b24` /
+   `@205ba8`, clear `*(0x283c20)`, optional message `@261c28`.
+4. Branch B (cold start): bank `@24c0a0`, probe `@262a0c`; on success
+   `ObjNewBrain(this, stub@261690)` via `@205168`.
+5. Copy lick payload into `this[+0x44]` (`@271608`, 0x20 bytes).
+6. Spin on Saturn status `@200e40` until ready (r9=0x7f sentinel).
+
+### 5.5 `_StopLick__7CGBonesP10LickStruct(this, lick)` @ 0x2612e8
+
+```
+if (this[+0xa4] != lick) return;
+wait status @200e40;
+clear this[+0x44] region via helper @271608;
+this[+0xb0] = 0; this[+0xac] = 0;
+this[+0xb4] = 0x0140;            // idle const
+```
+
+### 5.6 `_Brain__7CGBones` @ 0x261368 (0x3c8)
+
+Frame brain: allocates 40 B frame locals, seeds timer fields (100, etc.),
+then drives lick / seaskel interaction. Cross-refs StartLick/StopLick and
+`SequenceTable` consumers. Full state machine still open for byte-fiel host.
+
+================================================================================
+6. finale.o / fbones / ring / bolt (FINALE /27FINALE/03CODE)
+================================================================================
+
+**finale.o** contributes only COMMON `_FirstNumenStruct` @ 0x002c0360 (40 B).
+All executable “finale” logic is in **fbones.o + ring.o + bolt.o** (+ shared
+sidescrl/scrlcoll identical to MAUSO).
+
+### 6.1 fbones.o (.text 0x28d004, size 0x460)
+
+| VA       | Symbol |
+|----------|--------|
+| 0x28d008 | `_CreateCFBones` |
+| 0x28d310 | `_Brain__7CFBones` (0x3cc) |
+
+CreateCFBones: standard `CreateCObject` path then registers with manager.
+Brain: boss bones AI (hit react, BoltHit@ related path documented in
+`docs/ghidra-rhythm-enemies.txt`).
+
+### 6.2 ring.o (.text 0x28d464, size 0x3ac)
+
+| VA       | Size  | Symbol |
+|----------|------:|--------|
+| 0x28d468 | —     | `_CreateCRing` |
+| 0x28d5f4 | 0x10c | `_Brain__5CRing` |
+| 0x28d700 | 0x2a0 | `_ShootRing__5CRingi` |
+
+`_ShootRing(ring, index)` indexes `_RingDefinitionTable` and spawns a
+projectile with signed pixel offsets.
+
+### 6.3 `_RingDefinitionTable` @ 0x002b0158 (size 0x3ac = 117 × {dx,dy} BE32)
+
+First pairs (signed):
+
+```
+ (-27,-97) ( 27,-97) ( 24,-87) (-24,-87)
+ (-30,-96) ( 23,-97) ( 21,-87) (-26,-87)
+ …
+```
+Host PRESENT path uses the first 24 words as soft FX without skel damage.
+
+### 6.4 bolt.o (.text 0x28dafc, size 0x6a4)
+
+| VA       | Symbol |
+|----------|--------|
+| 0x28db00 | `_CreateCFace` |
+| 0x28dc04 | `_Brain__5CFace` |
+| 0x28dc34 | `_CreateCBolt` |
+| 0x28dd60 | `_Brain__5CBolt` |
+| 0x28ddc4 | `_CreateCBlueShot` |
+| 0x28dec8 | `_Brain__9CBlueShot` |
+| 0x28df94 | `_CreateCShotHit` |
+| 0x28e098 | `_Brain__8CShotHit` |
+| 0x28d814 | `_CreateCShotManager` |
+| 0x28d8d4 | `_Brain__12CShotManager` |
+
+================================================================================
+7. Cross-stage VA cheat sheet
+================================================================================
+
+| Function        | MAUSO    | GUITAR (corrected) | FINALE   |
+|-----------------|----------|--------------------|----------|
+| DecompByte      | 0x2a0b4c | 0x263018           | 0x2909f8 |
+| TileHeapInit    | 0x2a13e4 | 0x2638b0           | 0x291290 |
+| DecompTile      | 0x2a141c | 0x2638e8           | 0x2912c8 |
+| AddTiles        | 0x2a1570 | 0x263a3c*          | 0x29141c |
+| DrawMap         | 0x2a19f4 | 0x263ec0           | 0x2918a0 |
+| LoadMap         | 0x2a1c78 | 0x264144           | 0x291b24 |
+| LoadCDB         | 0x2a1d38 | 0x264204           | 0x291be4 |
+| InitGetFloor    | 0x2a2e6c | 0x26532c           | 0x292d18 |
+| GetHixel3D      | 0x2a2ee8 | 0x2653a8           | 0x292d94 |
+| findfloor       | 0x2a2f0c | 0x2653cc           | 0x292db8 |
+| SCROLLGetHixel  | 0x2a3000 | (scrlghix local)   | (local)  |
+
+\*GUITAR AddTiles MAP 0x263a4c − 0x10.
+
+| Global       | MAUSO    | GUITAR   | FINALE   |
+|--------------|----------|----------|----------|
+| pMapDefA     | 0x2c888c | 0x284bfc | 0x2b35ac |
+| pFloorHixels | 0x2d43a0 | 0x2903b8 | 0x2c03a8 |
+
+================================================================================
+8. Host gaps (explicit — do not claim done)
+================================================================================
+
+- DecompByte nibble handlers 0..15 not yet ported → host soft-blits TIL.
+- VDP2 cell / NBG register programming (`tagINIT_NBG01` in CheckScroll) open.
+- DrawMap→AddTiles full clip/priority vs Saturn VDP2 open.
+- guitar lick state machine / SequenceTable consumer byte-fiel open.
+- finale Brain / ring / bolt AI byte-fiel open (host PRESENT FX only).
+- Ymir RUNWAY-001 / VDP2 runtime capture still absent.
+
+Evidence chain for a future host DecompTile port:
+1. Implement DecompByte jump-table handlers against MAUSO ATIL fixtures.
+2. Wire LoadCDB header exactly as §3.5 into `scrl_cdb_parse`.
+3. Replace soft floor with InitGetFloor + MAPGetHixel over CDB cells.
+
+================================================================================
+9. Extraction commands (reproducible)
+================================================================================
+
+```
+tools/ghidra-work/extract.exe ^
+  "disco1/Mr. Bones (USA) (Disc 1).cue" /05MAUSO/03CODE  tools/ghidra-work/MAUSO_03CODE.bin
+tools/ghidra-work/extract.exe ^
+  "disco1/Mr. Bones (USA) (Disc 1).cue" /07GUITAR/03CODE tools/ghidra-work/GUITAR_03CODE.bin
+tools/ghidra-work/extract.exe ^
+  "disco2/Mr. Bones (USA) (Disc 2).cue" /27FINALE/03CODE tools/ghidra-work/FINALE_03CODE.bin
+```
+
+Capstone one-liner pattern (Python): `Cs(CS_ARCH_SH, CS_MODE_SH2|CS_MODE_BIG_ENDIAN)`.
+MAP absolute lines: `^\s*002[0-9a-f]{5}\s+_Symbol`.
+
+# end ghidra-vdp2-tiles.txt

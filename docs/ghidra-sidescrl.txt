@@ -1,0 +1,50 @@
+# §17/§23 side-scroll MAP notes (mr-bones-maps) — static + host
+
+Stages without 15PAN that share scroller stack:
+  MAUSO, VALLEY, BATWOOD1/2/3, GLASS, VILLAGE, SHADOW, VORTEX, LAFFRIOT
+ISO dirs: /05MAUSO /06VALLEY /08BAT1 /09BAT2 /10BAT3 /15GLASS
+          /19VILLAGE /22SHADOW /17VORTEX /26LAFF
+
+## Shared objects (example MAUSO A.MAP)
+- scroller.o  — CScroller (Create/Brain/Yeild/ScrollToFrame/FadeFrame/ConstantVel)
+- sidescrl.o  — CSideScroll CheckScroll; LoadCDB/LoadMap/DrawMap/LoadBitMap;
+                TileHeap*/DecompTile/AddTiles; tagMAP_DEF / tagTILE_DEF
+- scrlcoll.o  — pFloorHixels (COMMON ptr); SCRLCOLLInitGetFloor;
+                SCRLCOLLGetHixel3D / findfloor / findceiling / findtop
+- bkgdata.o   — background data (.data ~0x4c8)
+
+## MAUSO CODE VAs (base 0x232000)
+- LoadCDB    @ 0x2a1d38
+- LoadMap    @ 0x2a1c78
+- DrawMap    @ 0x2a19f4
+- CheckScroll@ 0x2a25d4
+- GetHixel3D @ 0x2a2ee8
+- findfloor  @ 0x2a2f0c
+- InitGetFloor @ 0x2a2e6c
+- pMapDefA/B/C/D @ 0x2c888c / 890 / 894 / 898
+- pFloorHixels COMMON @ 0x2d43a0
+- LoadCDB refs pMapDef* + bkgdata immediates (PC-relative mov.l)
+
+## Disc assets (real CODE disc)
+- 02TITL, 03CODE, 04STXT, 05SND1
+- Optional 06AMAP (floor polyline; VALLEY/BAT* present, MAUSO empty)
+- Layer pairs: 07ACDB/08ATIL, 09BCDB/10BTIL, 11CCDB/12CTIL, 13DCDB/14DTIL
+- 15PAN empty / absent (unlike RUNWAY/LOGS/ICE/MOAT/RIDE/STAING)
+
+## CDB header (BE16)
+- A-style (MAUSO/BAT*/VALLEY): [pix_w][pix_h][tw?][th?][n?]
+  e.g. MAUSO 1176×608, BAT1 3160×1344, VALLEY 15808×1376
+- B-style (VORTEX/BCDB…): [flags=0x0200][…][tw][th][n]
+  e.g. DCDB tw=16 th=16 n=586; body = map cells after ~12 B hdr
+
+## AMAP
+- BE16 (x, y) pairs; floor pixel = y>>8 when y>224
+- Small max-x → treat x as tile columns (×8)
+- Host walls only from AMAP steep steps (|Δfloor|>36)
+
+## Host (§23 scrl_map + sidescrl_phase)
+- scrl_map_init / build_collision / draw / get_hixel / find_floor / wall_at
+- Multi-layer DrawMap parallax factors 1/2/3/4 (A near → D far)
+- Palette from 03CODE + 02TITL via pan_palette_apply
+- Physics uses pFloorHixels stand-in + AMAP walls; TIL-only floors smoothed
+- Evidence: test_scrl_map; test_sidescrl_phase; mrbones --check --disc2

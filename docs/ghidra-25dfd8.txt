@@ -1,0 +1,65 @@
+
+=== Fn_25DFD8_cell @ 0025dfd8 ===
+
+void FUN_0025dfd8(undefined4 *param_1)
+
+{
+  undefined *puVar1;
+  uint uVar2;
+  int iVar3;
+  undefined4 *puVar4;
+  
+  puVar1 = PTR_DAT_0025e008;
+  iVar3 = *(int *)PTR_DAT_0025e008;
+  uVar2 = iVar3 + 1;
+  *(uint *)PTR_DAT_0025e008 = uVar2;
+  puVar4 = (undefined4 *)(iVar3 * 0xc + DAT_0025e00c);
+  *puVar4 = *param_1;
+  puVar4[1] = param_1[1];
+  puVar4[2] = param_1[2];
+  *(uint *)puVar1 = uVar2 & 0x3f;
+  return;
+}
+
+
+
+=== Near_25E05C @ 0025e05c ===
+NO FUN
+
+=== MaybeJump @ 00260bc0 ===
+NO FUN
+
+=== JoypadBrain @ 00269774 ===
+
+void JoypadBrain(void)
+
+{
+  ushort *puVar1;
+  ushort *puVar2;
+  int iVar3;
+  
+  puVar1 = DAT_002697dc;
+  iVar3 = 0;
+  do {
+    puVar2 = (ushort *)(*DAT_002697e0)(0);
+    if (puVar2 == (ushort *)0x0) {
+      iVar3 = iVar3 + 1;
+      if (iVar3 == 0x1e) {
+        *(byte *)(DAT_002697dc + 2) = *(byte *)(DAT_002697dc + 2) | 8;
+      }
+    }
+    else {
+      iVar3 = 0;
+      *puVar1 = *puVar2;
+      puVar1[1] = puVar2[1];
+      puVar1[2] = puVar2[2];
+      puVar1[3] = puVar2[3];
+      if ((uint)*puVar2 == (int)DAT_002697d8) {
+        (*(code *)PTR_FUN_002697e4)(2);
+      }
+    }
+    (*DAT_002697e8)();
+  } while( true );
+}
+
+
