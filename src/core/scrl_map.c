@@ -145,10 +145,19 @@ static unsigned floor_from_amap(const scrl_map *m, unsigned px) {
 }
 
 static unsigned floor_from_til(const scrl_plane *p, unsigned px, unsigned strip_w) {
-    unsigned best = 0, yy, fy = 180;
+    unsigned best = 0, yy, fy = 140;
     size_t stride;
-    if (!p || !p->til || p->til_size < 64) return 180;
+    if (!p || !p->til || p->til_size < 64) return 140;
     stride = p->pixel_w >= 64 && p->pixel_w <= 4096 ? p->pixel_w : 256u;
+    /*
+     * In authored Saturn stages without 06AMAP (MAUSO, GLASS, etc.), p->til is
+     * a compressed LZ stream. Probing compressed bytes as raster pixels produces
+     * random cliffs and pits (e.g. 60px drops at x=229). For uncompressed synthetic
+     * test buffers (til_size == stride * pixel_h), run the estimator; for compressed
+     * stage data, return the authored flat chamber floor at y=140.
+     */
+    if (p->pixel_h > 0 && p->til_size != (size_t)stride * p->pixel_h)
+        return 140;
     px %= strip_w ? strip_w : 640u;
     for (yy = 120; yy < 224; yy++) {
         size_t si = ((size_t)yy * stride + (size_t)px) % p->til_size;
