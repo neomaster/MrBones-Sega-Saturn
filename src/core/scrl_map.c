@@ -210,51 +210,15 @@ void scrl_map_build_collision(scrl_map *m, unsigned strip_w) {
 
 static void sample_plane(const scrl_plane *p, unsigned sx, unsigned sy,
                          const uint8_t *pal, uint8_t *rgba) {
-    size_t stride, si;
-    uint8_t idx = 0;
-    if (!p) {
-        rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
-        return;
-    }
+    (void)p; (void)sx; (void)sy; (void)pal;
     /*
-     * §23 LoadCDB@0x2a1d38 + DecompTile@0x2a141c:
-     * Sample 8x8 VDP2 cell from CDB static payload (cdb + 10) first when present,
-     * falling back to TIL payload (skipping tagTILE_DEF +0x48 header).
+     * CDB and TIL contain structured VDP2 cell descriptors and LZ-compressed
+     * tile streams (tagTILE_DEF), not raw 8bpp raster pixels. Sampling raw
+     * compressed bitstreams directly as pixel indices corrupts the entire
+     * display into high-frequency TV static noise. Keep transparent until
+     * full VDP2 tile cache is populated.
      */
-    if (p->cdb && p->cdb_size > 74u) {
-        size_t cdb_pay = p->cdb_size - 10u;
-        unsigned tx = sx >> 3;
-        unsigned ty = sy >> 3;
-        unsigned ix = sx & 7u;
-        unsigned iy = sy & 7u;
-        unsigned tcols = (p->pixel_w >= 64u) ? (p->pixel_w >> 3) : 40u;
-        size_t cell_idx = (size_t)ty * tcols + tx;
-        size_t off = (cell_idx * 64u + (size_t)iy * 8u + ix) % cdb_pay;
-        idx = p->cdb[10u + off];
-    }
-    if (!idx && p->til && p->til_size > 0x48u) {
-        size_t til_pay = p->til_size - 0x48u;
-        stride = p->pixel_w >= 64 && p->pixel_w <= 8192 ? p->pixel_w : 256u;
-        si = ((size_t)sy * stride + (size_t)sx) % til_pay;
-        idx = p->til[0x48u + si];
-    } else if (!idx && p->til && p->til_size > 0) {
-        stride = p->pixel_w >= 64 && p->pixel_w <= 8192 ? p->pixel_w : 256u;
-        si = ((size_t)sy * stride + (size_t)sx) % p->til_size;
-        idx = p->til[si];
-    }
-    if (!idx) {
-        rgba[3] = 0;
-        return;
-    }
-    /* Palette bank: CODE/TITL RGBA is BGRX words → already converted to RGBA1024. */
-    rgba[0] = pal[idx * 4u + 1];
-    rgba[1] = pal[idx * 4u + 2];
-    rgba[2] = pal[idx * 4u + 3];
-    rgba[3] = 255;
-    if (idx > 200) {
-        rgba[0] = (uint8_t)((rgba[0] * 3u + 40u) / 4u);
-        rgba[1] = (uint8_t)((rgba[1] * 3u + 30u) / 4u);
-    }
+    rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
 }
 
 int scrl_map_draw(const scrl_map *m, const uint8_t *palette_rgba1024,
