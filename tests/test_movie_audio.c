@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static int test_opening_sync(void) {
     const char *path = getenv("MB_DISC1");
@@ -148,6 +149,75 @@ done:
     return result;
 }
 
+static int test_story_clock(void) {
+    const char *path = getenv("MB_DISC1");
+    cdimage cd;
+    menu_phase menu;
+    saturn_pad pad = {0};
+    host_audio *audio = NULL;
+    char err[512];
+    unsigned position = 0, last = 0;
+    int full = getenv("MB_FULL_STORY") != NULL;
+    int state = 0, result = 1;
+    ULONGLONG deadline, previous_tick;
+    if (!path) { puts("SKIP story sync: MB_DISC1 unset"); return 0; }
+    if (cd_open(&cd, path, err, sizeof err)) return 1;
+    if (menu_phase_load(&menu, &cd, "test_audio_reference")) { cd_close(&cd); return 1; }
+    menu_phase_show_start(&menu);
+    saturn_pad_update_host(&pad, MB_PAD_START);
+    if (!menu_phase_step(&menu, &pad) || menu.screen != MENU_SCR_STORY ||
+        !menu.title_avi.pcm || menu.title_avi.frame_count <= 2048) goto done;
+    saturn_pad_update_host(&pad, 0);
+    audio = host_audio_start_pcm16(menu.title_avi.pcm, menu.title_avi.pcm_samples,
+                                   menu.title_avi.pcm_rate, menu.title_avi.pcm_channels);
+    if (!audio) goto done;
+    menu.movie_pcm_pending = 0;
+    menu.title_avi.tick_external = 1;
+    deadline = GetTickCount64() + (full ? 240000u : 5000u);
+    previous_tick = GetTickCount64();
+    while (GetTickCount64() < deadline &&
+           (full ? menu.state == MENU_ST_ACTIVE : position < 1500)) {
+        ULONGLONG now = GetTickCount64();
+        unsigned elapsed_us = (unsigned)(now - previous_tick) * 1000u;
+        unsigned expected;
+        previous_tick = now;
+        state = host_audio_movie_clock(audio, &position);
+        if (state < 0) { puts("SKIP story sync: audio device unavailable"); result = 0; goto done; }
+        if (state == 0) elapsed_us = 0;
+        else if (state == 1 || (state == 2 && position > last)) {
+            if (position < last) goto done;
+            elapsed_us = (position - last) * 1000u;
+            last = position;
+        }
+        menu.title_avi.tick_us = elapsed_us;
+        if (!menu_phase_step(&menu, &pad) || menu.title_avi.decode_error) goto done;
+        expected = 1u + (unsigned)((uint64_t)position * menu.title_avi.frame_rate /
+                                   ((uint64_t)menu.title_avi.frame_scale * 1000u));
+        if (expected > menu.title_avi.frame_count) expected = menu.title_avi.frame_count;
+        if (state == 1 && menu.title_avi.cur != expected) {
+            printf("story sync: audio=%u ms frame=%u expected=%u\n", position,
+                   menu.title_avi.cur, expected);
+            goto done;
+        }
+        Sleep(10);
+    }
+    if (position < 1500 || (full && (state != 2 || menu.state != MENU_ST_START_LEVEL ||
+        menu.title_avi.cur != menu.title_avi.frame_count || !menu_phase_selected_iso(&menu) ||
+        strcmp(menu_phase_selected_iso(&menu), "/04RUNWAY") != 0))) {
+        printf("story incomplete: audio=%d position=%u menu=%d frame=%u/%u\n",
+               state, position, menu.state, menu.title_avi.cur, menu.title_avi.frame_count);
+        goto done;
+    }
+    printf("OK %sstory audio clock: %u ms, %u/%u frames\n", full ? "full " : "",
+           position, menu.title_avi.cur, menu.title_avi.frame_count);
+    result = 0;
+done:
+    host_audio_stop(audio);
+    menu_phase_free(&menu);
+    cd_close(&cd);
+    return result;
+}
+
 static int test_finale_clock(void) {
     const char *path = getenv("MB_DISC2");
     cdimage cd;
@@ -266,6 +336,7 @@ done:
 }
 
 int main(void) {
+    if (getenv("MB_STORY_ONLY")) return test_story_clock();
     int16_t samples[44100] = {0}; /* 0.5 s of stereo silence */
     host_audio *audio = host_audio_start_pcm16(samples, 44100, 44100, 2);
     unsigned before = 0, paused = 0, after = 0;
@@ -310,6 +381,7 @@ int main(void) {
     puts("OK movie audio clock");
     if (test_opening_sync()) return 1;
     if (test_lose_sync()) return 1;
+    if (test_story_clock()) return 1;
     if (test_finale_clock()) return 1;
     return test_movie_interrupt();
 }

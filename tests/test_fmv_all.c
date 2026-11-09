@@ -55,10 +55,58 @@ int main(void) {
                     duck_avi_free(&movie); free(blob); cd_close(&cd); return 1;
                 }
             }
+            if (d == 1 && !strcmp(list.paths[i], "/27FINALE/20AVI")) {
+                sha256_ctx hash;
+                uint8_t before[32], after[32];
+                if (movie.frame_count < 2 || movie.frames[1].size != 15 ||
+                    (movie.frames[1].data[1] ^ movie.frames[1].data[2]) != 0 ||
+                    !duck_avi_step(&movie)) {
+                    fprintf(stderr, "FINALE: missing initial repeat interval\n");
+                    return 1;
+                }
+                sha256_init(&hash); sha256_update(&hash, movie.rgba, 320u * 224u * 4u);
+                sha256_final(&hash, before);
+                {
+                    uint8_t invalid[15];
+                    memcpy(invalid, movie.frames[1].data, sizeof invalid);
+                    invalid[6] ^= 1; /* A repeat cannot change its dimensions. */
+                    movie.frames[1].data = invalid;
+                    if (duck_avi_step(&movie) || !movie.decode_error) {
+                        fprintf(stderr, "FINALE: invalid repeat dimensions accepted\n");
+                        return 1;
+                    }
+                    duck_avi_free(&movie);
+                    if (duck_avi_open(&movie, blob, size) || !duck_avi_step(&movie)) return 1;
+                }
+                if (!duck_avi_step(&movie)) return 1;
+                sha256_init(&hash); sha256_update(&hash, movie.rgba, 320u * 224u * 4u);
+                sha256_final(&hash, after);
+                if (memcmp(before, after, sizeof before)) {
+                    fprintf(stderr, "FINALE: repeat interval erased the previous picture\n");
+                    return 1;
+                }
+            }
             while (!duck_avi_done(&movie)) {
+                unsigned interval = movie.cur;
                 if (!duck_avi_step(&movie)) {
                     fprintf(stderr, "disc %u %s: %s\n", d + 1, list.paths[i], movie.status);
                     duck_avi_free(&movie); free(blob); cd_close(&cd); return 1;
+                }
+                if (d == 1 && !strcmp(list.paths[i], "/27FINALE/20AVI")) {
+                    const char *expected = interval == 2653 ? "205f46bcc8e94c4d4a399b7e3bde621bfd49f1b55cbda9533b59fdd6dbe872d3" :
+                                           interval == 3954 ? "f5e3b5d5e996d6dadf51fcd23c3feb7adf03775afd7968c8b4699588f48d977f" :
+                                           interval == 5038 ? "e9ab38a026ea3969b377c3022a03bc79888857a33ee295f3b5f461943a0ffcb0" : NULL;
+                    if (expected) {
+                        sha256_ctx hash;
+                        uint8_t digest[32];
+                        char hex[65];
+                        sha256_init(&hash); sha256_update(&hash, movie.rgba, 320u * 224u * 4u);
+                        sha256_final(&hash, digest); sha256_hex(digest, hex);
+                        if (strcmp(hex, expected)) {
+                            fprintf(stderr, "FINALE: interval %u differs from Ymir\n", interval);
+                            return 1;
+                        }
+                    }
                 }
             }
             {

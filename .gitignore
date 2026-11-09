@@ -21,5 +21,6 @@ __pycache__/
 tools/ymir/
 tools/ymir-profile/
 tools/frame_dump.*
+tools/ghidra-work/proj-*/
 # Local config with disc paths
 mrbones.ini

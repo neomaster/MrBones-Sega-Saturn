@@ -1,4 +1,6 @@
 # VDP2 / tile pipeline + guitar.o / finale.o — SH-2 static analysis
+# Correction 2026-11-09: see docs/finale-ring-analysis.md for the actual ring
+# table bounds and ShootRing behavior; section 6.2–6.3 below is superseded.
 # Extracted 2026-11-07 from stage 03CODE blobs (base VA 0x00232000)
 # Sources: tools/ghidra-work/{MAUSO,GUITAR,FINALE}_03CODE.bin
 #          Neomaster/mr-bones-maps/{MAUSO,GUITAR,FINALE}/A.MAP
