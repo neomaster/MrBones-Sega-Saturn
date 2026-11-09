@@ -3,9 +3,13 @@ project(mrbones_port LANGUAGES C)
 if (MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
-if (MSVC AND CMAKE_C_CL_SHOWINCLUDES_PREFIX STREQUAL "Observa├º├úo: incluindo arquivo: ")
+if (MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND
+    CMAKE_C_CL_SHOWINCLUDES_PREFIX MATCHES "^Observa")
     set(CMAKE_C_CL_SHOWINCLUDES_PREFIX "Observação: incluindo arquivo: ")
     set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_C_CL_SHOWINCLUDES_PREFIX}")
+    if (NOT CMAKE_C_COMPILER_LAUNCHER)
+        set(CMAKE_C_COMPILER_LAUNCHER "${CMAKE_CURRENT_SOURCE_DIR}/tools/msvc-utf8.cmd")
+    endif()
 endif()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -115,6 +119,12 @@ if (WIN32)
     target_link_libraries(mbrunway mbcore user32 gdi32 winmm)
     add_executable(mrbones src/tools/mrbones.c src/platform/host_audio.c)
     target_link_libraries(mrbones mbcore user32 gdi32 winmm)
+    add_test(NAME test_mrbones_paths COMMAND ${CMAKE_COMMAND}
+        "-DEXE=$<TARGET_FILE:mrbones>"
+        "-DTEST_DIR=${CMAKE_BINARY_DIR}"
+        "-DMANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt"
+        "-DDISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue"
+        -P "${CMAKE_SOURCE_DIR}/tests/test_mrbones_paths.cmake")
     add_executable(test_movie_audio tests/test_movie_audio.c src/platform/host_audio.c)
     target_link_libraries(test_movie_audio mbcore winmm)
     add_test(NAME test_movie_audio COMMAND test_movie_audio)

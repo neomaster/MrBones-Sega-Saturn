@@ -5,7 +5,7 @@ No game data is included: provide your own Disc 1 and Disc 2 images.
 
 **Status:** experimental native Windows port; the campaign is not yet verified as fully playable. The boot movie uses `/29INTRO/20AVI` and the main menu uses original disc graphics. TrueMotion and DK3 decoding are linked statically. See `LOG-DESENVOLVIMENTO.md` for evidence and remaining differences.
 
-Project root: `F:\MrBonesPort`. Junctions: `Neomaster\mr-bones-port` / `MrBonesPort`.
+The commands below assume the project root is the current directory.
 
 ## Quick start
 
@@ -32,6 +32,8 @@ ctest --test-dir build-static --output-on-failure
 ```
 
 Some tests require the original discs at the paths configured in `CMakeLists.txt`.
+For Portuguese MSVC output with Ninja, the build uses `tools/msvc-utf8.cmd` so
+Ninja can record header dependencies correctly across incremental builds.
 
 To rebuild FFmpeg 7.1.1, place the [official source archive](https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz) at `build-static/ffmpeg-7.1.1.tar.xz` and verify its SHA-256 is `733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1`. Start MSYS2 Bash from the x64 Visual Studio developer command prompt, then run the following from the project root.
 
@@ -81,6 +83,10 @@ Progress unlocks are written to `<save_dir>/nvmshadow.bin` (0x28 bytes, loader `
 | Manifest | `manifest` | `MB_MANIFEST` | argv |
 
 Default config: `%LOCALAPPDATA%\MrBonesPort\mrbones.ini`.
+`mrbones.exe` without arguments uses these configured paths. When disc paths are
+not configured, it looks for the supplied `disco1` and optional `disco2` folders
+beside the executable or one directory above it. The default manifest is found
+the same way. Command-line disc and manifest paths override the configuration.
 
 ```
 build\mbverify --disc1 "D1.cue" --disc2 "D2.cue" --quick

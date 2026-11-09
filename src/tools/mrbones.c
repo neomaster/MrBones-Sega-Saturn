@@ -68,6 +68,26 @@ static uint32_t g_pending_keys;
 static char g_title[192];
 static char g_save_dir[MB_PATH_MAX];
 static char g_disc2_path[MB_PATH_MAX];
+
+static int find_bundled_file(char *out, size_t size, const char *relative) {
+    char dir[MB_PATH_MAX], *slash;
+    DWORD len = GetModuleFileNameA(NULL, dir, (DWORD)sizeof dir);
+    if (!len || len >= sizeof dir) return -1;
+    slash = strrchr(dir, '\\');
+    if (!slash) return -1;
+    *slash = 0;
+    for (int i = 0; i < 2; i++) {
+        int n = snprintf(out, size, "%s\\%s", dir, relative);
+        DWORD attrs;
+        if (n < 0 || (size_t)n >= size) return -1;
+        attrs = GetFileAttributesA(out);
+        if (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+        slash = strrchr(dir, '\\');
+        if (!slash) break;
+        *slash = 0;
+    }
+    return -1;
+}
 static int g_mounted_disc = 1;
 static stage_catalog g_catalog;
 static cdimage *g_cd;
@@ -885,6 +905,7 @@ int main(int argc, char **argv) {
     int i;
     char err[512];
     char level_override[32];
+    char bundled_manifest[MB_PATH_MAX];
     id_manifest manifest;
     id_result result;
     menu_phase menu;
@@ -903,11 +924,15 @@ int main(int argc, char **argv) {
     }
     config_load(&cfg, NULL);
     snprintf(g_save_dir, sizeof g_save_dir, "%s", cfg.save_dir);
+    snprintf(g_disc2_path, sizeof g_disc2_path, "%s", cfg.disc[1]);
     if (argc == 1) {
-        snprintf(g_cue1, sizeof g_cue1, "%s",
-                 "F:/MrBonesPort/disco1/Mr. Bones (USA) (Disc 1).cue");
-        snprintf(g_disc2_path, sizeof g_disc2_path, "%s",
-                 "F:/MrBonesPort/disco2/Mr. Bones (USA) (Disc 2).cue");
+        if (cfg.disc[0][0]) snprintf(g_cue1, sizeof g_cue1, "%s", cfg.disc[0]);
+        else if (find_bundled_file(g_cue1, sizeof g_cue1,
+                                   "disco1\\Mr. Bones (USA) (Disc 1).cue"))
+            snprintf(g_cue1, sizeof g_cue1, "disco1\\Mr. Bones (USA) (Disc 1).cue");
+        if (!g_disc2_path[0] && find_bundled_file(g_disc2_path, sizeof g_disc2_path,
+                                   "disco2\\Mr. Bones (USA) (Disc 2).cue"))
+            g_disc2_path[0] = 0;
     } else if (argc < 3) {
         usage();
         return 2;
@@ -933,8 +958,10 @@ int main(int argc, char **argv) {
     }
 
     {
-        const char *manifest_path =
-            (argc >= 3) ? argv[2] : "F:/MrBonesPort/manifest/versions.txt";
+        const char *manifest_path = (argc >= 3) ? argv[2] : cfg.manifest;
+        if (argc == 1 && !strcmp(cfg.manifest, "manifest\\versions.txt") &&
+            !find_bundled_file(bundled_manifest, sizeof bundled_manifest, cfg.manifest))
+            manifest_path = bundled_manifest;
         if (manifest_load(&manifest, manifest_path, err, sizeof err)) {
             fprintf(stderr, "manifest: %s\n", err);
             return 1;
