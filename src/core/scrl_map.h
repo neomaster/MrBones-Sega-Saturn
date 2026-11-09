@@ -15,6 +15,12 @@
 #define SCRL_PLANE_MAX 4u
 #define SCRL_STRIP_MAX 2048u
 #define SCRL_AMAP_MAX 512u
+/*
+ * Steepest slope, in rows per column, that an estimated floor may have. It is the
+ * limit for walking at full speed in sidescrl_motion.h (max_climb_step 6 divided by
+ * 3 px/frame). Authored floors (06AMAP) are never altered.
+ */
+#define SCRL_FLOOR_MAX_SLOPE 2
 #define SCRL_HIXEL_AIR 0
 #define SCRL_HIXEL_FLOOR 1
 #define SCRL_HIXEL_WALL 2
