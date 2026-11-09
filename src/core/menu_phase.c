@@ -560,17 +560,17 @@ static void load_original_menu(menu_phase *menu, cdimage *cd) {
         size_t y = i / MENU_W;
         unsigned index = y + 19 < MENU_H ? planes[MENU_W * MENU_H + i + 19 * MENU_W] : 0;
         uint32_t rgb = index ? colors[512 + index] : colors[256 + planes[i]];
-        background[4 * i] = (uint8_t)rgb;
+        background[4 * i] = (uint8_t)(rgb >> 16);
         background[4 * i + 1] = (uint8_t)(rgb >> 8);
-        background[4 * i + 2] = (uint8_t)(rgb >> 16);
+        background[4 * i + 2] = (uint8_t)rgb;
         background[4 * i + 3] = 255;
     }
     for (i = 0; i < 256; i++) {
         uint32_t rgb = colors[768 + i];
         palette[4 * i] = 0;
-        palette[4 * i + 1] = (uint8_t)rgb;
+        palette[4 * i + 1] = (uint8_t)(rgb >> 16);
         palette[4 * i + 2] = (uint8_t)(rgb >> 8);
-        palette[4 * i + 3] = (uint8_t)(rgb >> 16);
+        palette[4 * i + 3] = (uint8_t)rgb;
     }
     for (i = 0; i < 4; i++) {
         size_t off = offsets[i];
