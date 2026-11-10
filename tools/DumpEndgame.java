@@ -4,7 +4,11 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.listing.*;
 import java.io.*;
 
-/* §12o: endgame / skelbar / pause / gang / thrown hit conditions. */
+/*
+ * §12o: endgame / skelbar / pause / gang / thrown hit conditions (RUNWAY 03CODE).
+ * Args: [outPath]  default docs/ghidra-endgame.txt
+ * Standalone: no other script in tools/ is needed.
+ */
 public class DumpEndgame extends GhidraScript {
   private static final String[][] TARGETS = {
     {"00256178", "CreateCEndLevel"},
@@ -52,13 +56,15 @@ public class DumpEndgame extends GhidraScript {
   };
 
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-endgame.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-endgame.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
     out.println("Program " + currentProgram.getName()
         + " language " + currentProgram.getLanguageID()
-        + " imagebase " + currentProgram.getImageBase());
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     out.println("MAP: Skeletism@285884 RealSkeletism@285888 Pump@28588c");
     out.println("MAP: GlobalRealSkeletism@214418 bPaused@21441c pTheSkelBar@28c708");
     out.println("MAP: HitTimeout@2859f4 bPanScrollPause@284b50");
