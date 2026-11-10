@@ -493,9 +493,11 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             g_menu->title_avi.tick_us = elapsed_us;
             g_menu->title_avi.tick_external = 1;
             menu_phase_step(g_menu, &pad);
-            if (g_menu->title_avi.decode_error) {
-                fprintf(stderr, "movie decode failed (menu): %s\n", g_menu->title_avi.status);
+            if (g_menu->state == MENU_ST_QUIT) {
+                fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
+                g_mode = APP_DONE;
+                return 0;
             }
             if (g_menu->screen == MENU_SCR_TITLE || g_menu->screen == MENU_SCR_STORY) {
                 if (g_audio) { host_audio_stop(g_audio); g_audio = NULL; }
@@ -794,6 +796,25 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
     mb_nvm_load(&g_nvm, g_save_dir);
     stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
 
+    {
+        static const uint8_t invalid[] = {0, 0, 0};
+        if (menu_phase_load(menu, g_cd, g_save_dir) ||
+            menu->title_avi.cur >= menu->title_avi.frame_count) return 1;
+        menu->movie_pcm_pending = 0;
+        menu->title_avi.frames[menu->title_avi.cur].data = invalid;
+        menu->title_avi.frames[menu->title_avi.cur].size = sizeof invalid;
+        g_menu = menu;
+        g_mode = APP_MENU;
+        g_movie_last_tick = GetTickCount64() - 1000;
+        wndproc(NULL, WM_TIMER, 1, 0);
+        if (!menu->title_avi.decode_error || g_mode != APP_DONE) {
+            fprintf(stderr, "check: invalid menu movie was not stopped\n");
+            return 1;
+        }
+        menu_phase_free(menu);
+        g_menu = NULL;
+    }
+
     /* Each transition movie belongs to the stage just completed. */
     {
         static const struct { const char *movie; const char *next; int disc; } movies[] = {
@@ -1074,6 +1095,9 @@ int main(int argc, char **argv) {
                 }
             }
             if (g_mode == APP_DONE) {
+                if ((g_menu && g_menu->state == MENU_ST_QUIT) ||
+                    (g_stage && g_stage->special_live && g_stage->special.movie.decode_error))
+                    error = 1;
                 Sleep(200);
                 break;
             }

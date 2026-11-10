@@ -11,12 +11,11 @@
 void mb_nvm_init_default(mb_nvm_shadow *nvm) {
     if (!nvm) return;
     memset(nvm, 0, sizeof *nvm);
-    /* LoadFirstLevel empty-save init. */
-    nvm->bytes[MB_NVM_DEFAULT_FLAGS_OFF] = 1;
+    /* LoadFirstLevel empty-save init: [0..0x1b]=0, byte[4]=1, +0x1c=3, +0x20=0.
+     * byte[4] is the first level byte: RUNWAY unlocked, nothing else. */
+    nvm->bytes[MB_NVM_LEVEL_TABLE_OFF] = 1;
     mb_nvm_set_u32(nvm, MB_NVM_DEFAULT_LEVEL_OFF, 3u);
     mb_nvm_set_u32(nvm, MB_NVM_DEFAULT_EXTRA_OFF, 0u);
-    /* Unlock RUNWAY (index 0) by default. */
-    nvm->bytes[0] = 1;
     nvm->loaded = 0;
     nvm->dirty = 1;
 }
@@ -52,13 +51,13 @@ void mb_nvm_set_u8(mb_nvm_shadow *nvm, unsigned off, uint8_t v) {
 }
 
 int mb_nvm_level_unlocked(const mb_nvm_shadow *nvm, unsigned level_index) {
-    if (!nvm || level_index >= 28u) return 0;
-    return nvm->bytes[level_index] != 0;
+    if (!nvm || level_index >= MB_NVM_LEVEL_COUNT) return 0;
+    return nvm->bytes[MB_NVM_LEVEL_TABLE_OFF + level_index] != 0;
 }
 
 void mb_nvm_unlock_level(mb_nvm_shadow *nvm, unsigned level_index) {
-    if (!nvm || level_index >= 28u) return;
-    nvm->bytes[level_index] = 1;
+    if (!nvm || level_index >= MB_NVM_LEVEL_COUNT) return;
+    nvm->bytes[MB_NVM_LEVEL_TABLE_OFF + level_index] = 1;
     nvm->dirty = 1;
 }
 

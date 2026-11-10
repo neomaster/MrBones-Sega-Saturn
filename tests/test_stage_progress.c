@@ -64,6 +64,147 @@ static int run_smoke(stage_runner *r, cdimage *cd, int disc, stage_catalog *cat,
     return stage_runner_done(r) ? 0 : -1;
 }
 
+/*
+ * Disc-less part: a hand-built catalog with the 24 campaign dirs in
+ * DirNameTable order (TROLL1/TROLL2 EMPTY, 18RIDE the first disc-2 dir) plus
+ * 28LOSE. Checks stage_progress_skip_empty, the unlock bytes and level word
+ * after every win, and that the bytes stage_progress does not model survive
+ * every win, the disc-1 → disc-2 boundary (VORTEX → RIDE) and save/load.
+ */
+static const char *const k_leaves[24] = {
+    "04RUNWAY", "05MAUSO",  "06VALLEY", "07GUITAR", "08BAT1",   "09BAT2",
+    "10BAT3",   "11LOGS",   "12TROLL1", "13TROLL2", "14DRUM",   "15GLASS",
+    "16BIGBNS", "17VORTEX", "18RIDE",   "19VILLAGE", "20ICE1",  "21ICE2",
+    "22SHADOW", "23MOAT",   "24STAING", "25GENRM",  "26LAFF",   "27FINALE"};
+
+static void synth_catalog(stage_catalog *cat) {
+    unsigned i;
+    memset(cat, 0, sizeof *cat);
+    for (i = 0; i < 24u; i++) {
+        stage_info *s = &cat->stages[cat->count++];
+        snprintf(s->iso_dir, sizeof s->iso_dir, "/%s", k_leaves[i]);
+        snprintf(s->name, sizeof s->name, "%s", k_leaves[i] + 2);
+        s->kind = (i == 8u || i == 9u) ? STAGE_KIND_EMPTY
+                : (i == 23u)           ? STAGE_KIND_FINALE
+                                       : STAGE_KIND_SIDE;
+        s->in_campaign = 1;
+        s->campaign_index = (int)i;
+        s->preferred_disc = (i < 14u) ? 1 : 2;
+        s->playable = 1;
+        cat->campaign[cat->campaign_count++] = s;
+    }
+    {
+        stage_info *s = &cat->stages[cat->count++];
+        snprintf(s->iso_dir, sizeof s->iso_dir, "%s", "/28LOSE");
+        snprintf(s->name, sizeof s->name, "%s", "LOSE");
+        s->kind = STAGE_KIND_LOSE;
+        s->campaign_index = -1;
+        s->preferred_disc = 1;
+    }
+}
+
+static int markers_intact(const mb_nvm_shadow *nvm) {
+    return nvm->bytes[0] == 0x11 && nvm->bytes[1] == 0x22 && nvm->bytes[2] == 0x33 &&
+           nvm->bytes[3] == 0x44 &&
+           mb_nvm_get_u32(nvm, MB_NVM_DEFAULT_EXTRA_OFF) == 0xAABBCCDDu &&
+           mb_nvm_get_u32(nvm, 0x24u) == 0x01020304u;
+}
+
+static int synthetic_chain(void) {
+    const char *save = "test_save_prog_synth";
+    stage_catalog cat;
+    stage_progress prog;
+    mb_nvm_shadow nvm, disk;
+    unsigned i, played = 0, crossed = 0;
+#ifdef _WIN32
+    _mkdir(save);
+#else
+    mkdir(save, 0755);
+#endif
+    synth_catalog(&cat);
+    CHECK(cat.campaign_count == 24u);
+
+    /* skip_empty: LOGS → DRUM over both TROLLs; NULL and end stay NULL. */
+    {
+        const stage_info *logs = stage_catalog_find(&cat, "/11LOGS");
+        const stage_info *drum = stage_catalog_find(&cat, "/14DRUM");
+        const stage_info *s;
+        unsigned n = 0;
+        CHECK(logs && drum);
+        CHECK(stage_progress_skip_empty(&cat, stage_catalog_next(&cat, logs->iso_dir)) == drum);
+        CHECK(stage_progress_skip_empty(&cat, stage_catalog_find(&cat, "/12TROLL1")) == drum);
+        CHECK(stage_progress_skip_empty(&cat, stage_catalog_find(&cat, "/13TROLL2")) == drum);
+        CHECK(stage_progress_skip_empty(&cat, drum) == drum);
+        CHECK(stage_progress_skip_empty(&cat, NULL) == NULL);
+        CHECK(stage_progress_skip_empty(&cat, stage_catalog_next(&cat, "/27FINALE")) == NULL);
+        for (s = cat.campaign[0]; s; s = stage_progress_skip_empty(&cat, stage_catalog_next(&cat, s->iso_dir)))
+            n++;
+        CHECK(n == 22u);
+    }
+
+    mb_nvm_init_default(&nvm);
+    nvm.bytes[0] = 0x11; nvm.bytes[1] = 0x22; nvm.bytes[2] = 0x33; nvm.bytes[3] = 0x44;
+    mb_nvm_set_u32(&nvm, MB_NVM_DEFAULT_EXTRA_OFF, 0xAABBCCDDu);
+    mb_nvm_set_u32(&nvm, 0x24u, 0x01020304u);
+    stage_progress_init(&prog, &cat, &nvm, save);
+
+    /* begin on an EMPTY dir lands on the next playable; begin(NULL) on RUNWAY. */
+    CHECK(stage_progress_begin(&prog, "/12TROLL1") == 0);
+    CHECK(strcmp(prog.next_iso, "/14DRUM") == 0 && prog.current_campaign == 10);
+    CHECK(stage_progress_begin(&prog, NULL) == 0);
+    CHECK(strcmp(prog.next_iso, "/04RUNWAY") == 0 && prog.route == STAGE_ROUTE_STAGE);
+
+    while (prog.route == STAGE_ROUTE_STAGE) {
+        const stage_info *cur = stage_catalog_find(&cat, prog.next_iso);
+        CHECK(cur && cur->kind != STAGE_KIND_EMPTY);
+        played++;
+        CHECK(stage_progress_on_outcome(&prog, cur->iso_dir, STAGE_OUTCOME_WIN) == 0);
+        CHECK(mb_nvm_level_unlocked(&nvm, (unsigned)cur->campaign_index) == 1);
+        CHECK(markers_intact(&nvm));
+        if (prog.route == STAGE_ROUTE_STAGE) {
+            const stage_info *nx = stage_catalog_find(&cat, prog.next_iso);
+            CHECK(nx && nx->kind != STAGE_KIND_EMPTY);
+            CHECK(mb_nvm_level_unlocked(&nvm, (unsigned)nx->campaign_index) == 1);
+            CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == (uint32_t)nx->campaign_index);
+            if (strcmp(cur->iso_dir, "/17VORTEX") == 0) {
+                /* Disc 1 → disc 2: the file written on the last disc-1 win is
+                 * byte for byte what RIDE starts from. */
+                CHECK(strcmp(nx->iso_dir, "/18RIDE") == 0);
+                CHECK(cur->preferred_disc == 1 && nx->preferred_disc == 2);
+                CHECK(mb_nvm_load(&disk, save) == 0 && disk.loaded == 1);
+                CHECK(memcmp(disk.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
+                CHECK(markers_intact(&disk));
+                crossed = 1;
+            }
+        }
+    }
+    CHECK(crossed == 1);
+    CHECK(played == 22u);
+    CHECK(prog.route == STAGE_ROUTE_COMPLETE && prog.next_iso[0] == 0);
+    for (i = 0; i < 24u; i++)
+        CHECK(mb_nvm_level_unlocked(&nvm, i) == ((i != 8u && i != 9u) ? 1 : 0));
+    CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == 24u);
+    CHECK(mb_nvm_load(&disk, save) == 0);
+    CHECK(memcmp(disk.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
+
+    /* Lose and abort route to LOSE, LOSE routes to MENU; none of them writes nvm. */
+    {
+        mb_nvm_shadow before = nvm;
+        CHECK(stage_progress_on_outcome(&prog, "/05MAUSO", STAGE_OUTCOME_LOSE) == 0);
+        CHECK(prog.route == STAGE_ROUTE_LOSE && strcmp(prog.next_iso, "/28LOSE") == 0);
+        CHECK(stage_progress_on_outcome(&prog, "/05MAUSO", STAGE_OUTCOME_ABORT) == 0);
+        CHECK(prog.route == STAGE_ROUTE_LOSE && strcmp(prog.next_iso, "/28LOSE") == 0);
+        CHECK(stage_progress_on_outcome(&prog, "/28LOSE", STAGE_OUTCOME_LOSE) == 0);
+        CHECK(prog.route == STAGE_ROUTE_MENU && prog.next_iso[0] == 0);
+        CHECK(stage_progress_on_outcome(&prog, "/05MAUSO", STAGE_OUTCOME_NONE) == -1);
+        CHECK(prog.route == STAGE_ROUTE_MENU);
+        CHECK(stage_progress_on_outcome(&prog, "/99NOPE", STAGE_OUTCOME_WIN) == -1);
+        CHECK(memcmp(before.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
+    }
+    printf("synthetic chain: 22 wins, TROLL skipped, nvm markers intact across VORTEX->RIDE\n");
+    return 0;
+}
+
 int main(void) {
     const char *d1 = getenv("MB_DISC1");
     const char *d2 = getenv("MB_DISC2");
@@ -78,8 +219,10 @@ int main(void) {
     int opened2 = 0;
     unsigned i;
 
+    if (synthetic_chain()) return 1;
+
     if (!d1 || !man) {
-        printf("SKIP stage_progress\n");
+        printf("SKIP stage_progress disc part\n");
         return 0;
     }
 #ifdef _WIN32
@@ -155,6 +298,13 @@ int main(void) {
     stage_runner_free(&runner);
 
     if (opened2) {
+        /* Disc switch on the real catalog: RIDE is the first dir that needs
+         * disc 2, and the nvm image is not touched by NEED_DISC → resume. */
+        mb_nvm_shadow before = nvm;
+        const stage_info *ride = stage_catalog_find(&cat, "/18RIDE");
+        CHECK(ride && ride->preferred_disc == 2);
+        CHECK(stage_catalog_find(&cat, "/17VORTEX")->preferred_disc == 1);
+        CHECK(stage_progress_skip_empty(&cat, stage_catalog_next(&cat, "/17VORTEX")) == ride);
         CHECK(stage_runner_begin(&runner, &disc1, 1, &cat, "/25GENRM") == 0);
         CHECK(runner.state == STAGE_RS_NEED_DISC);
         CHECK(stage_runner_resume(&runner, &disc2, 2) == 0);
@@ -167,6 +317,7 @@ int main(void) {
             }
         }
         CHECK(runner.state == STAGE_RS_FINISHED);
+        CHECK(memcmp(before.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
         stage_runner_free(&runner);
 
         CHECK(run_smoke(&runner, &disc2, 2, &cat, "/27FINALE") == 0);

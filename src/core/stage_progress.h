@@ -5,9 +5,12 @@
 
 /*
  * §15 — campaign progression + automatic _NvmShadow save.
- * Win → unlock next campaign index, persist nvmshadow.bin.
- * Lose → route to /28LOSE then return to MENU (or retry).
+ * Win → unlock current and next playable campaign index (EMPTY dirs are
+ *       skipped, never unlocked), level word = next index, persist nvmshadow.bin.
+ * Lose / abort → route to /28LOSE, which then returns to MENU; nvm untouched.
  * FINALE win → campaign complete.
+ * The nvm is never handed to stage_runner, so a disc switch (NEED_DISC →
+ * resume) cannot alter it; docs/stage-progress-nvm.md.
  */
 
 typedef enum {
@@ -36,9 +39,6 @@ typedef struct {
 
 void stage_progress_init(stage_progress *p, const stage_catalog *cat,
                          mb_nvm_shadow *nvm, const char *save_dir);
-
-/* Sync unlock bits from catalog presence: unlock all cleared + current. */
-void stage_progress_apply_nvm(stage_progress *p);
 
 /* Start campaign at first unlocked, or force iso_dir. */
 int stage_progress_begin(stage_progress *p, const char *iso_dir_or_null);

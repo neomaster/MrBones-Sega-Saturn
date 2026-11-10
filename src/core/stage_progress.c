@@ -14,17 +14,6 @@ void stage_progress_init(stage_progress *p, const stage_catalog *cat,
         snprintf(p->save_dir, sizeof p->save_dir, "%s", save_dir);
 }
 
-void stage_progress_apply_nvm(stage_progress *p) {
-    unsigned i;
-    if (!p || !p->cat || !p->nvm) return;
-    for (i = 0; i < p->cat->campaign_count; i++) {
-        if (mb_nvm_level_unlocked(p->nvm, i))
-            continue;
-        /* Keep host defaults: only index 0 unlocked until wins. */
-    }
-    (void)i;
-}
-
 const stage_info *stage_progress_skip_empty(const stage_catalog *cat,
                                             const stage_info *from_next) {
     const stage_info *s = from_next;
@@ -100,15 +89,19 @@ int stage_progress_on_outcome(stage_progress *p, const char *finished_iso,
         return -1;
     }
 
-    /* Win: unlock current + next; advance current level word. */
+    /* Win: unlock current + next playable; level word = next to play. */
     if (p->nvm && cur->in_campaign && cur->campaign_index >= 0) {
         mb_nvm_unlock_level(p->nvm, (unsigned)cur->campaign_index);
         next = stage_progress_skip_empty(p->cat,
                                          stage_catalog_next(p->cat, cur->iso_dir));
         if (next && next->campaign_index >= 0)
             mb_nvm_unlock_level(p->nvm, (unsigned)next->campaign_index);
+        /* Same unit menu_phase writes when a level is selected: the campaign
+         * index of the stage to play next, never an EMPTY one. */
         mb_nvm_set_u32(p->nvm, MB_NVM_DEFAULT_LEVEL_OFF,
-                       (uint32_t)(cur->campaign_index + 1));
+                       (uint32_t)(next && next->campaign_index >= 0
+                                      ? next->campaign_index
+                                      : cur->campaign_index + 1));
         p->nvm->dirty = 1;
         if (persist(p) == 0)
             snprintf(p->status, sizeof p->status, "PROGRESS saved nvm after %s",
