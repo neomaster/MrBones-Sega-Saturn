@@ -130,11 +130,10 @@ Do `/02` (SHA-256 `02faf276ff9892d82c4b41dbfd8e6515f79b87f8883c731fa3d8aa1610d33
   ordem da campanha é a dos diretórios 04 a 27; `stage_progress_skip_empty` pula `TROLL1`/`TROLL2`, o
   que dá LOGS → DRUM. `STAGE_OUTCOME_LOSE` e `STAGE_OUTCOME_ABORT` levam a `/28LOSE` e daí ao MENU, o
   equivalente do resultado 1. Não há equivalente do resultado 2 (menu direto, sem filme).
-- FINALE: o port ainda inicia o AVI diretamente ao entrar na fase, sem reconstruir a arena original.
-  Após o filme, `mrbones.c` encaminha `STAGE_ROUTE_COMPLETE` ao menu, conforme o destino do cérebro
-  original e a referência de filme selecionado no Ymir. A vitória jogada e a transição normal da arena
-  para o filme continuam pendentes; veja [`finale-ring-analysis.md`](finale-ring-analysis.md). A música
-  do menu aguarda 4,54 s adicionais, calibrados pela comparação de áudio digital com essa referência.
+- FINALE: desde `b799d16` e `e43ee9e`, [`special_phase.c`](../src/core/special_phase.c) tem a arena de
+  dezesseis anéis, e apagar todos é o que encerra a fase; a vitória fecha a campanha
+  (`STAGE_ROUTE_COMPLETE`) em vez de voltar ao menu pelo filme como o original. O encadeamento do filme
+  com a arena está nesse arquivo e em [`finale-ring-analysis.md`](finale-ring-analysis.md), não aqui.
 
 ## 6. Observado no Ymir (09/11)
 
@@ -151,12 +150,6 @@ Capturas citadas ficam em `build-static/ymir-finale-*/screenshots/`, fora do con
   o resultado de 1 para 0 em RAM levou ao filme de FINALE; a captura `ymir-finale-winref/…134500.548.png`
   coincide em RGBA com o intervalo 288 do AVI decodificado pelo port. Isso confirma o ramo sob resultado
   forçado, não a condição de vitória normal.
-- **FINALE, filme até o menu.** Em nova execução da arena com resultado 1 alterado para 0 em RAM,
-  o filme completo terminou no menu START. Três capturas dos créditos coincidiram em RGBA com os
-  intervalos 2358–2418, 3963–4008 e 5366 decodificados pelo port. A captura de áudio exclusiva do
-  processo Ymir mediu 4,771 s entre o fim do PCM do filme e o início da faixa 02 do disco 2;
-  o port medido anteriormente apresentou 4,712 s. Evidências e análise em
-  `build-static/ymir-finale-win-boundary/`. A vitória continua sendo forçada pelo depurador.
 - **GUITAR** (`0022896c=7`, `00228970=0` em `0020b95c`): a fase Guitar Solo, personagem com guitarra
   diante da plateia. `/07GUITAR/20AVI` é uma cena diferente; sua chamada depois de GUITAR vem da
   descompilação, não de uma vitória observada.
@@ -178,11 +171,11 @@ aos dados originais da ROM. **Não correspondem, e não podem**, pelo que os dum
   `ghidra-finale-detail.txt`, `finale-ring-analysis.md`, `finale-handoff-27676.md`) cita uma rotina ou
   estrutura de créditos/equipe. `_DirNameTable` (`stage_catalog.c`, base `0022da00`) guarda só os 28
   nomes de diretório do disco (`04RUNWAY`..`30MAP`); nenhum é nome de pessoa.
-- **O conteúdo de encerramento real está dentro do filme.** Na seção 6 acima, três capturas do Ymir em
-  créditos coincidiram em RGBA com os intervalos 2358–2418, 3963–4008 e 5366 do AVI decodificado pelo
-  port — ou seja, **os créditos da Sega Saturn são quadros do próprio `/27FINALE/20AVI`** (36.680.552
-  bytes no disco 2), não uma tabela de texto. O `/27FINALE` do disco 1 tem todos os recursos "extra"
-  vazios (hash de string vazia no manifesto); só o disco 2 carrega a FINALE completa.
+- **O conteúdo de encerramento real está dentro do filme.** Na seção 6 acima, capturas do Ymir em
+  créditos coincidiram em RGBA com trechos do AVI decodificado pelo port — ou seja, **os créditos da
+  Sega Saturn são quadros do próprio `/27FINALE/20AVI`** (36.680.552 bytes no disco 2), não uma tabela
+  de texto. O `/27FINALE` do disco 1 tem todos os recursos "extra" vazios (hash de string vazia no
+  manifesto); só o disco 2 carrega a FINALE completa.
 - **A "chamada DirNameTable pós-FINALE" em `mrbones.c` é `credits_build_frame`.** Ela usa
   `stage_catalog_dir_name()`/`stage_catalog_dir_count()` — isto é, o `_DirNameTable` — para listar
   `"STAGE NN: /DIRNAME"` numa tela própria do host, rotulada "CAMPAIGN STAGES (DIRNAMETABLE)" e
