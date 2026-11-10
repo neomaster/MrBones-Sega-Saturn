@@ -51,6 +51,7 @@ int main(void) {
         timed.frames = frames;
         timed.frame_count = 3;
         timed.rgba = pixel;
+        timed.tm1_frames = 1; /* Timing fixture starts after a decoded image. */
         timed.us_per_frame = 100000;
         CHECK(duck_avi_tick(&timed, 250000) == 2);
         CHECK(timed.cur == 2 && timed.elapsed_us == 50000);
@@ -70,6 +71,7 @@ int main(void) {
         timed.frames = frames;
         timed.frame_count = 3;
         timed.rgba = pixel;
+        timed.tm1_frames = 1;
         timed.us_per_frame = 100000;
         timed.pcm_samples = 450;
         timed.pcm_rate = 1000;
@@ -86,6 +88,7 @@ int main(void) {
         timed.frames = frames;
         timed.frame_count = 5658;
         timed.rgba = pixel;
+        timed.tm1_frames = 1;
         timed.us_per_frame = 66666;
         timed.frame_scale = 1;
         timed.frame_rate = 15;
@@ -233,6 +236,7 @@ int main(void) {
         timed.frames = frames;
         timed.frame_count = 15;
         timed.rgba = pixel;
+        timed.tm1_frames = 1;
         timed.us_per_frame = 66666;
         timed.frame_scale = 1;
         timed.frame_rate = 15;
@@ -246,6 +250,7 @@ int main(void) {
         timed.frames = frames;
         timed.frame_count = 3;
         timed.rgba = pixel;
+        timed.tm1_frames = 1;
         timed.us_per_frame = 66666;
         timed.frame_scale = 1;
         timed.frame_rate = 15;
@@ -383,6 +388,23 @@ int main(void) {
         CHECK(duck_avi_tick(&movie, movie.us_per_frame + 1u) == -1);
         CHECK(movie.decode_error && duck_avi_playback_done(&movie));
         CHECK(strstr(movie.status, "invalid video frame") != NULL);
+        duck_avi_free(&movie);
+    }
+    {
+        uint8_t previous[320u * 224u * 4u];
+        CHECK(duck_avi_open(&movie, avi, avi_size) == 0);
+        movie.frames[0].size = 0;
+        CHECK(duck_avi_step(&movie) == 0);
+        CHECK(movie.decode_error && duck_avi_playback_done(&movie));
+        CHECK(strstr(movie.status, "invalid repeat frame") != NULL);
+        duck_avi_free(&movie);
+
+        CHECK(duck_avi_open(&movie, avi, avi_size) == 0);
+        CHECK(duck_avi_step(&movie) == 1);
+        memcpy(previous, movie.rgba, sizeof previous);
+        movie.frames[1].size = 0;
+        CHECK(duck_avi_step(&movie) == 1);
+        CHECK(!movie.decode_error && memcmp(previous, movie.rgba, sizeof previous) == 0);
         duck_avi_free(&movie);
     }
 #endif

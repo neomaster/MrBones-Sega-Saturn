@@ -521,6 +521,12 @@ int duck_avi_step(duck_avi *avi) {
     if (avi->cur >= avi->frame_count) return 0;
     f = &avi->frames[avi->cur++];
     if (f->size == 0) {
+        if (!avi->tm1_frames) {
+            snprintf(avi->status, sizeof avi->status, "duck_avi: invalid repeat frame %u", avi->cur);
+            avi->decode_error = 1;
+            avi->playback_done = 1;
+            return 0;
+        }
         avi->frames_drawn++;
         return 1;
     }
