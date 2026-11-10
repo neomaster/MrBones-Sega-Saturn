@@ -1,0 +1,156 @@
+Program 03MENU_03CODE.bin language SuperH:BE:32:SH-2 imagebase 00000000 sha256 ac031e1e7d83e0baa07f2a3232f56e2aa6dfd7e13bf12b3614f098e42d9e3d11
+-- DoLeagal literal pool --
+0023c592 = 0300 (16-bit)
+0023c594 = 00c80009
+0023c598 = 002398b4  menu image
+0023c59c = 00239d90  menu image
+0023c5a0 = 002143f0
+0023c5a4 = 002051e4
+-- InitOptions literal pool --
+0023c668 = 0300 (16-bit)
+0023c66a = 00c0 (16-bit)
+0023c66c = 0021d9dc
+0023c670 = 00236294  menu image
+0023c674 = 00236014  menu image
+0023c678 = 00239d90  menu image
+0023c67c = 0021d9e0
+0023c680 = 00236c1c  menu image
+0023c684 = 0023699c  menu image
+-- StartMenuScreen literal pool --
+0023c8c4 = 03000009
+0023c8c8 = 0023f650  menu image
+0023c8cc = 0023c688  menu image
+0023c8d0 = 0023c6e4  menu image
+0023c8d4 = 0023c608  menu image
+0023c8d8 = 0023e0f4  menu image
+0023c8dc = 00238510  menu image
+0023c8e0 = 00205ba8
+0023c8e4 = 0023f4a8  menu image
+0023c8e8 = 00237d08  menu image
+0023c8ec = 0023c5a8  menu image
+0023c8f0 = 00206c8c
+0023c8f4 = 00213edc
+0023c8f8 = 0021453c
+0023c8fc = 00205f10
+-- SelectMenuEntry literal pool --
+0023cd24 = 00c00009
+0023cd28 = 00213edc
+0023cd2c = 0023dfe0  menu image
+0023cd30 = 0023cbb4  "DISK 2"
+0023cd34 = 0020bd3c
+0023cd38 = 00228962  _NvmShadow+0x12
+0023cd3c = 00239abc  menu image
+0023cd40 = 0023cbbc  "DISK 1"
+0023cd44 = 00239ae8  menu image
+0023cd48 = 00205494
+0023cd4c = 0023f650  menu image
+0023cd50 = 0023f4a8  menu image
+0023cd54 = 0023c77c  menu image
+0023cd58 = 0021d9dc
+0023cd5c = 002364c4  menu image
+0023cd60 = 00239d90  menu image
+0023cd64 = 0023676c  menu image
+0023cd68 = 0021d9e0
+0023cd6c = 00236e4c  menu image
+0023cd70 = 25a00483
+0023cd74 = 002370f4  menu image
+0023cd78 = 00204128
+-- Brain literal pool --
+0023ce62 = 0080 (16-bit)
+0023ce64 = 002143f0
+0023ce68 = 0023c530  menu image
+0023ce6c = 0021dabc
+0023ce70 = 0023c4a0  menu image
+0023ce74 = 0023e0f4  menu image
+0023ce78 = 0023c77c  menu image
+0023ce7c = 0023ce9c  menu image
+0023ce80 = 0023c900  menu image
+0023ce84 = 002050b0
+0023ce88 = 0022fb0c
+0023ce8c = 0023ca04  menu image
+0023ce90 = 002084ea
+0023ce94 = 0023cbc4  menu image
+0023ce98 = 0023cd7c  menu image
+-- StartScreen @ 0023e0f4 --
+0023e0f4 = 00000002
+0023e0f8 = 00000001
+0023e0fc = 0023e0ec  menu image
+0023e100 = 00000000
+0023e104 = 00000000
+0023e108 = 00000001
+0023e10c = 00000004
+0023e110 = 00000004
+-- StartScreen entries: count 2 columns 1 at 0023e0ec --
+StartScreen entry[0] @ 0023dfe4
+  +00 00000001
+  +04 00000001
+  +08 00000003
+  +0c 00000004
+  +10 00000003
+  +14 00238d4c  menu image
+  +18 00238d8c  menu image
+  +1c 002144c8
+  +20 00000000
+  +24 00000000
+  +28 00000000
+  +2c 00000000
+StartScreen entry[1] @ 0023e068
+  +00 00000002
+  +04 00000001
+  +08 00000003
+  +0c 00000000
+  +10 00000000
+  +14 00238dcc  menu image
+  +18 00238e0c  menu image
+  +1c 002144c8
+  +20 00000000
+  +24 00000000
+  +28 00000000
+  +2c 00000000
+-- OptionsScreen @ 0023f650 --
+0023f650 = 00000003
+0023f654 = 00000001
+0023f658 = 0023f644  menu image
+0023f65c = 0023e0f4  menu image
+0023f660 = 00000000
+0023f664 = 00000000
+-- OptionsScreen entries: count 3 columns 1 at 0023f644 --
+OptionsScreen entry[0] @ 0023f4b8
+  +00 00000003
+  +04 00000001
+  +08 00000003
+  +0c 00000000
+  +10 00000000
+  +14 00235614  menu image
+  +18 00235de4  menu image
+  +1c 002144c8
+  +20 00000000
+  +24 00000000
+  +28 00000000
+  +2c 00000000
+OptionsScreen entry[1] @ 0023f53c
+  +00 00000004
+  +04 00000001
+  +08 00000003
+  +0c 00000000
+  +10 00000000
+  +14 00233fbc  menu image
+  +18 00234444  menu image
+  +1c 002144c8
+  +20 00000000
+  +24 00000000
+  +28 00000000
+  +2c 00000000
+OptionsScreen entry[2] @ 0023f5c0
+  +00 00000005
+  +04 00000001
+  +08 00000003
+  +0c 00000000
+  +10 00000000
+  +14 00234944  menu image
+  +18 00234e44  menu image
+  +1c 002144c8
+  +20 00000000
+  +24 00000000
+  +28 00000000
+  +2c 00000000
