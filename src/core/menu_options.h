@@ -5,8 +5,15 @@
  * Subsystem A -- OPTIONS submenu navigation state machine.
  *
  * Clean-room interoperability specification (C99, no third-party code, no
- * system calls). Behaviour below is the *specified* behaviour of this module;
- * it has not been verified against the original SH-2 binary.
+ * system calls). Behaviour below is the *specified* behaviour of this module.
+ *
+ * Checked against 03MENU/03CODE (docs/ghidra-menu-options.txt,
+ * docs/stage-progress-nvm.md section 8): the original OptionsScreen has three
+ * entries, LevelSelect and two on/off toggles, and no audio-mode register,
+ * button preset or volume row. The toggles are two 32-bit loader words
+ * (0x0021d9dc, 0x0021d9e0), not bytes of _NvmShadow, and are not saved to the
+ * backup. So this module is a host extension: its values have no byte in
+ * nvmshadow.bin and must not be written into it.
  *
  * Rows (vertical cursor):
  *   0  MENU_ROW_AUDIO_MODE    Mono / Stereo
@@ -53,7 +60,8 @@ typedef enum {
     MENU_ROW_COUNT = 4 /* also the "invalid" return value of menu_options_step */
 } MenuRow;
 
-/* Audio register (NVM): bits 0 and 1 select the output mode.
+/* Audio register (host setting, not part of _NvmShadow): bits 0 and 1 select
+ * the output mode.
  *   bit 0 set  -> Mono
  *   bit 1 set  -> Stereo
  * Exactly one of the two is valid. 00 and 11 are invalid and are treated as

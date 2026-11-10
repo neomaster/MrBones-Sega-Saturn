@@ -18,10 +18,15 @@
  *     (docs/ghidra-menu-level-table.txt).
  *   - FINALE's ShootRing writes 1 to byte +1 when the ring is cleared
  *     (docs/finale-ring-analysis.md).
+ *   - The Options screen does not use this block: its two toggles are the
+ *     loader words 0x0021d9dc and 0x0021d9e0, outside the 0x28 bytes and never
+ *     saved. 03MENU names the block only twice more: 0x00228962 (the 18RIDE
+ *     level byte, read when starting from disc 2) and the base again at
+ *     0023d264 (docs/ghidra-menu-options.txt).
  * Layout:
- *   [0]          unknown, kept as found
+ *   [0]          unknown, kept as found (not an options byte)
  *   [1]          campaign completed flag (FINALE)
- *   [2..3]       unknown, kept as found
+ *   [2..3]       unknown, kept as found (not options bytes)
  *   [4..0x1b]    level bytes indexed by directory ID: byte[ID] for
  *                04RUNWAY..27FINALE, i.e. byte[4 + campaign_index]; 0 = locked.
  *                byte[4]=1 on an empty save is RUNWAY unlocked.
