@@ -32,6 +32,15 @@
 static const int k_finale_dir[4] = {0, 128, 192, 64};
 #include "finale_ring_table.inc"
 
+/*
+ * ShootRing sound stand-in (Saturn play @0x00204128).
+ * Deactivate/hit table @0x002b21f0 = {0x2A,0x2A,0x2B,0x29} by dir.
+ * Activate table     @0x002b2200 = {0x32,0x32,0x33,0x31} by dir.
+ * Host remaps into the five RUNWAY_SFX slots (no per-dir PCM yet).
+ */
+#define FINALE_SFX_HIT      (RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C)
+#define FINALE_SFX_ACTIVATE (RUNWAY_SFX_FLAG_C)
+
 static void finale_ring_init(special_phase *phase) {
     unsigned i;
     for (i = 0; i < FINALE_RING_SLOTS; i++)
@@ -80,20 +89,20 @@ int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
     idx = finale_ring_select(phase->ring_phase, dir);
     phase->ring_shots++;
     phase->ring_last_index = idx;
-    /* The ending movie has its own audio and no ring sound effects. */
+    /* Ending movie carries its own audio — skip ring SFX while movie_ok. */
     if (!phase->ring_active[idx]) {
-        /* inactive → activate, increment +0x708 */
+        /* inactive → activate, increment +0x708; Saturn ID table @0x2b2200. */
         phase->ring_active[idx] = 1;
         phase->ring_active_count++;
         phase->ring_last_activated = 1;
-        if (!phase->movie_ok) phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        if (!phase->movie_ok) phase->sfx_flags |= FINALE_SFX_ACTIVATE;
         return 0;
     }
-    /* active → deactivate, decrement; count==0 → EndLevel(0) */
+    /* active → hit/destroy, decrement; count==0 → EndLevel(0); IDs @0x2b21f0. */
     phase->ring_active[idx] = 0;
     phase->ring_active_count--;
     phase->ring_last_activated = 0;
-    if (!phase->movie_ok) phase->sfx_flags |= RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C;
+    if (!phase->movie_ok) phase->sfx_flags |= FINALE_SFX_HIT;
     if (phase->ring_active_count < 0)
         phase->ring_active_count = 0;
     if (phase->ring_active_count == 0) {
@@ -832,7 +841,7 @@ int special_phase_step(special_phase *phase, const saturn_pad *pad) {
 
     runway_skel_tick_cooldown(&phase->skel);
 
-    if (phase->kind == STAGE_KIND_MOVIE && phase->movie_ok && (pad->pressed & 0x0800u))
+    if (phase->mode == SPECIAL_MODE_PRESENT && phase->movie_ok && (pad->held & 0x0800u))
         phase->movie.playback_done = 1;
 
     if (phase->mode == SPECIAL_MODE_RHYTHM)

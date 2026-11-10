@@ -75,8 +75,9 @@ int main(void) {
         arena.kind = STAGE_KIND_FINALE;
         arena.ring_active[0] = 1;
         arena.ring_active_count = FINALE_RING_SLOTS;
+        /* HIT = JUMP|C (Saturn @0x2b21f0); ACTIVATE = C (Saturn @0x2b2200). */
         CHECK(special_phase_finale_shoot(&arena, 0) == 0);
-        CHECK(arena.sfx_flags == (RUNWAY_SFX_FLAG_C | RUNWAY_SFX_FLAG_JUMP));
+        CHECK(arena.sfx_flags == (RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C));
         arena.sfx_flags = 0;
         CHECK(special_phase_finale_shoot(&arena, 0) == 0);
         CHECK(arena.sfx_flags == RUNWAY_SFX_FLAG_C);
@@ -155,10 +156,6 @@ int main(void) {
             CHECK(phase.movie.frames_drawn == 1 && phase.state == SPECIAL_ST_PLAY);
             CHECK(memcmp(phase.frame_rgba, duck_avi_frame_rgba(&phase.movie),
                          320u * 224u * 4u) == 0);
-            saturn_pad_update_host(&pad, MB_PAD_START);
-            CHECK(special_phase_step(&phase, &pad) == 0);
-            CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);
-            CHECK(phase.movie.frames_drawn == 1);
             saturn_pad_update_host(&pad, 0);
             phase.movie.tick_us = phase.movie.us_per_frame + 1u;
             for (int i = 0; i < 117; i++) special_phase_step(&phase, &pad);
@@ -195,6 +192,17 @@ int main(void) {
         CHECK(duck_avi_playback_done(&phase.movie));
         printf("FINALE: frames=%u avi=%zu %s\n", phase.frames, phase.avi_size,
                phase.status);
+        special_phase_free(&phase);
+
+        CHECK(special_phase_load(&phase, &disc2, "/27FINALE", STAGE_KIND_FINALE) == 0);
+        {
+            saturn_pad held = {0};
+            saturn_pad_update_host(&held, MB_PAD_START);
+            saturn_pad_update_host(&held, MB_PAD_START);
+            CHECK(!held.pressed && (held.held & 0x0800u));
+            special_phase_step(&phase, &held);
+            CHECK(phase.state == SPECIAL_ST_FINISHED && phase.movie.playback_done);
+        }
         special_phase_free(&phase);
 
         /* Arena: ShootRing clears 16 lit slots → EndLevel(0). */
@@ -255,7 +263,6 @@ int main(void) {
     CHECK(phase.movie.frame_count > 0);
     {
         saturn_pad pad = {0};
-        saturn_pad_update_host(&pad, MB_PAD_START);
         for (int i = 0; i < 4; i++) {
             special_phase_step(&phase, &pad);
             CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);
@@ -279,6 +286,17 @@ int main(void) {
     printf("LOSE: frames=%u avi=%zu duck_frames=%u drawn=%u %s\n", phase.frames,
            phase.avi_size, phase.movie.frame_count, phase.movie.frames_drawn,
            phase.status);
+    special_phase_free(&phase);
+
+    CHECK(special_phase_load(&phase, &disc1, "/28LOSE", STAGE_KIND_LOSE) == 0);
+    {
+        saturn_pad held = {0};
+        saturn_pad_update_host(&held, MB_PAD_START);
+        saturn_pad_update_host(&held, MB_PAD_START);
+        CHECK(!held.pressed && (held.held & 0x0800u));
+        special_phase_step(&phase, &held);
+        CHECK(phase.state == SPECIAL_ST_LOST && phase.movie.playback_done);
+    }
     special_phase_free(&phase);
 
     cd_close(&disc1);

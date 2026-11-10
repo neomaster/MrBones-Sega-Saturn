@@ -50,6 +50,13 @@ Implementação nativa em `src/core/special_phase.c` (2026-11-09):
 - O AVI de `/27FINALE/20AVI` continua a poder encerrar a fase sozinho
   (compatível com `test_special_phase` / hashes Ymir). HUD do anel só é
   desenhado quando `!movie_ok` (blit de filme limpo).
+- SFX por disparo (`phase->sfx_flags`, só se `!movie_ok`):
+  - **acerto/destruição** (slot activo → desactiva): Saturn
+    `@0x002b21f0` = `{0x2A,0x2A,0x2B,0x29}` por dir → host
+    `FINALE_SFX_HIT` = `JUMP|C`.
+  - **activação** (slot inactivo → acende): Saturn `@0x002b2200` =
+    `{0x32,0x32,0x33,0x31}` por dir → host `FINALE_SFX_ACTIVATE` = `C`.
+  - Chamada Saturn: `(*0x00204128)(id)`.
 
-Ainda aberto: estado inicial confirmado no Ymir, áudio/animação por ramo de
-`ShootRing`, sprites STXTR byte-fiel do anel e vitória jogada ponta a ponta.
+Ainda aberto: estado inicial confirmado no Ymir, PCM por ID/dir byte-fiel,
+sprites STXTR do anel e vitória jogada ponta a ponta.

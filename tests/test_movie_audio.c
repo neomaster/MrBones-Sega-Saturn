@@ -228,7 +228,7 @@ static int test_finale_clock(void) {
     unsigned position = 0, last = 0;
     int result = 1;
     int full = getenv("MB_FULL_FINALE") != NULL;
-    int state = 0, start_sent = 0;
+    int state = 0;
     ULONGLONG deadline;
     if (!path) { puts("SKIP finale sync: MB_DISC2 unset"); return 0; }
     if (cd_open(&cd, path, err, sizeof err)) { printf("disc2: %s\n", err); return 1; }
@@ -275,10 +275,7 @@ static int test_finale_clock(void) {
             last = position;
         } else if (state == 2) phase.movie.tick_us = elapsed_us;
         else goto done;
-        if (!start_sent && state == 1 && position >= 500) {
-            saturn_pad_update_host(&pad, MB_PAD_START);
-            start_sent = 1;
-        } else saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        saturn_pad_update_host(&pad, MB_PAD_RIGHT);
         if (special_phase_step(&phase, &pad) != 0 || phase.movie.decode_error ||
             (phase.state != SPECIAL_ST_PLAY && !(full && phase.state == SPECIAL_ST_FINISHED))) goto done;
         expected = 1u + (unsigned)((uint64_t)position * 1000u * phase.movie.frame_rate / ((uint64_t)phase.movie.frame_scale * 1000000u));
@@ -289,13 +286,13 @@ static int test_finale_clock(void) {
         }
         Sleep(10);
     }
-    if (!start_sent || position < 1500 || (full && (state != 2 || phase.state != SPECIAL_ST_FINISHED ||
+    if (position < 1500 || (full && (state != 2 || phase.state != SPECIAL_ST_FINISHED ||
         phase.movie.cur != phase.movie.frame_count))) {
         printf("finale incomplete: audio=%d position=%u state=%d frame=%u/%u\n",
                state, position, phase.state, phase.movie.cur, phase.movie.frame_count);
         goto done;
     }
-    printf("OK %sfinale audio clock after START: %u ms, %u/%u frames\n",
+    printf("OK %sfinale audio clock: %u ms, %u/%u frames\n",
            full ? "full " : "", position, phase.movie.cur, phase.movie.frame_count);
     result = 0;
 done:
@@ -319,7 +316,8 @@ static int test_movie_interrupt(void) {
         unsigned position = 0;
         int state = 0;
         ULONGLONG deadline, stopped_at;
-        if (special_phase_load(&phase, &cd, movies[i], STAGE_KIND_MOVIE)) goto done;
+        if (special_phase_load(&phase, &cd, movies[i],
+                               i == 1 ? STAGE_KIND_LOSE : STAGE_KIND_MOVIE)) goto done;
         audio = host_audio_start_pcm16(phase.movie.pcm, phase.movie.pcm_samples,
                                        phase.movie.pcm_rate, phase.movie.pcm_channels);
         if (!audio) goto done;
@@ -335,7 +333,7 @@ static int test_movie_interrupt(void) {
             saturn_pad pad = {0};
             saturn_pad_update_host(&pad, MB_PAD_START);
             special_phase_step(&phase, &pad);
-            if (phase.state != SPECIAL_ST_FINISHED) goto done;
+            if (phase.state != (i == 1 ? SPECIAL_ST_LOST : SPECIAL_ST_FINISHED)) goto done;
         }
         stopped_at = GetTickCount64();
         host_audio_stop(audio);
