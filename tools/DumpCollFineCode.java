@@ -6,11 +6,15 @@ import java.io.*;
 
 public class DumpCollFineCode extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-coll-fine-code.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-coll-fine-code.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("03CODE imagebase="+currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     out.println("MAP: _PANCOLLGetHixel@256a68 _BonesPushOutOfWalls@25c694 _BonesWallAboveCheck@25c900");
     out.println("HitChk BSS/data @285A5C..285A88 (runtime; image zeros)");
     String[][] targets = {

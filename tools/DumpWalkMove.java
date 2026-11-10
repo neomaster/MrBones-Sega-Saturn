@@ -6,10 +6,15 @@ import java.io.*;
 
 public class DumpWalkMove extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-walk-move.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-walk-move.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     String[][] t = {
       {"25db1c","WalkMove_25DB1C"},
       {"25c694","WalkAnim_25C694"},

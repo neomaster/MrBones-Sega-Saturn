@@ -7,11 +7,15 @@ import java.io.*;
 /* Link Bones position object to RWorldSprite: decompile fn near 0x25D400 pool and sprite init. */
 public class DumpBonesPosLink extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-bones-pos-link.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-bones-pos-link.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("program=" + currentProgram.getName() + " base=" + currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
 
     /* Force-create and decompile candidates that own the 0x25D3xx / 0x25Cxxx pools. */
     String[][] funs = {

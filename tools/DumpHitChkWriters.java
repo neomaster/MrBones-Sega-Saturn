@@ -18,9 +18,13 @@ public class DumpHitChkWriters extends GhidraScript {
   };
 
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-hitchk-writers.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-hitchk-writers.txt";
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("imagebase="+currentProgram.getImageBase()+" name="+currentProgram.getName());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
 

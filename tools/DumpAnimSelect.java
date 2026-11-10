@@ -6,10 +6,15 @@ import java.io.*;
 
 public class DumpAnimSelect extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-anim-select.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-anim-select.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     out.println("03CODE anim / frame select / pan scroll");
     String[][] t = {
       {"25df78","Mplaynext"},

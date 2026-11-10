@@ -5,7 +5,13 @@ import ghidra.program.model.listing.*;
 import java.io.*;
 public class DumpInvXform extends GhidraScript {
   public void run() throws Exception {
-    PrintWriter out = new PrintWriter(new File("F:/MrBonesPort/docs/ghidra-inv-xform.txt"));
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-inv-xform.txt";
+    PrintWriter out = new PrintWriter(new File(outPath));
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     String[][] funs = {{"2078c0","InvXform_2078C0"},{"206b10","WorldXformPool"},{"206ab0","WorldXform_206AB0"}};
@@ -27,6 +33,6 @@ public class DumpInvXform extends GhidraScript {
       long v = ((getByte(a)&0xffL)<<24)|((getByte(a.add(1))&0xffL)<<16)|((getByte(a.add(2))&0xffL)<<8)|(getByte(a.add(3))&0xffL);
       out.printf("0x%08X = 0x%08X%n", va, v);
     }
-    out.close(); decomp.dispose(); println("wrote inv-xform");
+    out.close(); decomp.dispose(); println("wrote " + outPath);
   }
 }

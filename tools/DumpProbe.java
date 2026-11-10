@@ -6,11 +6,15 @@ import java.io.*;
 
 public class DumpProbe extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-message-probe.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-message-probe.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("imagebase "+currentProgram.getImageBase()+" lang "+currentProgram.getLanguageID());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     String[][] t = {
       {"20b308","MsgProbe_20B308"},
       {"20b264","Fn_20B264"},

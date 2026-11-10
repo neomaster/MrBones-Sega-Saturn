@@ -28,7 +28,8 @@ public class DumpSound extends GhidraScript {
   public void run() throws Exception {
     String n = currentProgram.getName().toLowerCase();
     boolean loader = n.contains("02") || n.contains("loader");
-    String outPath = loader
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : loader
         ? "F:/MrBonesPort/docs/ghidra-sound-loader.txt"
         : "F:/MrBonesPort/docs/ghidra-sound-code.txt";
     DecompInterface decomp = new DecompInterface();
@@ -36,7 +37,8 @@ public class DumpSound extends GhidraScript {
     PrintWriter out = new PrintWriter(new File(outPath));
     out.println("Program " + currentProgram.getName()
         + " language " + currentProgram.getLanguageID()
-        + " imagebase " + currentProgram.getImageBase());
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     String[][] targets = loader ? LOADER_TARGETS : CODE_TARGETS;
     for (String[] t : targets) {
       dumpFun(out, decomp, t[0], t[1]);

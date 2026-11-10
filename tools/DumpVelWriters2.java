@@ -6,10 +6,15 @@ import java.io.*;
 
 public class DumpVelWriters2 extends GhidraScript {
   public void run() throws Exception {
-    PrintWriter out = new PrintWriter(new File("F:/MrBonesPort/docs/ghidra-vel-writers2.txt"));
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-vel-writers2.txt";
+    PrintWriter out = new PrintWriter(new File(outPath));
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
-    out.println("program=" + currentProgram.getName());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     String[][] funs = {
       {"262fd0", "VelFn_262FD0"},
       {"2636f8", "VelFn_2636F8"},
@@ -44,6 +49,6 @@ public class DumpVelWriters2 extends GhidraScript {
       out.printf("0x%08X = 0x%08X%n", va, v);
     }
     out.close(); decomp.dispose();
-    println("wrote vel-writers2");
+    println("wrote " + outPath);
   }
 }

@@ -16,14 +16,16 @@ public class DumpRunwayBrains extends GhidraScript {
   };
 
   public void run() throws Exception {
-    String outPath = System.getProperty("mrbones.out",
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : System.getProperty("mrbones.out",
         "F:/MrBonesPort/docs/ghidra-runway-brains.txt");
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
     out.println("Program " + currentProgram.getName()
         + " language " + currentProgram.getLanguageID()
-        + " imagebase " + currentProgram.getImageBase());
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     out.println("SHA note: analyze against 03CODE.bin base 0x00200000");
     for (String[] t : TARGETS) {
       Address addr = toAddr(t[0]);

@@ -26,7 +26,13 @@ public class DumpObjScheduler extends GhidraScript {
   public void run() throws Exception {
     DecompInterface di = new DecompInterface();
     di.openProgram(currentProgram);
-    FileWriter w = new FileWriter("F:/MrBonesPort/docs/ghidra-objyeild.txt");
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-objyeild.txt";
+    FileWriter w = new FileWriter(outPath);
+    w.write("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256() + "\n");
     dump(di, w, 0x002050b0L, "ObjYeild");
     dump(di, w, 0x00205168L, "ObjNewBrain");
     dump(di, w, 0x002051a0L, "CreateCObject");
@@ -37,5 +43,7 @@ public class DumpObjScheduler extends GhidraScript {
     dump(di, w, 0x0020bf08L, "SMPCgetPad_alt");
     dump(di, w, 0x0020b834L, "CreateLoader_alt");
     w.close();
+    di.dispose();
+    println("wrote " + outPath);
   }
 }

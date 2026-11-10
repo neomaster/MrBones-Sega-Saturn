@@ -8,11 +8,16 @@ import java.io.*;
 /* Trace tall path: InputBrain tall cell refs, 0x204128 callees, Walk/Stand msg effects. */
 public class DumpTallPath extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-tall-path.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-tall-path.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("03CODE base expect 0x00232000; imagebase="+currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
+    out.println("03CODE base expect 0x00232000");
 
     /* Absolute pointer literals embedded in 03CODE. */
     long[] ptrs = { 0x28DB8CL, 0x2858BCL, 0x204128L, 0x25D534L };

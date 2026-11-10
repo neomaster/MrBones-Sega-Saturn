@@ -6,11 +6,16 @@ import java.io.*;
 
 public class DumpStandSwitch extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-stand-switch.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-stand-switch.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("03CODE base expect 0x00232000; imagebase="+currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
+    out.println("03CODE base expect 0x00232000");
     String[][] t = {
       {"25d534","BrainSwitch_25D534"},
       {"25c900","Fn_25C900"},

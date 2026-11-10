@@ -7,11 +7,16 @@ import java.io.*;
 /* Decompile BBS match/search and nearby helpers in loader /02. */
 public class DumpBbsMatch extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-bbs-match.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-bbs-match.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("loader /02 base expect 0x00200000; imagebase="+currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
+    out.println("loader /02 base expect 0x00200000");
     String[][] t = {
       {"20b35c","BbsMatch_20B35C"},
       {"20b38c","BbsHelper_20B38C"},

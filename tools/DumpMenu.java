@@ -39,7 +39,8 @@ public class DumpMenu extends GhidraScript {
   public void run() throws Exception {
     String n = currentProgram.getName().toLowerCase();
     boolean menu = n.contains("menu");
-    String outPath = menu
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : menu
         ? "F:/MrBonesPort/docs/ghidra-menu.txt"
         : "F:/MrBonesPort/docs/ghidra-loader-backup.txt";
     DecompInterface decomp = new DecompInterface();
@@ -47,7 +48,8 @@ public class DumpMenu extends GhidraScript {
     PrintWriter out = new PrintWriter(new File(outPath));
     out.println("Program " + currentProgram.getName()
         + " language " + currentProgram.getLanguageID()
-        + " imagebase " + currentProgram.getImageBase());
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
     String[][] targets = menu ? MENU_TARGETS : LOADER_TARGETS;
     for (String[] t : targets) {
       dumpFun(out, decomp, t[0], t[1]);

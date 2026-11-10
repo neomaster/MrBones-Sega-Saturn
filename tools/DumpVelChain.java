@@ -8,11 +8,15 @@ import java.util.HashSet;
 /* vel 0x285904/928 writers + NearVel integrate path */
 public class DumpVelChain extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-vel-chain.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-vel-chain.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("program=" + currentProgram.getName() + " base=" + currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
 
     out.println("\n=== literal 0x285904 sites + containing fn ===");
     dumpCell(out, decomp, 0x285904L, 12);

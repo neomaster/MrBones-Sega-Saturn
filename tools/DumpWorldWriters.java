@@ -7,12 +7,15 @@ import java.io.*;
 /* Decompile world-X writers: 206AB0 (loader), WalkStep, NearVel pools, 2858D4 sites. */
 public class DumpWorldWriters extends GhidraScript {
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-world-writers.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-world-writers.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("program=" + currentProgram.getName() + " base=" + currentProgram.getImageBase()
-        + " lang=" + currentProgram.getLanguageID());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
 
     long baseOff = currentProgram.getImageBase().getOffset();
     boolean isLoader = (baseOff == 0x200000L) || currentProgram.getName().contains("02")

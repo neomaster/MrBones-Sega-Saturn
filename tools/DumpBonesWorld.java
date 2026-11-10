@@ -14,11 +14,15 @@ public class DumpBonesWorld extends GhidraScript {
   }
 
   public void run() throws Exception {
-    String outPath = "F:/MrBonesPort/docs/ghidra-bones-world.txt";
+    String[] args = getScriptArgs();
+    String outPath = args.length > 0 ? args[0] : "F:/MrBonesPort/docs/ghidra-bones-world.txt";
     DecompInterface decomp = new DecompInterface();
     decomp.openProgram(currentProgram);
     PrintWriter out = new PrintWriter(new File(outPath));
-    out.println("03CODE imagebase=" + currentProgram.getImageBase());
+    out.println("Program " + currentProgram.getName()
+        + " language " + currentProgram.getLanguageID()
+        + " imagebase " + currentProgram.getImageBase()
+        + " sha256 " + currentProgram.getExecutableSHA256());
 
     /* Dump literal pools as BE32 from file-backed memory via getByte. */
     long[][] pools = {
