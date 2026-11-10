@@ -86,12 +86,26 @@ static void expand_record(scrl_tile_cache *c, uint8_t *block, const uint8_t *rec
     }
 }
 
+/* Clean decode at payload `off`: exact count*64 bytes and no forbidden matches. */
+static int decomp_clean(const uint8_t *rec, size_t size, unsigned count, unsigned off,
+                        uint8_t *chars, size_t want, scrl_decomp_info *info) {
+    size_t got;
+    if (size <= (size_t)off) return 0;
+    got = scrl_decomp_byte_ex(rec + off, size - (size_t)off, chars, want, info);
+    return got == want && info->bad_matches == 0u;
+}
+
+/*
+ * Walk the TIL once for structure / voting, then decode with the winning payload offset.
+ * Packed (+0x48) wins ties and the empty-vote case; heap (+0x88) wins when it has more
+ * clean decodes (MAUSO plane A). size==0 after a prior record ends the walk (VALLEY A).
+ */
 scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsigned height_px,
                                     const uint8_t *cdb, size_t cdb_size, const uint8_t *til,
                                     size_t til_size) {
     uint8_t chars[SCRL_TILE_CHARS_MAX * SCRL_TILE_CHAR_BYTES];
-    size_t pos = 0, blocks;
-    unsigned cols, rows, index;
+    size_t pos = 0, blocks, limit = til_size;
+    unsigned cols, rows, index, votes48 = 0u, votes88 = 0u, payload_off;
     if (!c) return SCRL_TC_ARG;
     memset(c, 0, sizeof *c);
     if (!cdb || cdb_size < SCRL_CDB_HEADER_BYTES || !til || til_size == 0u || width_px == 0u ||
@@ -111,11 +125,11 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
     c->width_px = width_px;
     c->height_px = height_px;
 
+    /* Pass 1: validate structure, vote packed vs heap, stop at size-0 sentinel. */
     for (index = 0; pos < til_size; index++) {
         const uint8_t *rec = til + pos;
         size_t size;
         unsigned count, id;
-        uint8_t *block;
         if (til_size - pos < SCRL_TILE_RECORD_HDR) {
             note(c, index, 0u, til_size - pos);
             return fail(c, SCRL_TC_TRAILING);
@@ -123,6 +137,10 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
         size = rd16(rec);
         count = rd16(rec + 2);
         id = rd16(rec + 4);
+        if (size == 0u && index > 0u) {
+            limit = pos; /* end sentinel: keep prior records, ignore the rest */
+            break;
+        }
         if (size < SCRL_TILE_RECORD_HDR || size > til_size - pos || count > SCRL_TILE_CHARS_MAX ||
             id >= blocks) {
             note(c, index, count, size);
@@ -132,20 +150,48 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
             note(c, index, count, size);
             return fail(c, SCRL_TC_DUP);
         }
+        c->present[id] = BLOCK_DROPPED; /* reserve id for the duplicate check; decode resets it */
         if (count > 0u) {
             scrl_decomp_info info;
             const size_t want = (size_t)count * SCRL_TILE_CHAR_BYTES;
-            const size_t got = scrl_decomp_byte_ex(rec + SCRL_TILE_RECORD_HDR,
-                                                   size - SCRL_TILE_RECORD_HDR, chars, want, &info);
+            if (decomp_clean(rec, size, count, SCRL_TILE_RECORD_HDR, chars, want, &info))
+                votes48++;
+            if (decomp_clean(rec, size, count, SCRL_TILE_HEAP_PAYLOAD, chars, want, &info))
+                votes88++;
+        }
+        pos += size;
+    }
+    payload_off = (votes88 > votes48) ? SCRL_TILE_HEAP_PAYLOAD : SCRL_TILE_RECORD_HDR;
+    c->heap_mode = (payload_off == SCRL_TILE_HEAP_PAYLOAD) ? 1u : 0u;
+    memset(c->present, 0, blocks); /* clear the pass-1 reservations */
+
+    /* Pass 2: decode with the winning offset up to `limit`. */
+    for (index = 0, pos = 0; pos < limit; index++) {
+        const uint8_t *rec = til + pos;
+        size_t size = rd16(rec);
+        unsigned count = rd16(rec + 2);
+        unsigned id = rd16(rec + 4);
+        uint8_t *block;
+        if (count > 0u) {
+            scrl_decomp_info info;
+            const size_t want = (size_t)count * SCRL_TILE_CHAR_BYTES;
+            size_t got;
+            if (size > (size_t)payload_off)
+                got = scrl_decomp_byte_ex(rec + payload_off, size - (size_t)payload_off, chars, want,
+                                          &info);
+            else {
+                memset(&info, 0, sizeof info);
+                got = 0u;
+            }
             if (got != want || info.bad_matches != 0u) {
-                if (c->lz_failed_blocks++ == 0u) { /* keep the numbers of the first one */
+                if (c->lz_failed_blocks++ == 0u) {
                     note(c, index, count, size);
                     c->fail.lz_got = got;
                     c->fail.lz_want = want;
                     c->fail.lz_bad_matches = info.bad_matches;
                     c->fail.lz_terminated = info.terminated;
                 }
-                c->present[id] = BLOCK_DROPPED; /* still counts as seen, for duplicates */
+                c->present[id] = BLOCK_DROPPED;
                 pos += size;
                 continue;
             }

@@ -85,10 +85,11 @@ static void print_cache(const char *stage, const scrl_map *m) {
     for (i = 0; i < m->plane_count; i++) {
         const scrl_tile_cache *c = &m->planes[i].tiles;
         printf("%s %s: plane=%ux%u cache=%s grid=%ux%u present=%u compressed=%u empty=%u bad_cells=%u "
-               "ignored=0x%08X\n",
+               "heap=%u ignored=0x%08X\n",
                stage, m->planes[i].cdb_name, m->planes[i].pixel_w, m->planes[i].pixel_h,
                scrl_tilecache_status_name(c->status), c->cols, c->rows, c->present_blocks,
-               c->compressed_blocks, c->empty_blocks, c->bad_cells, (unsigned)c->ignored_bits);
+               c->compressed_blocks, c->empty_blocks, c->bad_cells, c->heap_mode,
+               (unsigned)c->ignored_bits);
         if (c->status != SCRL_TC_OK || c->lz_failed_blocks)
             printf("%s %s: lz_failed_blocks=%u first problem at record %u (count=%u size=%u) lz got=%u "
                    "want=%u bad_matches=%u terminated=%u til_size=%u\n",

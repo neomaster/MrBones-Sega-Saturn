@@ -17,10 +17,14 @@
  *           +4   BE16 id       block number in the plane grid, row by row
  *           +6   BE16          not interpreted
  *           +8   16 x BE32     cell descriptors, a 4x4 grid of 8x8 cells, row by row
- *           +72  payload       count * 64 bytes of characters, compressed (scrl_decomp.h)
- *         A descriptor's low 16 bits times 32 is a byte offset. With bit 0x08000000 set it
- *         points into the CDB payload, otherwise into this record's own characters. No
- *         other bit is interpreted (palette, flips); they are collected in `ignored_bits`.
+ *           +72  payload       packed form (DecompTile when map[+0x20] is NULL)
+ *           +136 payload       heap form (DecompTile when map[+0x20] is set); +72..+135 unused
+ *         The build votes per file: each compressed record is tried at +72 and, when the
+ *         record is long enough, at +136; the offset with more clean decodes wins for the
+ *         whole TIL (MAUSO plane A is heap; MENU and MAUSO B/C/D are packed). A descriptor's
+ *         low 16 bits times 32 is a byte offset. With bit 0x08000000 set it points into the
+ *         CDB payload, otherwise into this record's own characters. No other bit is
+ *         interpreted (palette, flips); they are collected in `ignored_bits`.
  *
  * The grid is ceil(width / 32) by ceil(height / 32) blocks, which for a 1176x608 plane is
  * 37 x 19 = 703. A block without a record is missing (transparent). A block is "empty" when
@@ -29,10 +33,12 @@
  * Two kinds of problem, treated differently. The record structure (sizes, ids, one record per
  * block, exact tiling of the file) decides whether the TIL is in this format at all: if it does
  * not walk cleanly the build fails and the plane draws nothing, so noise from a file in some
- * other format can never reach the screen. Inside a sound structure, a record whose characters
- * do not decompress to exactly count * 64 bytes, without a match the format forbids, is dropped:
- * its block stays missing (transparent) and is counted in `lz_failed_blocks`. A cell whose
- * descriptor points outside its source is left at 0 (transparent) and counted in `bad_cells`.
+ * other format can never reach the screen. A record with size 0 after at least one accepted
+ * record is an end sentinel: the build keeps what it has and ignores the rest (VALLEY A).
+ * Inside a sound structure, a record whose characters do not decompress to exactly count * 64
+ * bytes, without a match the format forbids, is dropped: its block stays missing (transparent)
+ * and is counted in `lz_failed_blocks`. A cell whose descriptor points outside its source is
+ * left at 0 (transparent) and counted in `bad_cells`.
  *
  * Dot value 0 is treated as transparent by the renderer (the VDP2 default for a character
  * dot); the palette bank a plane uses is not modelled.
@@ -45,7 +51,8 @@
 #define SCRL_TILE_BLOCK_BYTES (SCRL_TILE_PX * SCRL_TILE_PX)
 #define SCRL_TILE_CHAR_BYTES 64u
 #define SCRL_TILE_CHARS_MAX 16u
-#define SCRL_TILE_RECORD_HDR 72u
+#define SCRL_TILE_RECORD_HDR 72u   /* packed payload offset (+0x48), DecompTile no-heap */
+#define SCRL_TILE_HEAP_PAYLOAD 136u /* heap payload offset (+0x88), DecompTile heap mode */
 #define SCRL_CDB_HEADER_BYTES 10u
 #define SCRL_TILE_BLOCKS_MAX 65536u /* what scrl_cdb_parse allows: 16384 x 4096 px, 64 MB */
 #define SCRL_DESC_CDB_FLAG 0x08000000u
@@ -84,6 +91,7 @@ typedef struct {
     unsigned empty_blocks;      /* of those, with every dot 0 */
     unsigned bad_cells;         /* descriptors that pointed outside their source */
     unsigned lz_failed_blocks;  /* records dropped because their characters did not decompress */
+    unsigned heap_mode;         /* 1 when the winning payload offset was SCRL_TILE_HEAP_PAYLOAD */
     uint32_t ignored_bits;      /* OR of descriptor bits the cache does not interpret */
     scrl_tc_status status;      /* SCRL_TC_OK when the cache is usable */
     scrl_tc_fail fail;          /* the first problem, see scrl_tc_fail */

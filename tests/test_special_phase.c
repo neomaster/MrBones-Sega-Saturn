@@ -1,6 +1,7 @@
 #include "core/cdimage.h"
 #include "core/identity.h"
 #include "core/saturn_pad.h"
+#include "core/runway_sfx.h"
 #include "core/sha256.h"
 #include "core/special_phase.h"
 #include "core/stage_catalog.h"
@@ -69,6 +70,17 @@ static int play_present(special_phase *ph) {
 }
 
 int main(void) {
+    {
+        special_phase arena = {0};
+        arena.kind = STAGE_KIND_FINALE;
+        arena.ring_active[0] = 1;
+        arena.ring_active_count = FINALE_RING_SLOTS;
+        CHECK(special_phase_finale_shoot(&arena, 0) == 0);
+        CHECK(arena.sfx_flags == (RUNWAY_SFX_FLAG_C | RUNWAY_SFX_FLAG_JUMP));
+        arena.sfx_flags = 0;
+        CHECK(special_phase_finale_shoot(&arena, 0) == 0);
+        CHECK(arena.sfx_flags == RUNWAY_SFX_FLAG_C);
+    }
     const char *d1 = getenv("MB_DISC1");
     const char *d2 = getenv("MB_DISC2");
     const char *man = getenv("MB_MANIFEST");
@@ -215,6 +227,7 @@ int main(void) {
             for (unsigned k = 0; k < FINALE_RING_SLOTS; k++) {
                 phase.ring_phase_acc = (255 - (int)(16u * k)) * 65536;
                 CHECK(special_phase_step(&phase, &input) == 0);
+                CHECK(phase.sfx_flags == 0);
             }
             CHECK(phase.ring_cleared && phase.ring_shots == FINALE_RING_SLOTS);
             CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);

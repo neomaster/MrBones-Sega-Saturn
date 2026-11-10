@@ -80,19 +80,20 @@ int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
     idx = finale_ring_select(phase->ring_phase, dir);
     phase->ring_shots++;
     phase->ring_last_index = idx;
+    /* The ending movie has its own audio and no ring sound effects. */
     if (!phase->ring_active[idx]) {
         /* inactive → activate, increment +0x708 */
         phase->ring_active[idx] = 1;
         phase->ring_active_count++;
         phase->ring_last_activated = 1;
-        phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        if (!phase->movie_ok) phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
         return 0;
     }
     /* active → deactivate, decrement; count==0 → EndLevel(0) */
     phase->ring_active[idx] = 0;
     phase->ring_active_count--;
     phase->ring_last_activated = 0;
-    phase->sfx_flags |= RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C;
+    if (!phase->movie_ok) phase->sfx_flags |= RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C;
     if (phase->ring_active_count < 0)
         phase->ring_active_count = 0;
     if (phase->ring_active_count == 0) {

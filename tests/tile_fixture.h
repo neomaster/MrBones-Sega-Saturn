@@ -51,21 +51,28 @@ static inline size_t make_cdb(uint8_t *cdb, unsigned n) {
     return make_cdb_sized(cdb, n, 0, 0);
 }
 
-/* Append a record carrying `count` characters made from `tags`; returns the new end. */
-static inline size_t add_record(uint8_t *til, size_t pos, unsigned id, unsigned count,
-                                const unsigned *tags, const uint32_t desc[16]) {
+/* Append a record carrying `count` characters made from `tags`; returns the new end.
+ * `heap` 0 → packed payload at +0x48; 1 → heap payload at +0x88 with a 0x40-byte gap. */
+static inline size_t add_record_ex(uint8_t *til, size_t pos, unsigned id, unsigned count,
+                                   const unsigned *tags, const uint32_t desc[16], int heap) {
     uint8_t raw[SCRL_TILE_CHARS_MAX * SCRL_TILE_CHAR_BYTES], lz[2400];
     size_t lz_len = 0, size, i;
+    const unsigned payload_off = heap ? SCRL_TILE_HEAP_PAYLOAD : SCRL_TILE_RECORD_HDR;
     for (i = 0; i < count; i++) make_char(raw + i * SCRL_TILE_CHAR_BYTES, tags[i]);
     if (count) lz_len = lz_encode(raw, (size_t)count * SCRL_TILE_CHAR_BYTES, lz, sizeof lz);
-    size = SCRL_TILE_RECORD_HDR + lz_len;
-    memset(til + pos, 0, SCRL_TILE_RECORD_HDR);
+    size = (size_t)payload_off + lz_len;
+    memset(til + pos, 0, payload_off);
     put16(til + pos, (unsigned)size);
     put16(til + pos + 2, count);
     put16(til + pos + 4, id);
     for (i = 0; i < 16; i++) put32(til + pos + 8 + i * 4, desc[i]);
-    if (lz_len) memcpy(til + pos + SCRL_TILE_RECORD_HDR, lz, lz_len);
+    if (lz_len) memcpy(til + pos + payload_off, lz, lz_len);
     return pos + size;
+}
+
+static inline size_t add_record(uint8_t *til, size_t pos, unsigned id, unsigned count,
+                                const unsigned *tags, const uint32_t desc[16]) {
+    return add_record_ex(til, pos, id, count, tags, desc, 0);
 }
 
 static inline void all_cells(uint32_t desc[16], uint32_t value) {

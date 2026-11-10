@@ -343,9 +343,61 @@ static int test_names(void) {
     return 0;
 }
 
+/* Heap-form payload at +0x88 (DecompTile when map[+0x20] is set): majority vote picks it. */
+static int test_heap_mode(void) {
+    uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[4000];
+    const size_t cdb_size = make_cdb(cdb, 1);
+    const unsigned tags[2] = {20, 21};
+    uint32_t d[16];
+    size_t pos = 0;
+    scrl_tile_cache c;
+    unsigned i;
+
+    all_cells(d, OWN(0));
+    for (i = 0; i < 3u; i++) {
+        d[1] = OWN(1);
+        pos = add_record_ex(til, pos, i, 2, tags, d, 1);
+    }
+    CHECK(scrl_tilecache_build(&c, 96, 32, cdb, cdb_size, til, pos) == SCRL_TC_OK);
+    CHECK(c.heap_mode == 1u && c.compressed_blocks == 3u && c.lz_failed_blocks == 0u);
+    CHECK(c.present_blocks == 3u);
+    CHECK(cell_matches(&c, 0, 0, 0, 20) && cell_matches(&c, 0, 0, 1, 21));
+    CHECK(cell_matches(&c, 2, 0, 0, 20));
+    scrl_tilecache_free(&c);
+
+    /* Packed fixtures still win packed mode. */
+    pos = add_record(til, 0, 0, 2, tags, d);
+    CHECK(scrl_tilecache_build(&c, 32, 32, cdb, cdb_size, til, pos) == SCRL_TC_OK);
+    CHECK(c.heap_mode == 0u && c.compressed_blocks == 1u && cell_matches(&c, 0, 0, 0, 20));
+    scrl_tilecache_free(&c);
+    return 0;
+}
+
+/* size==0 after a prior record ends the TIL; trailing bytes are ignored (VALLEY A). */
+static int test_size0_sentinel(void) {
+    uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[4000];
+    const size_t cdb_size = make_cdb(cdb, 1);
+    const unsigned tags[2] = {7, 8};
+    uint32_t d[16];
+    size_t pos;
+    scrl_tile_cache c;
+
+    all_cells(d, OWN(0));
+    pos = add_record(til, 0, 0, 2, tags, d);
+    pos = add_record(til, pos, 1, 2, tags, d);
+    memset(til + pos, 0, 200); /* size=0 sentinel, then junk */
+    til[pos + 4] = 0xAB;
+    CHECK(scrl_tilecache_build(&c, 64, 32, cdb, cdb_size, til, pos + 200u) == SCRL_TC_OK);
+    CHECK(c.heap_mode == 0u && c.present_blocks == 2u && c.compressed_blocks == 2u);
+    CHECK(c.lz_failed_blocks == 0u);
+    CHECK(cell_matches(&c, 0, 0, 0, 7) && cell_matches(&c, 1, 0, 0, 7));
+    scrl_tilecache_free(&c);
+    return 0;
+}
+
 int main(void) {
     if (test_layout() || test_full_record() || test_rejects() || test_fail_diag() || test_fuzz() ||
-        test_names())
+        test_names() || test_heap_mode() || test_size0_sentinel())
         return 1;
     printf("OK scrl_tilecache\n");
     return 0;
