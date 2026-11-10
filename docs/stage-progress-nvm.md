@@ -32,9 +32,9 @@ Nada liga a troca de disco ao shadow: o carregador fica residente e o bloco fica
 
 | Bytes | Uso | Evidência |
 |---|---|---|
-| `0` | desconhecido, preservado | zerado no save vazio |
+| `0` | desconhecido, preservado; **não** é opção de áudio (seção 8) | zerado no save vazio |
 | `1` | campanha concluída (FINALE) | `ShootRing` |
-| `2..3` | desconhecidos, preservados | zerados no save vazio |
+| `2..3` | desconhecidos, preservados; **não** são preset de botões nem volume (seção 8) | zerados no save vazio |
 | `4..0x1b` | **um byte por ID de diretório**, `byte[ID]` para `04RUNWAY..27FINALE` = `byte[4 + índice de campanha]`; 0 = travada | deslocamentos do menu = IDs; `byte[4] = 1` no save vazio = RUNWAY |
 | `0x1c..0x1f` | `u32` BE: ID do nível a carregar na partida (3 = MENU) | `LoadFirstLevel` lê e decide por ele |
 | `0x20..0x23` | `u32` BE: ID da origem do filme (0 = nenhum) | idem |
@@ -103,3 +103,58 @@ ID da fase escolhida.
   ignoram o retorno, então um arquivo corrompido reinicia o progresso em silêncio.
 - A `LevelSelect` original tem 18 entradas para 13 fases (as de `+0 = 6` repetem o byte da anterior);
   o port mostra uma linha por fase.
+- A rotina do carregador que relê `0x0021d9dc` e `0x0021d9e0` (literais `00204100` e `00203fd4`) não
+  foi decompilada; o nome "música"/"efeitos" dos dois interruptores continua sem prova.
+
+## 8. Tela de opções, StartScreen e attract
+
+Dump: [`ghidra-menu-options.txt`](ghidra-menu-options.txt), só palavras de dados, gerado por
+`tools/DumpMenuOptions.java`.
+
+**A hipótese de áudio, preset de botões e volume em `+0x00`, `+0x02` e `+0x03` do shadow não se
+confirma.** O que o binário mostra:
+
+- **`OptionsScreen` (`0023f650`)**: 3 entradas em `0023f644`, uma coluna, tela anterior
+  `StartScreen`. Os tipos (`entrada + 0`) são 3, 4 e 5: abrir a `LevelSelect` e dois interruptores.
+  Não há linha de modo de áudio, de preset de botões nem de volume.
+- **`InitOptions_CMenuSelector` (`0023c608`)**: lê duas palavras de 32 bits, `0x0021d9dc` (literal
+  `0023c66c`) e `0x0021d9e0` (literal `0023c67c`), e escolhe o sprite ligado/desligado de cada
+  interruptor (`00236294`/`00236014` e `00236c1c`/`0023699c`). Os meios-literais `0023c668` e
+  `0023c66a` valem `0x0300` e `0x00c0`: o valor gravado em `+0x34` de cada objeto e o deslocamento
+  do segundo objeto dentro do seletor.
+- **`SelectMenuEntry`, casos 4 e 5 (`0023cbc4`)**: invertem as mesmas duas palavras (literais
+  `0023cd58` e `0023cd68`). O caso 5 também grava `0x80` ou `0` no byte `0x25a00483`, na RAM do
+  driver de som.
+- **Onde ficam.** `0x0021d9dc` e `0x0021d9e0` são dados do carregador, fora de
+  `0x00228950..0x00228977`. Valores iniciais na imagem: 0 e 1. O carregador as relê (literais
+  `00204100` e `00203fd4`, este junto de `0x25a00483`) e não as cita perto das rotinas de backup,
+  que só copiam os `0x28` bytes. **As opções não são gravadas no backup**: valem até desligar.
+- **Referências ao shadow em todo o `03MENU/03CODE`** (varredura de palavras): a base em `0023c600`
+  (`UpdateLevels`) e em `0023d264`, e `0x00228962` em `0023cd38`, que é `+0x12`, o byte de `18RIDE`,
+  lido pelo caso 1 quando o disco é o 2. Nenhuma aponta para `+0`, `+2` ou `+3`.
+
+Consequência no port: nenhuma macro de opções em `nvm_shadow.h`, e `menu_options` não foi ligado ao
+shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro modo. O módulo
+`menu_options` (modo de áudio, 6 presets, volume 0..15) é extensão do host; se as opções tiverem de
+persistir, o lugar é a configuração do host, não o `nvmshadow.bin`.
+
+**`StartScreen` (`0023e0f4`)**: 2 entradas em `0023e0ec`, uma coluna, sem tela anterior.
+
+| Entrada | Tipo | `+0x0c` | `+0x10` | Ação em `SelectMenuEntry` |
+|---|---|---|---|---|
+| 0 | 1 | 4 | 3 | disco 1: `00239ae8(3, 4)`, lido como filme de origem 3 e fase 4 (`04RUNWAY`); disco 2: `00239ae8(3, 0x12)` (`18RIDE`) se `byte[0x12]` estiver aberto, senão `00239abc(4)` |
+| 1 | 2 | 0 | 0 | abre a `OptionsScreen` |
+
+**Attract e inatividade.** `Brain_CMenuSelector` (`0023cda0`) não tem contador de tempo:
+
+1. se `*0x002143f0 == 0`, chama `DoLeagal`, que marca a palavra com 1 e espera 200 quadros
+   (`CObject_Delay`, literal `0023c594` = `0x00c8`): a tela legal aparece uma vez por ligação;
+2. se `*0x0021dabc != 0`, mostra a tela de erro de backup;
+3. abre a `StartScreen` e entra num laço sem saída. A cada quadro chama `002084ea`, que só avança o
+   gerador pseudoaleatório do carregador, e `ObjYeild` (`002050b0`), e lê o controle em `0x0022fb0c`:
+   `0x40`/`0x80` movem na horizontal, `0x10`/`0x20` na vertical, `0x0e` seleciona, `0x01` ou os bits
+   `0x70` do segundo byte voltam uma tela.
+
+**Não existe timeout que reinicie a demonstração.** O filme de `29INTRO` toca uma vez, na partida,
+quando a palavra de nível vale 3 (`LoadFirstLevel`, seção 1). Parado no menu, o jogo fica no menu.
+O port também não tem timeout em `menu_phase`, o que está de acordo.
