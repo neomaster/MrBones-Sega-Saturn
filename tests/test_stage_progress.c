@@ -165,7 +165,7 @@ static int synthetic_chain(void) {
             const stage_info *nx = stage_catalog_find(&cat, prog.next_iso);
             CHECK(nx && nx->kind != STAGE_KIND_EMPTY);
             CHECK(mb_nvm_level_unlocked(&nvm, (unsigned)nx->campaign_index) == 1);
-            CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == (uint32_t)nx->campaign_index);
+            CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == MB_NVM_LEVEL_ID(nx->campaign_index));
             if (strcmp(cur->iso_dir, "/17VORTEX") == 0) {
                 /* Disc 1 → disc 2: the file written on the last disc-1 win is
                  * byte for byte what RIDE starts from. */
@@ -183,7 +183,7 @@ static int synthetic_chain(void) {
     CHECK(prog.route == STAGE_ROUTE_COMPLETE && prog.next_iso[0] == 0);
     for (i = 0; i < 24u; i++)
         CHECK(mb_nvm_level_unlocked(&nvm, i) == ((i != 8u && i != 9u) ? 1 : 0));
-    CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == 24u);
+    CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == MB_NVM_MENU_DIR_ID);
     CHECK(mb_nvm_load(&disk, save) == 0);
     CHECK(memcmp(disk.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
 

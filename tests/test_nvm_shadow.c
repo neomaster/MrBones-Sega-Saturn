@@ -30,8 +30,9 @@ int main(void) {
         else if (i == 0x1fu) CHECK(a.bytes[i] == 3);
         else CHECK(a.bytes[i] == 0);
     }
-    CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_LEVEL_OFF) == 3u);
+    CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_LEVEL_OFF) == MB_NVM_MENU_DIR_ID);
     CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_EXTRA_OFF) == 0u);
+    CHECK(MB_NVM_LEVEL_ID(0) == 4u && MB_NVM_LEVEL_ID(23) == 0x1bu);
     CHECK(a.loaded == 0 && a.dirty == 1);
 
     /* byte[4] is RUNWAY's level byte, not a fifth unlocked level. */

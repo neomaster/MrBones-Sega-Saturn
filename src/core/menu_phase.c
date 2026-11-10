@@ -298,7 +298,7 @@ static void begin_level(menu_phase *menu, int level_index) {
     }
     menu->selected_level = level_index;
     menu->state = MENU_ST_START_LEVEL;
-    mb_nvm_set_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF, (uint32_t)level_index);
+    mb_nvm_set_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF, MB_NVM_LEVEL_ID(level_index));
     mb_nvm_save(&menu->nvm, menu->save_dir);
     render_status(menu);
 }

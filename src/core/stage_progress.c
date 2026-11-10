@@ -96,12 +96,13 @@ int stage_progress_on_outcome(stage_progress *p, const char *finished_iso,
                                          stage_catalog_next(p->cat, cur->iso_dir));
         if (next && next->campaign_index >= 0)
             mb_nvm_unlock_level(p->nvm, (unsigned)next->campaign_index);
-        /* Same unit menu_phase writes when a level is selected: the campaign
-         * index of the stage to play next, never an EMPTY one. */
+        /* Directory ID of the stage to play next (the unit LoadFirstLevel
+         * reads and menu_phase writes), never an EMPTY one; MENU when the
+         * campaign is over. */
         mb_nvm_set_u32(p->nvm, MB_NVM_DEFAULT_LEVEL_OFF,
-                       (uint32_t)(next && next->campaign_index >= 0
-                                      ? next->campaign_index
-                                      : cur->campaign_index + 1));
+                       next && next->campaign_index >= 0
+                           ? MB_NVM_LEVEL_ID(next->campaign_index)
+                           : MB_NVM_MENU_DIR_ID);
         p->nvm->dirty = 1;
         if (persist(p) == 0)
             snprintf(p->status, sizeof p->status, "PROGRESS saved nvm after %s",
