@@ -37,10 +37,10 @@ static int test_cache_drawn(void) {
     all_cells(d, OWN(0)); /* block 2: points at nothing, so it is transparent */
     til_size = add_record(til, til_size, 2, 0, NULL, d);
     memset(pal, 0, sizeof pal);
-    for (i = 0; i < 256; i++) {
-        pal[4 * i + 1] = (uint8_t)i;
-        pal[4 * i + 2] = (uint8_t)(255u - i);
-        pal[4 * i + 3] = (uint8_t)(i / 2u);
+    for (i = 0; i < 1024; i++) {
+        pal[4 * i + 1] = (uint8_t)(i & 0xffu);
+        pal[4 * i + 2] = (uint8_t)(255u - (i & 0xffu));
+        pal[4 * i + 3] = (uint8_t)((i & 0xffu) / 2u);
     }
 
     CHECK(scrl_map_init(&map, cdb, cdb_size, til, til_size, NULL, 0, NULL, 0, NULL, 0, NULL, 0, NULL,
@@ -97,6 +97,43 @@ static void print_cache(const char *stage, const scrl_map *m) {
                    c->fail.size, (unsigned)c->fail.lz_got, (unsigned)c->fail.lz_want,
                    c->fail.lz_bad_matches, c->fail.lz_terminated, (unsigned)m->planes[i].til_size);
     }
+}
+
+/* Descriptor palette bank shifts the CRAM index used by scrl_map_draw. */
+static int test_palette_bank_draw(void) {
+    static uint8_t strip[32u * 32u * 4u];
+    uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[2000], pal[4096];
+    const size_t cdb_size = make_cdb_sized(cdb, 1, 32, 32);
+    const unsigned tags[1] = {7};
+    uint32_t d[16];
+    size_t til_size;
+    scrl_map map;
+    unsigned i;
+    const uint8_t *px;
+
+    all_cells(d, OWN(0) | (2u << SCRL_DESC_PAL_SHIFT)); /* bank 2 */
+    til_size = add_record(til, 0, 0, 1, tags, d);
+    memset(pal, 0, sizeof pal);
+    for (i = 0; i < 1024; i++) {
+        pal[4 * i + 1] = (uint8_t)((i >> 8) * 40u + (i & 0xffu));
+        pal[4 * i + 2] = (uint8_t)(i & 0xffu);
+        pal[4 * i + 3] = (uint8_t)(255u - (i & 0xffu));
+    }
+    CHECK(scrl_map_init(&map, cdb, cdb_size, til, til_size, NULL, 0, NULL, 0, NULL, 0, NULL, 0,
+                        NULL, 0, NULL, 0, NULL, 0) == 0);
+    CHECK(scrl_map_draw(&map, pal, strip, 32, 32, 0) == 0);
+    px = strip;
+    {
+        const unsigned dotv = dot(7, 0);
+        const unsigned cram = (2u << 8) | dotv;
+        const unsigned r = (pal[4 * cram + 1] * 3u + 18u) / 4u;
+        const unsigned g = (pal[4 * cram + 2] * 3u + 36u) / 4u;
+        const unsigned b = (pal[4 * cram + 3] * 3u + 72u) / 4u;
+        CHECK(px[0] == r && px[1] == g && px[2] == b);
+        CHECK(scrl_tilecache_cram(&map.planes[0].tiles, 0, 0) == (int)cram);
+    }
+    scrl_map_free(&map);
+    return 0;
 }
 
 /* Disc-less: an estimated floor is walkable, an authored one is left alone. */
@@ -157,6 +194,8 @@ int main(void) {
     printf("OK scrl_map floor slope (synthetic)\n");
     if (test_cache_drawn()) return 1;
     printf("OK scrl_map tile cache drawn (synthetic)\n");
+    if (test_palette_bank_draw()) return 1;
+    printf("OK scrl_map palette bank draw (synthetic)\n");
     if (!d1 || !man) {
         printf("SKIP scrl_map\n");
         return 0;

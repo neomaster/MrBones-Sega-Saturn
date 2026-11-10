@@ -33,8 +33,8 @@ static size_t layout_fixture(uint8_t *cdb, size_t *cdb_size, uint8_t *til) {
     *cdb_size = make_cdb(cdb, 3);
 
     all_cells(d, OWN(0)); /* block 4 first: the order of records is not the order of blocks */
-    d[0] = OWN(0) | 0x40000000u; /* flip bit: ignored */
-    d[1] = OWN(0) | 0x00100000u; /* palette bits: ignored */
+    d[0] = OWN(0) | SCRL_DESC_HFLIP; /* H-Flip on cell 0 */
+    d[1] = OWN(0) | SCRL_DESC_PAL_MASK; /* palette bank 3 on cell 1 (dots unchanged) */
     pos = add_record(til, pos, 4, 1, flip_tag, d);
 
     all_cells(d, OWN(0));
@@ -62,7 +62,7 @@ static int test_layout(void) {
     CHECK(c.status == SCRL_TC_OK && c.cols == 3u && c.rows == 2u);
     CHECK(c.present_blocks == 4u && c.compressed_blocks == 2u && c.empty_blocks == 1u);
     CHECK(c.bad_cells == 16u && c.lz_failed_blocks == 0u);
-    CHECK(c.ignored_bits == 0x40100000u);
+    CHECK(c.ignored_bits == 0u); /* H-Flip and palette bank are interpreted */
 
     CHECK(cell_matches(&c, 0, 0, 0, 10)); /* own char 0 */
     CHECK(cell_matches(&c, 0, 0, 1, 11)); /* own char 1 */
@@ -70,8 +70,19 @@ static int test_layout(void) {
     CHECK(cell_matches(&c, 0, 0, 3, 51)); /* CDB char 1 */
     for (cell = 4; cell < 16; cell++) CHECK(cell_matches(&c, 0, 0, cell, 10));
     for (cell = 0; cell < 16; cell++) CHECK(cell_matches(&c, 1, 0, cell, 52)); /* block 1 */
-    CHECK(cell_matches(&c, 1, 1, 0, 12)); /* block 4: the flips changed nothing */
-    CHECK(cell_matches(&c, 1, 1, 3, 12)); /* rows 32..39 are the last ones inside the plane */
+    /* block 4 cell 0: H-Flip mirrors columns of character 12 */
+    {
+        unsigned row, col;
+        for (row = 0; row < 8; row++)
+            for (col = 0; col < 8; col++) {
+                const unsigned x = 1u * 32u + col;
+                const unsigned y = 1u * 32u + row;
+                CHECK(scrl_tilecache_pixel(&c, x, y) == (int)dot(12, row * 8u + (7u - col)));
+            }
+    }
+    CHECK(cell_matches(&c, 1, 1, 3, 12)); /* cell 3 unflipped; rows 32..39 inside the plane */
+    CHECK(scrl_tilecache_cram(&c, 32, 32) == (int)dot(12, 7u)); /* cell 0 bank 0, H-flipped */
+    CHECK(scrl_tilecache_cram(&c, 40, 32) == (int)((3u << 8) | dot(12, 0))); /* cell 1 bank 3 */
     CHECK(scrl_tilecache_pixel(&c, 56, 56) == -1); /* cell 15 of block 4 is below the plane */
 
     CHECK(scrl_tilecache_pixel(&c, 64, 0) == 0 && scrl_tilecache_pixel(&c, 69, 31) == 0); /* block 2 */
@@ -343,6 +354,39 @@ static int test_names(void) {
     return 0;
 }
 
+/* VDP2 H/V-Flip and palette-bank bits on cell descriptors. */
+static int test_flip_palette(void) {
+    uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[2400];
+    const size_t cdb_size = make_cdb(cdb, 1);
+    const unsigned tags[1] = {33};
+    uint32_t d[16];
+    scrl_tile_cache c;
+    unsigned row, col;
+    size_t pos;
+
+    all_cells(d, OWN(0));
+    d[0] = OWN(0) | SCRL_DESC_HFLIP;
+    d[1] = OWN(0) | SCRL_DESC_VFLIP;
+    d[2] = OWN(0) | SCRL_DESC_HFLIP | SCRL_DESC_VFLIP;
+    d[3] = OWN(0) | (1u << SCRL_DESC_PAL_SHIFT); /* bank 1, no flip */
+    pos = add_record(til, 0, 0, 1, tags, d);
+    CHECK(scrl_tilecache_build(&c, 32, 32, cdb, cdb_size, til, pos) == SCRL_TC_OK);
+    CHECK(c.ignored_bits == 0u && c.compressed_blocks == 1u);
+
+    for (row = 0; row < 8; row++)
+        for (col = 0; col < 8; col++) {
+            CHECK(scrl_tilecache_pixel(&c, col, row) == (int)dot(33, row * 8u + (7u - col)));
+            CHECK(scrl_tilecache_pixel(&c, 8 + col, row) == (int)dot(33, (7u - row) * 8u + col));
+            CHECK(scrl_tilecache_pixel(&c, 16 + col, row) ==
+                  (int)dot(33, (7u - row) * 8u + (7u - col)));
+            CHECK(scrl_tilecache_pixel(&c, 24 + col, row) == (int)dot(33, row * 8u + col));
+        }
+    CHECK(scrl_tilecache_cram(&c, 0, 0) == (int)dot(33, 7)); /* bank 0 */
+    CHECK(scrl_tilecache_cram(&c, 24, 0) == (int)((1u << 8) | dot(33, 0))); /* bank 1 */
+    scrl_tilecache_free(&c);
+    return 0;
+}
+
 /* Heap-form payload at +0x88 (DecompTile when map[+0x20] is set): majority vote picks it. */
 static int test_heap_mode(void) {
     uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[4000];
@@ -397,7 +441,7 @@ static int test_size0_sentinel(void) {
 
 int main(void) {
     if (test_layout() || test_full_record() || test_rejects() || test_fail_diag() || test_fuzz() ||
-        test_names() || test_heap_mode() || test_size0_sentinel())
+        test_names() || test_flip_palette() || test_heap_mode() || test_size0_sentinel())
         return 1;
     printf("OK scrl_tilecache\n");
     return 0;

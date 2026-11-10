@@ -22,7 +22,7 @@ a campanha ponta a ponta.
 | (infra) full campaign §19–§25 | **parcial** | **parcial (nativo)** | MENU+HUD+AVI | CD-DA+SND1+PCM | COMPLETE→credits 360×6 | nvmshadow.bin | 22 native; DirNameTable; TM1+scrl+enemies | `mrbones --full-campaign`; `--check` |
 | (infra) DirNameTable §25 | **parcial** | n/a | n/a | n/a | n/a | n/a | BSS GFS runtime → literais ISO+verify | `test_stage_catalog` |
 | (infra) duck_avi §20/§22 | **parcial** | n/a | TM1+19DUCK | 01wb→PCM8 | present step | n/a | decode simplificado ≠ FFmpeg bit-exact | `test_duck_avi` |
-| (infra) scrl_map §23 | **parcial** | n/a | ACDB..DTIL+AMAP | n/a | n/a | n/a | tilecache packed/heap + size0; paleta/VRAM aberto | `test_scrl_map` |
+| (infra) scrl_map §23 | **parcial** | n/a | ACDB..DTIL+AMAP | n/a | n/a | n/a | tilecache heap/flip/banco CRAM; VRAM/prioridade aberto | `test_scrl_map` |
 | (infra) rhythm/enemies §24 | **parcial** | n/a | n/a | n/a | n/a | n/a | DrumSequence 48 notes; enemy AI soft | `test_rhythm_enemies` |
 | MENU | parcial | **parcial (§25)** | STXT+title AVI | soft PCM | → stage_runner | nvmshadow | 20AVI/02TITL/19DUCK; font SH-2 aberto | `test_menu_phase` |
 | RUNWAY | parcial | **parcial (nativo)** | parcial + HUD | parcial CD-DA+PCM8 | EndLevel / pause | via progress | gang/lord/poofs+throws; Ymir aberta | `mbrunway --check`; `test_runway_phase` |

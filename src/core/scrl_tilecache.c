@@ -26,6 +26,7 @@ void scrl_tilecache_free(scrl_tile_cache *c) {
     if (!c) return;
     free(c->pixels);
     free(c->present);
+    free(c->cell_bank);
     memset(c, 0, sizeof *c);
 }
 
@@ -52,11 +53,18 @@ const char *scrl_tilecache_status_name(scrl_tc_status status) {
     return "unknown";
 }
 
-/* Copy one 8x8 character into a block at cell (cx, cy). */
-static void put_char(uint8_t *block, unsigned cx, unsigned cy, const uint8_t *src) {
-    unsigned row;
+/* Copy one 8x8 character into a block at cell (cx, cy), with optional VDP2 H/V flip. */
+static void put_char(uint8_t *block, unsigned cx, unsigned cy, const uint8_t *src, int hflip,
+                     int vflip) {
+    unsigned row, col;
     uint8_t *dst = block + (cy * 8u) * SCRL_TILE_PX + cx * 8u;
-    for (row = 0; row < 8u; row++) memcpy(dst + row * SCRL_TILE_PX, src + row * 8u, 8u);
+    for (row = 0; row < 8u; row++) {
+        const unsigned sr = vflip ? (7u - row) : row;
+        for (col = 0; col < 8u; col++) {
+            const unsigned sc = hflip ? (7u - col) : col;
+            dst[row * SCRL_TILE_PX + col] = src[sr * 8u + sc];
+        }
+    }
 }
 
 static int block_is_empty(const uint8_t *block) {
@@ -71,18 +79,22 @@ static void expand_record(scrl_tile_cache *c, uint8_t *block, const uint8_t *rec
                           const uint8_t *chars, unsigned count, const uint8_t *cdb_payload,
                           size_t cdb_payload_size) {
     unsigned cell;
+    const size_t block_index = (size_t)(block - c->pixels) / SCRL_TILE_BLOCK_BYTES;
     for (cell = 0; cell < 16u; cell++) {
         const uint32_t desc = rd32(rec + 8u + cell * 4u);
         const size_t off = (size_t)(desc & SCRL_DESC_CHAR_MASK) * 32u;
         const int from_cdb = (desc & SCRL_DESC_CDB_FLAG) != 0u;
         const uint8_t *base = from_cdb ? cdb_payload : chars;
         const size_t avail = from_cdb ? cdb_payload_size : (size_t)count * SCRL_TILE_CHAR_BYTES;
-        c->ignored_bits |= desc & ~(SCRL_DESC_CHAR_MASK | SCRL_DESC_CDB_FLAG);
+        const unsigned bank = (desc & SCRL_DESC_PAL_MASK) >> SCRL_DESC_PAL_SHIFT;
+        c->cell_bank[block_index * 16u + cell] = (uint8_t)(bank & 3u);
+        c->ignored_bits |= desc & ~SCRL_DESC_KNOWN_MASK;
         if (off > avail || avail - off < SCRL_TILE_CHAR_BYTES) {
             c->bad_cells++; /* the cell stays 0: transparent, never garbage */
             continue;
         }
-        put_char(block, cell % 4u, cell / 4u, base + off);
+        put_char(block, cell % 4u, cell / 4u, base + off, (desc & SCRL_DESC_HFLIP) != 0u,
+                 (desc & SCRL_DESC_VFLIP) != 0u);
     }
 }
 
@@ -119,7 +131,8 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
     blocks = (size_t)cols * rows;
     c->pixels = (uint8_t *)calloc(blocks, SCRL_TILE_BLOCK_BYTES);
     c->present = (uint8_t *)calloc(blocks, 1u);
-    if (!c->pixels || !c->present) return fail(c, SCRL_TC_NOMEM);
+    c->cell_bank = (uint8_t *)calloc(blocks, 16u);
+    if (!c->pixels || !c->present || !c->cell_bank) return fail(c, SCRL_TC_NOMEM);
     c->cols = cols;
     c->rows = rows;
     c->width_px = width_px;
@@ -216,4 +229,16 @@ int scrl_tilecache_pixel(const scrl_tile_cache *c, unsigned x, unsigned y) {
     if (c->present[block] != BLOCK_USABLE) return -1;
     return c->pixels[block * SCRL_TILE_BLOCK_BYTES + (y % SCRL_TILE_PX) * SCRL_TILE_PX +
                      (x % SCRL_TILE_PX)];
+}
+
+int scrl_tilecache_cram(const scrl_tile_cache *c, unsigned x, unsigned y) {
+    size_t block, cell;
+    unsigned bank;
+    const int dot = scrl_tilecache_pixel(c, x, y);
+    if (dot < 0) return -1;
+    if (dot == 0 || !c->cell_bank) return 0;
+    block = (size_t)(y / SCRL_TILE_PX) * c->cols + (x / SCRL_TILE_PX);
+    cell = (size_t)((y % SCRL_TILE_PX) / 8u) * 4u + ((x % SCRL_TILE_PX) / 8u);
+    bank = c->cell_bank[block * 16u + cell] & 3u;
+    return (int)((bank << 8) | (unsigned)dot);
 }

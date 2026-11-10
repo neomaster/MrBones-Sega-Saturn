@@ -49,9 +49,18 @@ os testes com disco veem a mesma saída. `scrl_decomp_byte` continua existindo c
 O `build` vota por arquivo: cada registro comprimido é tentado em +72 e, se couber, em +136; o
 offset com mais decodificações limpas vale para o TIL inteiro. Empate (e voto vazio) fica em +72.
 
-- **Descritor.** Os 16 bits baixos vezes 32 são um deslocamento em bytes: no payload do CDB se o bit
-  `0x08000000` está ligado, senão nos caracteres do próprio registro. Nenhum outro bit é interpretado
-  (paleta, espelhamento); eles são juntados em `ignored_bits`.
+- **Descritor.** Pattern name VDP2 de 2 words (mais um bit do jogo):
+
+| Bits | Campo |
+|---|---|
+| 15..0 | deslocamento do caractere / 32 |
+| 21..20 | banco de paleta 0..3 → índice CRAM `(banco<<8)\|ponto` |
+| 27 | 1 → caractere no CDB; 0 → nos caracteres do registro |
+| 30 | H-Flip (espelho esquerda/direita da célula 8×8) |
+| 31 | V-Flip (espelho cima/baixo da célula 8×8) |
+
+Outros bits altos entram em `ignored_bits`. Nos TILs de MAUSO/MENU o banco é uniforme por plano
+(A=2, B/C/D=3; MENU A=1, B=2); H/V-Flip não aparecem setados nesses arquivos, mas o expansor aplica.
 - **Grade.** `ceil(largura / 32) x ceil(altura / 32)` blocos. Um plano de 1176x608 dá 37 x 19 = **703**.
   Bloco sem registro é *ausente* (transparente). Bloco *vazio* é o que tem todos os pontos em 0.
 
@@ -109,10 +118,12 @@ paleta; não verificado.
 
 - **VALLEY A (resto).** O que os ~17 MB depois da sentinela representam (outro formato, segunda grade,
   padding) continua desconhecido.
-- **Paleta.** Só o índice de 0 a 255 é usado, direto nas primeiras 256 entradas. Banco de paleta e
-  espelhamento não são modelados.
+- **CRAM 2048.** O host indexa 1024 entradas (4 bancos × 256), modo 0/2 do Saturn. Modo 1 com 2048
+  cores pediria mais bits de banco (o Pattern Name Control pode suplementar); nos TILs vistos só
+  há 2 bits.
 - **Posição.** O mapeamento do plano para a tira (módulo da largura, `y` sem deslocamento vertical,
   divisores de paralaxe 1, 2, 3, 4) é o de antes. Não foi conferido contra o jogo.
-- **Aparência.** A janela do jogo não foi aberta: o desenho dos planos com arte real (A heap + B/C/D) não
-  foi visto lado a lado com o Saturn.
-- **Duplicação.** `decode_menu_plane` repete a lógica de bloco do cache e poderia usá-lo.
+- **Aparência.** A janela do jogo não foi aberta: o desenho dos planos com arte real (A heap + B/C/D) e
+  bancos de paleta não foi visto lado a lado com o Saturn.
+- **Duplicação.** `decode_menu_plane` já aplica H/V-Flip; a composição do MENU ainda escolhe o banco
+  por plano (1 e 2), coerente com os descritores uniformes desses TILs.

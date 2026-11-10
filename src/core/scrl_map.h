@@ -89,7 +89,9 @@ size_t scrl_decomp_byte(const uint8_t *src, size_t src_cap,
 /* Build floor/wall tables (SCRLCOLLInitGetFloor + AMAP). */
 void scrl_map_build_collision(scrl_map *m, unsigned strip_w);
 
-/* DrawMap stand-in: compose planes into RGBA strip (parallax by plane index). */
+/* DrawMap stand-in: compose planes into RGBA strip (parallax by plane index).
+ * `palette_rgba1024` is 1024 CRAM entries × 4 bytes {unused,R,G,B} (4096 bytes): cell
+ * descriptors select bank 0..3 so the colour index is (bank<<8)|dot. */
 int scrl_map_draw(const scrl_map *m, const uint8_t *palette_rgba1024,
                   uint8_t *strip_rgba, unsigned strip_w, unsigned strip_h,
                   unsigned camera_px);

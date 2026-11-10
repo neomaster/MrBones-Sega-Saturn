@@ -234,14 +234,15 @@ void scrl_map_build_collision(scrl_map *m, unsigned strip_w) {
  */
 static void sample_plane(const scrl_plane *p, unsigned sx, unsigned sy,
                          const uint8_t *pal, uint8_t *rgba) {
-    const int dot = scrl_tilecache_pixel(&p->tiles, sx, sy);
-    if (dot <= 0) {
+    /* CRAM index = (descriptor palette bank << 8) | character dot; pal holds 1024 entries. */
+    const int cram = scrl_tilecache_cram(&p->tiles, sx, sy);
+    if (cram <= 0 || cram >= 1024) {
         rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
         return;
     }
-    rgba[0] = pal[4 * dot + 1]; /* palette entries are {unused, R, G, B} */
-    rgba[1] = pal[4 * dot + 2];
-    rgba[2] = pal[4 * dot + 3];
+    rgba[0] = pal[4 * cram + 1]; /* palette entries are {unused, R, G, B} */
+    rgba[1] = pal[4 * cram + 2];
+    rgba[2] = pal[4 * cram + 3];
     rgba[3] = 255;
 }
 

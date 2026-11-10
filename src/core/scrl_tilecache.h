@@ -21,10 +21,14 @@
  *           +136 payload       heap form (DecompTile when map[+0x20] is set); +72..+135 unused
  *         The build votes per file: each compressed record is tried at +72 and, when the
  *         record is long enough, at +136; the offset with more clean decodes wins for the
- *         whole TIL (MAUSO plane A is heap; MENU and MAUSO B/C/D are packed). A descriptor's
- *         low 16 bits times 32 is a byte offset. With bit 0x08000000 set it points into the
- *         CDB payload, otherwise into this record's own characters. No other bit is
- *         interpreted (palette, flips); they are collected in `ignored_bits`.
+ *         whole TIL (MAUSO plane A is heap; MENU and MAUSO B/C/D are packed). A descriptor is
+ *         a Saturn VDP2-style 2-word pattern name plus one game bit:
+ *           bits 15..0     character byte-offset / 32
+ *           bits 21..20    palette bank 0..3 (CRAM index = bank<<8 | dot, 256-color cells)
+ *           bit  27        1 → character comes from the CDB payload, else from this record
+ *           bit  30        H-Flip (left/right invert of the 8×8 cell)
+ *           bit  31        V-Flip (upside-down invert of the 8×8 cell)
+ *         Any other high bit is OR'd into `ignored_bits`.
  *
  * The grid is ceil(width / 32) by ceil(height / 32) blocks, which for a 1176x608 plane is
  * 37 x 19 = 703. A block without a record is missing (transparent). A block is "empty" when
@@ -57,6 +61,13 @@
 #define SCRL_TILE_BLOCKS_MAX 65536u /* what scrl_cdb_parse allows: 16384 x 4096 px, 64 MB */
 #define SCRL_DESC_CDB_FLAG 0x08000000u
 #define SCRL_DESC_CHAR_MASK 0x0000FFFFu
+#define SCRL_DESC_PAL_MASK 0x00300000u /* bits 21..20: palette bank 0..3 */
+#define SCRL_DESC_PAL_SHIFT 20u
+#define SCRL_DESC_HFLIP 0x40000000u /* bit 30: VDP2 left/right invert */
+#define SCRL_DESC_VFLIP 0x80000000u /* bit 31: VDP2 upside-down invert */
+#define SCRL_DESC_KNOWN_MASK                                                               \
+    (SCRL_DESC_CHAR_MASK | SCRL_DESC_CDB_FLAG | SCRL_DESC_PAL_MASK | SCRL_DESC_HFLIP |       \
+     SCRL_DESC_VFLIP)
 
 typedef enum {
     SCRL_TC_NONE = 0, /* never built, or freed: a zeroed struct is this */
@@ -82,8 +93,9 @@ typedef struct {
 } scrl_tc_fail;
 
 typedef struct {
-    uint8_t *pixels;  /* cols * rows blocks of 32x32 dots, each row by row; owned */
-    uint8_t *present; /* per block: 1 when it has a usable record (2: dropped); owned */
+    uint8_t *pixels;    /* cols * rows blocks of 32x32 character dots, row by row; owned */
+    uint8_t *present;   /* per block: 1 when it has a usable record (2: dropped); owned */
+    uint8_t *cell_bank; /* per cell (blocks * 16): palette bank 0..3 from the descriptor; owned */
     unsigned cols, rows;
     unsigned width_px, height_px;
     unsigned present_blocks;    /* blocks with a record */
@@ -109,9 +121,14 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
 /* Release the buffers and zero the struct. Safe on a zeroed or already freed cache. */
 void scrl_tilecache_free(scrl_tile_cache *c);
 
-/* Dot (0..255) at plane pixel (x, y), or -1 when the cache is unusable, the pixel is outside
- * the plane, or its block is missing. 0 is a valid result: a transparent dot. */
+/* Character dot (0..255) at plane pixel (x, y), or -1 when the cache is unusable, the pixel is
+ * outside the plane, or its block is missing. 0 is a valid result: a transparent dot. */
 int scrl_tilecache_pixel(const scrl_tile_cache *c, unsigned x, unsigned y);
+
+/* CRAM colour index for a 256-colour cell: (palette_bank << 8) | character_dot. Returns -1 when
+ * the pixel is missing, 0 when the character dot is transparent. Bank comes from the cell's
+ * descriptor (bits 21..20). Index fits in a 1024-entry CRAM (Saturn mode 0/2). */
+int scrl_tilecache_cram(const scrl_tile_cache *c, unsigned x, unsigned y);
 
 const char *scrl_tilecache_status_name(scrl_tc_status status);
 

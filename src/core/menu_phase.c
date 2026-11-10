@@ -516,8 +516,10 @@ static int decode_menu_plane(const uint8_t *cdb, size_t cdb_size,
             unsigned descriptor = menu_be32(til + pos + 8 + cell * 4);
             size_t off = (size_t)(descriptor & 0xffffu) * 32u;
             const uint8_t *src;
-            unsigned row, x = (id % 10) * 32 + (cell % 4) * 8;
+            unsigned row, col, x = (id % 10) * 32 + (cell % 4) * 8;
             unsigned y = (id / 10) * 32 + (cell / 4) * 8;
+            const int hflip = (descriptor & 0x40000000u) != 0;
+            const int vflip = (descriptor & 0x80000000u) != 0;
             if (descriptor & 0x08000000u) {
                 if (off > cdb_size - 10 || cdb_size - 10 - off < 64) return -1;
                 src = cdb + 10 + off;
@@ -525,8 +527,13 @@ static int decode_menu_plane(const uint8_t *cdb, size_t cdb_size,
                 if (off > count * 64u || count * 64u - off < 64) return -1;
                 src = chars + off;
             }
-            for (row = 0; row < 8; row++)
-                memcpy(pixels + (y + row) * MENU_W + x, src + row * 8, 8);
+            for (row = 0; row < 8; row++) {
+                const unsigned sr = vflip ? (7u - row) : row;
+                for (col = 0; col < 8; col++) {
+                    const unsigned sc = hflip ? (7u - col) : col;
+                    pixels[(y + row) * MENU_W + x + col] = src[sr * 8u + sc];
+                }
+            }
         }
         pos += size;
     }
