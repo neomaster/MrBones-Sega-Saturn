@@ -1,6 +1,6 @@
 /*
  * Integrated Mr. Bones host (§19–§25 / 1.0.0): MENU title AVI → full campaign
- * (native) → INSERTCD → FINALE → credits roll; HUD; CD-DA + 05SND1; duck_avi;
+ * (native) → INSERTCD → FINALE → MENU; HUD; CD-DA + 05SND1; duck_avi;
  * DirNameTable; nvmshadow.bin.
  *
  * Usage:
@@ -27,6 +27,7 @@
 #include "platform/host_audio.h"
 #include "platform/host_input.h"
 #include <windows.h>
+#include <mmsystem.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,8 +42,11 @@ typedef enum {
 #define CREDITS_HOLD_FRAMES 360u
 #define CREDITS_PAGES 6u
 #define STAGE_MAX_FRAMES 5000
+#define FINALE_MENU_MUSIC_DELAY_MS 4540u
 
 static app_mode g_mode = APP_MENU;
+/* --check / --full-campaign: FINALE keeps movie_ok from load (hashes). */
+static int g_headless_finale_movie;
 static menu_phase *g_menu;
 static stage_runner *g_stage;
 static stage_progress g_prog;
@@ -74,6 +78,8 @@ static void store_host_options(const menu_phase *menu, unsigned volume) {
         config_save_options(g_config_path, g_opt_music, g_opt_sfx, g_opt_volume))
         fprintf(stderr, "options not saved: cannot write %s\n", g_config_path);
 }
+static unsigned g_menu_volume = 15;
+static ULONGLONG g_menu_music_after;
 static host_audio *g_movie_audio;
 static int g_movie_audio_failed;
 static ULONGLONG g_movie_last_tick;
@@ -169,7 +175,7 @@ static void maybe_start_movie_audio(void) {
 static void maybe_play_sfx(void) {
     unsigned flags = 0;
     maybe_start_movie_audio();
-    if (!g_stage || !g_sfx_ok) return;
+    if (!g_stage || !g_sfx_ok || (g_menu && !g_menu->sfx_on)) return;
     if (g_stage->runway_live) {
         if (g_stage->runway.sound_event_id)
             runway_sfx_sound_event(&g_sfx, g_stage->runway.sound_event_id);
@@ -225,6 +231,7 @@ static int remount_disc(int want_disc) {
 
 static int enter_stage(const char *iso_dir) {
     g_movie_last_tick = 0;
+    g_menu_music_after = 0;
     g_movie_audio_failed = 0;
     host_audio_stop(g_movie_audio);
     g_movie_audio = NULL;
@@ -241,6 +248,10 @@ static int enter_stage(const char *iso_dir) {
         if (stage_runner_resume(g_stage, g_cd, g_mounted_disc)) return -1;
     }
     if (g_stage->state != STAGE_RS_PLAYING) return -1;
+    /* Interactive FINALE: arena first, then PlayDuckMovie(3) on ring clear. */
+    if (!g_headless_finale_movie && g_stage->special_live &&
+        g_stage->kind == STAGE_KIND_FINALE)
+        (void)special_phase_finale_defer_ending(&g_stage->special);
     g_sfx_ok = 0;
     runway_sfx_free(&g_sfx);
     if (stage_is_native_live(g_stage))
@@ -349,6 +360,7 @@ static void enter_credits(void) {
 /* After stage done: NvmShadow + next route. Returns 1 if another stage/credits. */
 static int advance_after_stage(void) {
     stage_outcome oc;
+    int finale_to_menu = 0;
     if (!g_stage) return 0;
     if (g_stage->special_live && g_stage->special.movie.decode_error) {
         fprintf(stderr, "movie decode failed (%s): %s\n", g_stage->iso_dir,
@@ -391,6 +403,11 @@ static int advance_after_stage(void) {
             return 0;
         }
     }
+    if (g_prog.route == STAGE_ROUTE_COMPLETE && g_stage->kind == STAGE_KIND_FINALE) {
+        g_prog.route = STAGE_ROUTE_MENU;
+        finale_to_menu = 1;
+        snprintf(g_prog.status, sizeof g_prog.status, "PROGRESS FINALE -> MENU");
+    }
     printf("%s\n", g_prog.status);
     /* Unreachable in a real playthrough: stage_progress_on_outcome only ever
      * returns STAGE_ROUTE_COMPLETE for STAGE_KIND_FINALE (28LOSE now routes
@@ -411,6 +428,8 @@ static int advance_after_stage(void) {
         fprintf(stderr, "advance failed: %s\n", g_prog.next_iso);
     }
     if (g_prog.route == STAGE_ROUTE_LOSE && g_prog.next_iso[0]) {
+        host_audio_fade_stop(g_audio, 280);
+        g_audio = NULL;
         if (enter_stage(g_prog.next_iso) == 0) return 1;
     }
     if (g_prog.route == STAGE_ROUTE_MENU && g_menu) {
@@ -420,9 +439,13 @@ static int advance_after_stage(void) {
         menu_phase_free(g_menu);
         if (menu_phase_load(g_menu, g_cd, g_save_dir) == 0) {
             apply_host_options(g_menu);
+            g_menu->volume = g_menu_volume;
             menu_phase_show_start(g_menu);
             g_mode = APP_MENU;
             g_movie_last_tick = 0;
+            /* Match the Ymir-observed pause after the FINALE soundtrack. */
+            g_menu_music_after = finale_to_menu
+                ? GetTickCount64() + FINALE_MENU_MUSIC_DELAY_MS : 0;
             return 1;
         }
     }
@@ -439,16 +462,24 @@ static void paint(HWND window) {
                 (g_mode == APP_STAGE && g_stage && g_stage->special_live &&
                  g_stage->special.mode == SPECIAL_MODE_PRESENT && g_stage->special.movie_ok);
     GetClientRect(window, &rect);
-    FillRect(dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(220, 220, 220));
+    int cw = rect.right - rect.left;
+    int ch = rect.bottom - rect.top;
+    if (cw <= 0 || ch <= 0) { EndPaint(window, &ps); return; }
+
+    HDC mem_dc = CreateCompatibleDC(dc);
+    HBITMAP mem_bmp = CreateCompatibleBitmap(dc, cw, ch);
+    HGDIOBJ old_bmp = SelectObject(mem_dc, mem_bmp);
+
+    FillRect(mem_dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    SetBkMode(mem_dc, TRANSPARENT);
+    SetTextColor(mem_dc, RGB(220, 220, 220));
     const char *help =
         g_mode == APP_MENU
             ? "MENU: Arrows | Enter select | Esc quit"
             : (g_mode == APP_CREDITS
                    ? "CREDITS: Esc quit"
                    : "STAGE: Arrows | X=jump | Down=tall | Enter=pause | Esc abort");
-    if (!movie) TextOutA(dc, 12, 8, help, (int)strlen(help));
+    if (!movie) TextOutA(mem_dc, 12, 8, help, (int)strlen(help));
     const char *status = NULL;
     const uint8_t *frame = NULL;
     if (g_mode == APP_MENU && g_menu) {
@@ -461,9 +492,9 @@ static void paint(HWND window) {
         status = g_credits_status;
         frame = g_credits_rgba;
     }
-    if (!movie && status) TextOutA(dc, 12, 28, status, (int)strlen(status));
+    if (!movie && status) TextOutA(mem_dc, 12, 28, status, (int)strlen(status));
     if (!movie && g_prog.status[0])
-        TextOutA(dc, 12, 48, g_prog.status, (int)strlen(g_prog.status));
+        TextOutA(mem_dc, 12, 48, g_prog.status, (int)strlen(g_prog.status));
     if (frame) {
         static uint8_t bgra[320 * 224 * 4];
         size_t i;
@@ -482,17 +513,40 @@ static void paint(HWND window) {
         info.bmiHeader.biCompression = BI_RGB;
         int width = 640, height = 448, left = 20, top = 72;
         if (movie) {
-            int cw = rect.right - rect.left, ch = rect.bottom - rect.top;
             width = cw;
             height = (int)((int64_t)cw * 224 / 320);
             if (height > ch) { height = ch; width = (int)((int64_t)ch * 320 / 224); }
             left = (cw - width) / 2;
             top = (ch - height) / 2;
         }
-        StretchDIBits(dc, left, top, width, height, 0, 0, 320, 224,
+        StretchDIBits(mem_dc, left, top, width, height, 0, 0, 320, 224,
                       bgra, &info, DIB_RGB_COLORS, SRCCOPY);
     }
+    BitBlt(dc, 0, 0, cw, ch, mem_dc, 0, 0, SRCCOPY);
+    SelectObject(mem_dc, old_bmp);
+    DeleteObject(mem_bmp);
+    DeleteDC(mem_dc);
     EndPaint(window, &ps);
+}
+
+static int step_menu_with_pad(menu_phase *menu, const saturn_pad *pad) {
+    saturn_pad input = *pad;
+    if (menu->title_avi_ok &&
+        (menu->screen == MENU_SCR_TITLE || menu->screen == MENU_SCR_STORY)) {
+        input.pressed = (uint16_t)(input.held & 0x0800u);
+        if (input.pressed) {
+            unsigned tick = menu->title_avi.tick_us;
+            int external = menu->title_avi.tick_external;
+            int result;
+            menu->title_avi.tick_external = 1;
+            menu->title_avi.tick_us = 0;
+            result = menu_phase_step(menu, &input);
+            menu->title_avi.tick_us = tick;
+            menu->title_avi.tick_external = external;
+            return result;
+        }
+    }
+    return menu_phase_step(menu, &input);
 }
 
 static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
@@ -527,8 +581,10 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == APP_MENU && g_menu && !menu_phase_done(g_menu)) {
             g_menu->title_avi.tick_us = elapsed_us;
             g_menu->title_avi.tick_external = 1;
-            menu_phase_step(g_menu, &pad);
-            store_host_options(g_menu, g_opt_volume);
+            step_menu_with_pad(g_menu, &pad);
+            g_menu_volume = g_menu->volume;
+            store_host_options(g_menu, g_menu_volume);
+            host_audio_set_volume(g_menu_volume);
             if (g_menu->state == MENU_ST_QUIT) {
                 fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
@@ -541,7 +597,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             } else {
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
                 g_movie_audio_failed = 0;
-                if (g_menu->music_on && !g_audio)
+                if (g_menu->music_on && !g_audio && now >= g_menu_music_after)
                     g_audio = host_audio_start_menu_cdda(g_cd, 2);
                 else if (!g_menu->music_on && g_audio) {
                     host_audio_stop(g_audio);
@@ -582,6 +638,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             }
         }
         InvalidateRect(window, NULL, FALSE);
+        UpdateWindow(window);
         return 0;
     }
     if (msg == WM_USER + 1) { SetTimer(window, 1, 16, NULL); return 0; }
@@ -676,8 +733,7 @@ static int nvmshadow_file_exists(void) {
 }
 
 /*
- * §19 headless: MENU STXT → campaign chain (native only) → INSERTCD → FINALE →
- * credits → nvmshadow.bin. Returns 0 on success.
+ * §19 headless: MENU → campaign chain → INSERTCD → FINALE → MENU.
  */
 static int full_campaign_mode(menu_phase *menu, stage_runner *stage) {
     saturn_pad pad = {0};
@@ -778,17 +834,11 @@ static int full_campaign_mode(menu_phase *menu, stage_runner *stage) {
         goto done;
     }
 
-    enter_credits();
-    {
-        unsigned c;
-        for (c = 0; c < CREDITS_HOLD_FRAMES; c++) {
-            g_credits_frames = c;
-            credits_build_frame(c / (CREDITS_HOLD_FRAMES / CREDITS_PAGES));
-        }
+    if (!advance_after_stage() || g_mode != APP_MENU || menu->screen != MENU_SCR_START) {
+        fprintf(stderr, "full: FINALE did not return to menu\n");
+        error = 1;
+        goto done;
     }
-    printf("CREDITS roll %u frames × %u pages (DirNameTable)\n",
-           CREDITS_HOLD_FRAMES, CREDITS_PAGES);
-    g_mode = APP_DONE;
 
     if (!nvmshadow_file_exists()) {
         /* Force final persist if dirty flag cleared oddly. */
@@ -803,7 +853,7 @@ static int full_campaign_mode(menu_phase *menu, stage_runner *stage) {
     printf("nvm save_dir=%s level_word=%u unlocks_ok file=nvmshadow.bin\n",
            g_save_dir,
            (unsigned)mb_nvm_get_u32(&g_nvm, MB_NVM_DEFAULT_LEVEL_OFF));
-    printf("full-campaign: MENU→%u stages→INSERTCD→FINALE→CREDITS OK\n", played);
+    printf("full-campaign: MENU→%u stages→INSERTCD→FINALE→MENU OK\n", played);
 
 done:
     host_audio_stop(g_audio);
@@ -831,6 +881,66 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
     if (remount_disc(1)) return 1;
     mb_nvm_load(&g_nvm, g_save_dir);
     stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
+
+    {
+        saturn_pad pad = {0};
+        if (menu_phase_load(menu, g_cd, g_save_dir) || !menu->title_avi_ok) return 1;
+        menu->title_avi.tick_external = 1;
+        menu->title_avi.tick_us = 0;
+        saturn_pad_update_host(&pad, MB_PAD_A);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_TITLE) {
+            fprintf(stderr, "check: A skipped the opening movie\n");
+            return 1;
+        }
+        saturn_pad_update_host(&pad, MB_PAD_START);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_START) return 1;
+        saturn_pad_update_host(&pad, MB_PAD_START);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_START) return 1;
+        saturn_pad_update_host(&pad, 0);
+        step_menu_with_pad(menu, &pad);
+        saturn_pad_update_host(&pad, MB_PAD_START);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_STORY || menu->state != MENU_ST_ACTIVE) return 1;
+        saturn_pad_update_host(&pad, MB_PAD_START);
+        step_menu_with_pad(menu, &pad);
+        if (menu->state != MENU_ST_START_LEVEL) {
+            fprintf(stderr, "check: held Start did not skip the story movie\n");
+            return 1;
+        }
+        menu_phase_free(menu);
+    }
+
+    {
+        saturn_pad pad = {0};
+        if (menu_phase_load(menu, g_cd, g_save_dir) || !menu->title_avi_ok) return 1;
+        menu->title_avi.cur = menu->title_avi.frame_count;
+        menu->title_avi.elapsed_us = 0;
+        menu->title_avi.tick_external = 1;
+        menu->title_avi.tick_us = 1000000;
+        saturn_pad_update_host(&pad, MB_PAD_START);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_START || menu->state != MENU_ST_ACTIVE) {
+            fprintf(stderr, "check: Start at opening end skipped the menu\n");
+            return 1;
+        }
+        menu_phase_free(menu);
+        if (menu_phase_load(menu, g_cd, g_save_dir) || !menu->title_avi_ok) return 1;
+        menu->title_avi.cur = menu->title_avi.frame_count;
+        menu->title_avi.elapsed_us = 0;
+        menu->title_avi.tick_external = 1;
+        menu->title_avi.tick_us = 1000000;
+        saturn_pad_update_host(&pad, 0);
+        step_menu_with_pad(menu, &pad);
+        if (menu->screen != MENU_SCR_START || menu->state != MENU_ST_ACTIVE ||
+            !menu->title_avi.playback_done) {
+            fprintf(stderr, "check: opening did not end naturally at the menu\n");
+            return 1;
+        }
+        menu_phase_free(menu);
+    }
 
     {
         static const uint8_t invalid[] = {0, 0, 0};
@@ -899,6 +1009,41 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
         if (remount_disc(1)) return 1;
     }
     printf("check: 13 FMV transitions OK\n");
+
+    if (g_disc2_path[0]) {
+        saturn_pad pad = {0};
+        stage_runner_free(stage);
+        g_menu = menu;
+        if (enter_stage("/27FINALE") || !stage->special_live ||
+            !stage->special.movie_ok) return 1;
+        stage->special.movie.tick_external = 1;
+        stage->special.movie.tick_us = 400000000u;
+        stage_runner_step(stage, &pad);
+        if (!stage_runner_done(stage) || !stage->special.movie.playback_done ||
+            stage->special.movie.frames_drawn != stage->special.movie.frame_count ||
+            !advance_after_stage() || g_mode != APP_MENU ||
+            menu->screen != MENU_SCR_START || !menu->frame_rgba) {
+            fprintf(stderr, "check: FINALE movie did not return to menu\n");
+            return 1;
+        }
+        menu->music_on = 1;
+        wndproc(NULL, WM_TIMER, 1, 0);
+        if (g_audio) {
+            fprintf(stderr, "check: FINALE menu music started too early\n");
+            return 1;
+        }
+        g_menu_music_after = GetTickCount64() - 1;
+        wndproc(NULL, WM_TIMER, 1, 0);
+        if (!g_audio) {
+            fprintf(stderr, "check: FINALE menu music did not start after delay\n");
+            return 1;
+        }
+        host_audio_stop(g_audio);
+        g_audio = NULL;
+        menu_phase_free(menu);
+        g_menu = NULL;
+        if (remount_disc(1)) return 1;
+    }
 
     {
         static const uint8_t invalid[] = {0, 0, 0};
@@ -984,6 +1129,7 @@ int main(int argc, char **argv) {
     g_opt_sfx = cfg.sfx_on;
     g_opt_volume = cfg.volume;
     snprintf(g_config_path, sizeof g_config_path, "%s", cfg.config_path);
+    g_menu_volume = cfg.volume;
     snprintf(g_save_dir, sizeof g_save_dir, "%s", cfg.save_dir);
     snprintf(g_disc2_path, sizeof g_disc2_path, "%s", cfg.disc[1]);
     if (argc == 1) {
@@ -1069,6 +1215,7 @@ int main(int argc, char **argv) {
     g_stage = &stage;
 
     if (check_only || full_campaign) {
+        g_headless_finale_movie = 1;
         if (full_campaign && !check_only)
             error = full_campaign_mode(&menu, &stage);
         else
@@ -1095,6 +1242,8 @@ int main(int argc, char **argv) {
             goto shutdown;
         }
         apply_host_options(&menu);
+        menu.volume = g_menu_volume;
+        host_audio_set_volume(g_menu_volume);
         g_menu = &menu;
         g_nvm = menu.nvm;
         stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
@@ -1116,23 +1265,35 @@ int main(int argc, char **argv) {
                                CW_USEDEFAULT, CW_USEDEFAULT, 700, 580,
                                NULL, NULL, instance, NULL);
         if (!window) { error = 1; goto shutdown; }
+        timeBeginPeriod(1);
+        LARGE_INTEGER qpc_freq, qpc_last, qpc_now;
+        QueryPerformanceFrequency(&qpc_freq);
+        QueryPerformanceCounter(&qpc_last);
+        int64_t target_ticks = qpc_freq.QuadPart / 60;
+
         SetTimer(window, 1, 16, NULL);
-        while (GetMessageA(&msg, NULL, 0, 0) > 0) {
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
-            if (g_mode == APP_MENU && g_menu &&
-                g_menu->state == MENU_ST_START_LEVEL) {
-                const char *sel = menu_phase_selected_iso(g_menu);
-                g_nvm = g_menu->nvm;
-                stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
-                if (sel && stage_progress_begin(&g_prog, sel) == 0 &&
-                    enter_stage(g_prog.next_iso) == 0) {
-                    SetTimer(window, 1, 16, NULL);
-                } else if (g_menu) {
-                    snprintf(g_menu->status, sizeof g_menu->status,
-                             "MENU level load failed: %s", sel ? sel : "?");
-                    g_menu->state = MENU_ST_ACTIVE;
-                    g_menu->screen = MENU_SCR_LEVELS;
+        while (g_mode != APP_DONE) {
+            while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
+                if (msg.message == WM_QUIT) {
+                    g_mode = APP_DONE;
+                    break;
+                }
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+                if (g_mode == APP_MENU && g_menu &&
+                    g_menu->state == MENU_ST_START_LEVEL) {
+                    const char *sel = menu_phase_selected_iso(g_menu);
+                    g_nvm = g_menu->nvm;
+                    stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
+                    if (sel && stage_progress_begin(&g_prog, sel) == 0 &&
+                        enter_stage(g_prog.next_iso) == 0) {
+                        SetTimer(window, 1, 16, NULL);
+                    } else if (g_menu) {
+                        snprintf(g_menu->status, sizeof g_menu->status,
+                                 "MENU level load failed: %s", sel ? sel : "?");
+                        g_menu->state = MENU_ST_ACTIVE;
+                        g_menu->screen = MENU_SCR_LEVELS;
+                    }
                 }
             }
             if (g_mode == APP_DONE) {
@@ -1142,7 +1303,26 @@ int main(int argc, char **argv) {
                 Sleep(200);
                 break;
             }
+
+            QueryPerformanceCounter(&qpc_now);
+            int64_t delta = qpc_now.QuadPart - qpc_last.QuadPart;
+            if (delta >= target_ticks) {
+                if (delta >= target_ticks * 4) {
+                    qpc_last = qpc_now;
+                } else {
+                    qpc_last.QuadPart += target_ticks;
+                }
+                SendMessageA(window, WM_TIMER, 1, 0);
+            } else {
+                int64_t remaining_ms = ((target_ticks - delta) * 1000) / qpc_freq.QuadPart;
+                if (remaining_ms > 2) {
+                    Sleep((DWORD)(remaining_ms - 1));
+                } else {
+                    Sleep(0);
+                }
+            }
         }
+        timeEndPeriod(1);
     }
 
 shutdown:
