@@ -8,7 +8,9 @@
  * Win → unlock current and next playable campaign index (EMPTY dirs are
  *       skipped, never unlocked), level word = next index, persist nvmshadow.bin.
  * Lose / abort → route to /28LOSE, which then returns to MENU; nvm untouched.
- * FINALE win → campaign complete.
+ * FINALE win → byte +1 (completed) set, campaign complete.
+ * begin(NULL) starts at the directory ID held in the level word at +0x1c
+ * (LoadFirstLevel), else at the first unlocked stage.
  * The nvm is never handed to stage_runner, so a disc switch (NEED_DISC →
  * resume) cannot alter it; docs/stage-progress-nvm.md.
  */

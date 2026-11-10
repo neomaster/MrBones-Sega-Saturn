@@ -31,11 +31,24 @@ int stage_progress_begin(stage_progress *p, const char *iso_dir_or_null) {
     } else {
         unsigned i;
         s = NULL;
-        for (i = 0; i < p->cat->campaign_count; i++) {
-            if (p->nvm && mb_nvm_level_unlocked(p->nvm, i)) {
-                s = p->cat->campaign[i];
-                break;
+        /* LoadFirstLevel: the level word at +0x1c is the directory ID to
+         * load; 3 (MENU) and anything outside 04..27 fall back to the first
+         * unlocked campaign stage. */
+        if (p->nvm) {
+            uint32_t id = mb_nvm_get_u32(p->nvm, MB_NVM_DEFAULT_LEVEL_OFF);
+            if (id >= MB_NVM_LEVEL_TABLE_OFF &&
+                id < MB_NVM_LEVEL_TABLE_OFF + MB_NVM_LEVEL_COUNT) {
+                for (i = 0; i < p->cat->campaign_count; i++) {
+                    if (MB_NVM_LEVEL_ID(p->cat->campaign[i]->campaign_index) == id) {
+                        s = p->cat->campaign[i];
+                        break;
+                    }
+                }
             }
+        }
+        for (i = 0; !s && i < p->cat->campaign_count; i++) {
+            if (p->nvm && mb_nvm_level_unlocked(p->nvm, i))
+                s = p->cat->campaign[i];
         }
         if (!s && p->cat->campaign_count > 0)
             s = p->cat->campaign[0];
@@ -103,6 +116,9 @@ int stage_progress_on_outcome(stage_progress *p, const char *finished_iso,
                        next && next->campaign_index >= 0
                            ? MB_NVM_LEVEL_ID(next->campaign_index)
                            : MB_NVM_MENU_DIR_ID);
+        /* ShootRing writes 1 to byte +1 when the last ring goes out. */
+        if (cur->kind == STAGE_KIND_FINALE)
+            mb_nvm_set_u8(p->nvm, MB_NVM_COMPLETED_OFF, 1u);
         p->nvm->dirty = 1;
         if (persist(p) == 0)
             snprintf(p->status, sizeof p->status, "PROGRESS saved nvm after %s",
