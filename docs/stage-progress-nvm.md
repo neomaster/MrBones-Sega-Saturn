@@ -83,13 +83,23 @@ ID da fase escolhida.
   escrita.
 - `test_stage_progress`, parte com discos: `NEED_DISC → resume` em GENRM não altera a imagem.
 
-## 6. Limites
+## 6. Feito depois da confirmação
 
-- Os bytes `0`, `2..3` e a origem do filme (`0x20`) são preservados, não interpretados; o port não
-  grava o byte `+1` ao concluir FINALE nem o `"BONE"` em `0x24`.
-- `stage_progress_begin(NULL)` ignora a palavra de nível e começa na primeira fase aberta, que é
-  sempre a RUNWAY; o original carrega o nível que ela indica.
+- **Byte `+1`:** `stage_progress_on_outcome` grava 1 em `MB_NVM_COMPLETED_OFF` na vitória de FINALE,
+  antes de salvar, como o `ShootRing` ao apagar o último anel.
+- **`"BONE"` em `0x24`:** `mb_nvm_init_default` e `mb_nvm_load` gravam `MB_NVM_TAG_VALUE` em
+  `MB_NVM_TAG_OFF`, por cima do que o arquivo tiver, como o `BackupLoadNvmShadow`.
+- **Partida pela palavra de nível:** `stage_progress_begin(NULL)` começa na fase cujo ID está em
+  `0x1c` quando ele vale 4..0x1b (um TROLL avança para a próxima jogável); 3 (MENU), 0, 28 ou lixo
+  caem na primeira fase aberta.
+- **Seleção do menu:** `menu_phase` só lista as 13 fases da `LevelSelect` original (IDs 4..10 e
+  18..23), guarda o `dir_id` de cada uma, lê o desbloqueio por `byte[dir_id]` e grava o ID escolhido
+  em `0x1c`.
+
+## 7. Limites
+
+- Os bytes `0`, `2..3` e a origem do filme (`0x20`) são preservados, não interpretados.
 - `mb_nvm_load` devolve -1 para um arquivo curto e volta aos padrões; `mrbones.c` e `menu_phase.c`
   ignoram o retorno, então um arquivo corrompido reinicia o progresso em silêncio.
-- `menu_phase` indexa pelas suas próprias entradas (ordem da ISO com a RUNWAY em primeiro) e lista
-  todas as pastas; o original só oferece 13 fases na seleção.
+- A `LevelSelect` original tem 18 entradas para 13 fases (as de `+0 = 6` repetem o byte da anterior);
+  o port mostra uma linha por fase.
