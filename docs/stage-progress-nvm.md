@@ -135,8 +135,18 @@ confirma.** O que o binário mostra:
 
 Consequência no port: nenhuma macro de opções em `nvm_shadow.h`, e `menu_options` não foi ligado ao
 shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro modo. O módulo
-`menu_options` (modo de áudio, 6 presets, volume 0..15) é extensão do host; se as opções tiverem de
-persistir, o lugar é a configuração do host, não o `nvmshadow.bin`.
+`menu_options` (modo de áudio, 6 presets, volume 0..15) é extensão do host.
+
+**Persistência no host.** As opções do menu ficam no `mrbones.ini`, nunca no `nvmshadow.bin`:
+
+- chaves `music` e `sfx` (`on`/`off`, também `true`/`false`, `yes`/`no`, `1`/`0`) e `volume`
+  (`0..15`); padrões ligado, ligado e 15; valor inválido mantém o padrão e volume acima de 15 vira 15;
+- `mrbones.c` aplica `music` e `sfx` depois de cada carga interativa do menu e chama
+  `config_save_options` quando o jogador muda uma delas;
+- `config_save_options` reescreve só essas três chaves e mantém as outras linhas, para que um
+  caminho vindo de variável de ambiente não fique gravado no arquivo;
+- o volume já é lido e gravado pela configuração, mas o campo de volume do menu ainda não está em
+  `master`; até lá o valor do arquivo é preservado sem efeito.
 
 **`StartScreen` (`0023e0f4`)**: 2 entradas em `0023e0ec`, uma coluna, sem tela anterior.
 
