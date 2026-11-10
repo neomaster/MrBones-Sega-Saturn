@@ -39,14 +39,17 @@ Implementação nativa em `src/core/special_phase.c` (2026-11-09):
 - 16 slots (`ring_active[]`), contador `ring_active_count` (+0x708), fase
   publicada `ring_phase` (+0x704) e acumulador `ring_phase_acc` (Brain).
 - Tabela de direção `@0x002b21e0` = `{0,128,192,64}`; incrementos de fase
-  `@0x002b2158`; seleção `ShootRing` =
+  `@0x002b2158` (BE32 reais no host); seleção `ShootRing` =
   `((dir + 0x100 - phase) + 8) >> 4` com wrap em 16.
+- `RingDefinitionTable@0x002b0158`…`0x002b2158` (0x2000 B): 256 registos de
+  0x20 B = 4 pares `{dx,dy}` BE32. Slot `i` na fase `p` usa o registo
+  `(p + i*16) & 255` (`paint_finale_rings` via `finale_ring_table.inc`).
 - Estado inicial do host: **16 slots acesos**. Cada disparo (A/B/C + D-pad)
   chama `special_phase_finale_shoot`; ao desativar o último, `ring_cleared`
   e `SPECIAL_ST_FINISHED` (caminho `EndLevel(0)` → filme).
 - O AVI de `/27FINALE/20AVI` continua a poder encerrar a fase sozinho
   (compatível com `test_special_phase` / hashes Ymir). HUD do anel só é
-  desenhado quando não há blit de filme (para não alterar esses hashes).
+  desenhado quando `!movie_ok` (blit de filme limpo).
 
 Ainda aberto: estado inicial confirmado no Ymir, áudio/animação por ramo de
-`ShootRing`, sprites do anel byte-fiel e vitória jogada ponta a ponta.
+`ShootRing`, sprites STXTR byte-fiel do anel e vitória jogada ponta a ponta.

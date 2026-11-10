@@ -246,7 +246,8 @@ static int test_finale_clock(void) {
         saturn_pad shots = {0};
         shots.pressed = 0x0100u;
         phase.movie.tick_us = 0;
-        phase.ring_phase_mode = 0;
+        /* mode 1 incr @0x2b2158 is 32768: one Brain tick keeps high-16 phase. */
+        phase.ring_phase_mode = 1;
         for (unsigned k = 0; k < FINALE_RING_SLOTS; k++) {
             phase.ring_phase_acc = (255 - (int)(16u * k)) * 65536;
             if (special_phase_step(&phase, &shots) || phase.state != SPECIAL_ST_PLAY ||

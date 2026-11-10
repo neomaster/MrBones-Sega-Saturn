@@ -25,12 +25,12 @@
 
 /*
  * FINALE CRing literals from /27FINALE/03CODE (base 0x00232000).
- * Direction table @0x002b21e0; phase increments @0x002b2158; ShootRing
- * adds 0x100 before subtracting object+0x704 (docs/finale-ring-analysis.md).
+ * Direction table @0x002b21e0; RingDefinitionTable @0x002b0158 (0x2000 B);
+ * phase increments @0x002b2158; ShootRing adds 0x100 before subtracting
+ * object+0x704 (docs/finale-ring-analysis.md).
  */
 static const int k_finale_dir[4] = {0, 128, 192, 64};
-static const int k_finale_phase_incr[16] = {
-    0, 0, 204, 153, 102, 51, 0, 204, 153, 102, 51, 0, 153, 51, 102, 153};
+#include "finale_ring_table.inc"
 
 static void finale_ring_init(special_phase *phase) {
     unsigned i;
@@ -111,38 +111,45 @@ static unsigned finale_dir_from_pad(const saturn_pad *pad) {
     return 0u;                  /* RIGHT / default → 0 */
 }
 
+/*
+ * Brain_CRing: slot i at published phase p reads RingDefinitionTable record
+ * ((p + i*16) & 255) — base + p*0x20, then +0x200 per slot with wrap -0x2000.
+ * Each record holds four signed {dx,dy} sprite offsets from the arena centre.
+ */
 static void paint_finale_rings(const special_phase *phase, uint8_t *dst) {
-    /* 16 slots on a circle; integer offsets avoid libm. */
-    static const int8_t k_ox[16] = {0, 35, 64, 83, 90, 83, 64, 35,
-                                    0, -35, -64, -83, -90, -83, -64, -35};
-    static const int8_t k_oy[16] = {-90, -83, -64, -35, 0, 35, 64, 83,
-                                    90, 83, 64, 35, 0, -35, -64, -83};
-    unsigned i;
-    int cx = (int)SCR_W / 2, cy = 100;
+    unsigned i, part;
+    const int cx = (int)SCR_W / 2, cy = (int)SCR_H / 2;
+    const int phase_field = phase->ring_phase & 255;
+
     for (i = 0; i < FINALE_RING_SLOTS; i++) {
-        int x = cx + k_ox[i];
-        int y = cy + k_oy[i];
-        int dy, dx;
-        int lit = phase->ring_active[i];
-        int flash = (phase->ring_last_index == (int)i && (phase->frames & 4u) == 0);
-        for (dy = -3; dy <= 3; dy++) {
-            for (dx = -3; dx <= 3; dx++) {
-                int px = x + dx, py = y + dy;
-                uint8_t *p;
-                if (px < 0 || py < 0 || px >= (int)SCR_W || py >= (int)SCR_H)
-                    continue;
-                if (dx * dx + dy * dy > 10) continue;
-                p = dst + ((size_t)py * SCR_W + (size_t)px) * 4u;
-                if (lit) {
-                    p[0] = 255;
-                    p[1] = flash ? 255 : 200;
-                    p[2] = flash ? 80 : 40;
-                } else {
-                    p[0] = 40;
-                    p[1] = 50;
-                    p[2] = 70;
+        const unsigned rec = (unsigned)(phase_field + (int)(i * 16u)) & 255u;
+        const int16_t *xy = k_finale_ring_xy[rec];
+        const int lit = phase->ring_active[i];
+        const int flash =
+            (phase->ring_last_index == (int)i && (phase->frames & 4u) == 0);
+        for (part = 0; part < 4u; part++) {
+            const int x = cx + (int)xy[part * 2u];
+            const int y = cy + (int)xy[part * 2u + 1u];
+            int dy, dx;
+            for (dy = -2; dy <= 2; dy++) {
+                for (dx = -2; dx <= 2; dx++) {
+                    int px = x + dx, py = y + dy;
+                    uint8_t *p;
+                    if (px < 0 || py < 0 || px >= (int)SCR_W || py >= (int)SCR_H)
+                        continue;
+                    if (dx * dx + dy * dy > 5) continue;
+                    p = dst + ((size_t)py * SCR_W + (size_t)px) * 4u;
+                    if (lit) {
+                        p[0] = 255;
+                        p[1] = flash ? 255 : 200;
+                        p[2] = flash ? 80 : 40;
+                    } else {
+                        p[0] = 40;
+                        p[1] = 50;
+                        p[2] = 70;
+                    }
+                    p[3] = 255;
                 }
-                p[3] = 255;
             }
         }
     }
