@@ -168,3 +168,20 @@ shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro 
 **Não existe timeout que reinicie a demonstração.** O filme de `29INTRO` toca uma vez, na partida,
 quando a palavra de nível vale 3 (`LoadFirstLevel`, seção 1). Parado no menu, o jogo fica no menu.
 O port também não tem timeout em `menu_phase`, o que está de acordo.
+
+## 9. Rota de `/28LOSE` depois da própria reprodução
+
+Auditoria de `docs/fmv-routes.md` seção 8: `stage_progress_on_outcome` tratava o fim normal do filme
+de `/28LOSE` (um resultado `WIN` daquele estágio só-de-filme, não uma vitória de campanha) do mesmo
+jeito que a vitória da FINALE — as duas devolviam `STAGE_ROUTE_COMPLETE`. Em `mrbones.c`, o desvio que
+manda a FINALE ao menu só testava `STAGE_KIND_FINALE`, então o fim de `/28LOSE` não caía nesse desvio e
+chamava a tela de "créditos" do host (`enter_credits`, `credits_build_frame`) — o oposto do original,
+cujo resultado 1 (derrota) vai direto a `03MENU` sem nenhum passo de créditos (`fmv-routes.md` seção 3).
+
+**Corrigido:** `STAGE_KIND_LOSE` agora devolve `STAGE_ROUTE_MENU` diretamente, igual ao abandono
+(`STAGE_OUTCOME_LOSE`/`ABORT`, que já tinha essa rota). `28LOSE` está fora de `04..27`, então nunca
+esteve em `in_campaign` e o bloco de desbloqueio já deixava a nvm intocada nos dois casos; só a rota
+mudou. Com isso `enter_credits()` fica inatingível em `mrbones.c` por qualquer caminho real: a vitória
+da FINALE (único caso que ainda gera `STAGE_ROUTE_COMPLETE`) já era desviada ao menu antes desse
+`if`. Teste em `tests/test_stage_progress.c`: `on_outcome("/28LOSE", STAGE_OUTCOME_WIN)` dá
+`STAGE_ROUTE_MENU`, `next_iso` vazio, nvm byte a byte intocada.
