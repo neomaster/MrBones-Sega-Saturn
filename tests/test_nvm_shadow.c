@@ -23,13 +23,16 @@ int main(void) {
     unsigned i;
     make_dir(dir);
 
-    /* LoadFirstLevel empty-save image: [0..0x1b]=0 but byte[4]=1, +0x1c=3, +0x20=0. */
+    /* LoadFirstLevel empty-save image: [0..0x1b]=0 but byte[4]=1, +0x1c=3, +0x20=0;
+     * BackupLoadNvmShadow then stores "BONE" at +0x24. */
     mb_nvm_init_default(&a);
     for (i = 0; i < MB_NVM_SHADOW_SIZE; i++) {
         if (i == 4u) CHECK(a.bytes[i] == 1);
         else if (i == 0x1fu) CHECK(a.bytes[i] == 3);
+        else if (i >= 0x24u) CHECK(a.bytes[i] == (uint8_t)"BONE"[i - 0x24u]);
         else CHECK(a.bytes[i] == 0);
     }
+    CHECK(mb_nvm_get_u32(&a, MB_NVM_TAG_OFF) == MB_NVM_TAG_VALUE);
     CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_LEVEL_OFF) == MB_NVM_MENU_DIR_ID);
     CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_EXTRA_OFF) == 0u);
     CHECK(MB_NVM_LEVEL_ID(0) == 4u && MB_NVM_LEVEL_ID(23) == 0x1bu);
@@ -58,16 +61,19 @@ int main(void) {
     CHECK(mb_nvm_get_u32(&a, MB_NVM_DEFAULT_LEVEL_OFF) == 3u);
     for (i = 0; i < 4u; i++) CHECK(a.bytes[i] == 0);
 
-    /* Bytes the host does not model survive a save and a load. */
+    /* Bytes the host does not model survive a save and a load; the tag at
+     * +0x24 is rewritten on load whatever the file held. */
     a.bytes[0] = 0xA5; a.bytes[1] = 0x01; a.bytes[2] = 0x02; a.bytes[3] = 0x5A;
     mb_nvm_set_u32(&a, MB_NVM_DEFAULT_EXTRA_OFF, 0x11223344u);
-    mb_nvm_set_u32(&a, 0x24u, 0xCAFEF00Du);
+    mb_nvm_set_u32(&a, MB_NVM_TAG_OFF, 0xCAFEF00Du);
     CHECK(a.bytes[0x24] == 0xCA && a.bytes[0x27] == 0x0D); /* big-endian */
     CHECK(mb_nvm_save(&a, dir) == 0);
     CHECK(mb_nvm_load(&b, dir) == 0);
     CHECK(b.loaded == 1 && b.dirty == 0);
+    CHECK(mb_nvm_get_u32(&b, MB_NVM_TAG_OFF) == MB_NVM_TAG_VALUE);
+    mb_nvm_set_u32(&a, MB_NVM_TAG_OFF, MB_NVM_TAG_VALUE);
     CHECK(memcmp(a.bytes, b.bytes, MB_NVM_SHADOW_SIZE) == 0);
-    CHECK(mb_nvm_get_u32(&b, 0x24u) == 0xCAFEF00Du);
+    CHECK(mb_nvm_get_u32(&b, MB_NVM_DEFAULT_EXTRA_OFF) == 0x11223344u);
     CHECK(mb_nvm_level_unlocked(&b, 0) == 1 && mb_nvm_level_unlocked(&b, 2) == 1);
     CHECK(mb_nvm_level_unlocked(&b, 1) == 0);
 
@@ -86,6 +92,7 @@ int main(void) {
         CHECK(mb_nvm_load(&c, "no_such_save_dir_xyz") == 0);
         CHECK(c.loaded == 0);
         CHECK(c.bytes[4] == 1 && mb_nvm_level_unlocked(&c, 0) == 1);
+        CHECK(mb_nvm_get_u32(&c, MB_NVM_TAG_OFF) == MB_NVM_TAG_VALUE);
     }
 
     /* Short file → defaults, loaded=0, and -1 so the caller can tell. */

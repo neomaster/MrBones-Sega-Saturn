@@ -16,6 +16,8 @@ void mb_nvm_init_default(mb_nvm_shadow *nvm) {
     nvm->bytes[MB_NVM_LEVEL_TABLE_OFF] = 1;
     mb_nvm_set_u32(nvm, MB_NVM_DEFAULT_LEVEL_OFF, 3u);
     mb_nvm_set_u32(nvm, MB_NVM_DEFAULT_EXTRA_OFF, 0u);
+    /* BackupLoadNvmShadow stores "BONE" at +0x24 after every load. */
+    mb_nvm_set_u32(nvm, MB_NVM_TAG_OFF, MB_NVM_TAG_VALUE);
     nvm->loaded = 0;
     nvm->dirty = 1;
 }
@@ -94,6 +96,8 @@ int mb_nvm_load(mb_nvm_shadow *nvm, const char *save_dir) {
         mb_nvm_init_default(nvm);
         return -1;
     }
+    /* As BackupLoadNvmShadow: the tag is written over whatever the file held. */
+    mb_nvm_set_u32(nvm, MB_NVM_TAG_OFF, MB_NVM_TAG_VALUE);
     nvm->loaded = 1;
     nvm->dirty = 0;
     return 0;

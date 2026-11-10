@@ -104,10 +104,9 @@ static void synth_catalog(stage_catalog *cat) {
 }
 
 static int markers_intact(const mb_nvm_shadow *nvm) {
-    return nvm->bytes[0] == 0x11 && nvm->bytes[1] == 0x22 && nvm->bytes[2] == 0x33 &&
-           nvm->bytes[3] == 0x44 &&
+    return nvm->bytes[0] == 0x11 && nvm->bytes[2] == 0x33 && nvm->bytes[3] == 0x44 &&
            mb_nvm_get_u32(nvm, MB_NVM_DEFAULT_EXTRA_OFF) == 0xAABBCCDDu &&
-           mb_nvm_get_u32(nvm, 0x24u) == 0x01020304u;
+           mb_nvm_get_u32(nvm, MB_NVM_TAG_OFF) == MB_NVM_TAG_VALUE;
 }
 
 static int synthetic_chain(void) {
@@ -143,9 +142,8 @@ static int synthetic_chain(void) {
     }
 
     mb_nvm_init_default(&nvm);
-    nvm.bytes[0] = 0x11; nvm.bytes[1] = 0x22; nvm.bytes[2] = 0x33; nvm.bytes[3] = 0x44;
+    nvm.bytes[0] = 0x11; nvm.bytes[2] = 0x33; nvm.bytes[3] = 0x44;
     mb_nvm_set_u32(&nvm, MB_NVM_DEFAULT_EXTRA_OFF, 0xAABBCCDDu);
-    mb_nvm_set_u32(&nvm, 0x24u, 0x01020304u);
     stage_progress_init(&prog, &cat, &nvm, save);
 
     /* begin on an EMPTY dir lands on the next playable; begin(NULL) on RUNWAY. */
@@ -154,6 +152,24 @@ static int synthetic_chain(void) {
     CHECK(stage_progress_begin(&prog, NULL) == 0);
     CHECK(strcmp(prog.next_iso, "/04RUNWAY") == 0 && prog.route == STAGE_ROUTE_STAGE);
 
+    /* begin(NULL) follows the level word like LoadFirstLevel: a directory ID
+     * 04..27 starts there (an EMPTY one moves on); 3 (MENU), 0, 28LOSE and
+     * garbage fall back to the first unlocked stage. */
+    {
+        static const struct { uint32_t id; const char *iso; } cases[] = {
+            {14u, "/14DRUM"}, {12u, "/14DRUM"}, {0x1bu, "/27FINALE"}, {4u, "/04RUNWAY"},
+            {3u, "/04RUNWAY"}, {0u, "/04RUNWAY"}, {0x1cu, "/04RUNWAY"}, {0xffffffffu, "/04RUNWAY"}};
+        for (i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+            mb_nvm_set_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF, cases[i].id);
+            CHECK(stage_progress_begin(&prog, NULL) == 0);
+            CHECK(strcmp(prog.next_iso, cases[i].iso) == 0);
+        }
+        mb_nvm_set_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF, MB_NVM_MENU_DIR_ID);
+        CHECK(stage_progress_begin(&prog, NULL) == 0);
+        CHECK(strcmp(prog.next_iso, "/04RUNWAY") == 0);
+    }
+    CHECK(mb_nvm_get_u8(&nvm, MB_NVM_COMPLETED_OFF) == 0);
+
     while (prog.route == STAGE_ROUTE_STAGE) {
         const stage_info *cur = stage_catalog_find(&cat, prog.next_iso);
         CHECK(cur && cur->kind != STAGE_KIND_EMPTY);
@@ -161,6 +177,8 @@ static int synthetic_chain(void) {
         CHECK(stage_progress_on_outcome(&prog, cur->iso_dir, STAGE_OUTCOME_WIN) == 0);
         CHECK(mb_nvm_level_unlocked(&nvm, (unsigned)cur->campaign_index) == 1);
         CHECK(markers_intact(&nvm));
+        CHECK(mb_nvm_get_u8(&nvm, MB_NVM_COMPLETED_OFF) ==
+              (cur->kind == STAGE_KIND_FINALE ? 1 : 0));
         if (prog.route == STAGE_ROUTE_STAGE) {
             const stage_info *nx = stage_catalog_find(&cat, prog.next_iso);
             CHECK(nx && nx->kind != STAGE_KIND_EMPTY);
@@ -186,6 +204,7 @@ static int synthetic_chain(void) {
     CHECK(mb_nvm_get_u32(&nvm, MB_NVM_DEFAULT_LEVEL_OFF) == MB_NVM_MENU_DIR_ID);
     CHECK(mb_nvm_load(&disk, save) == 0);
     CHECK(memcmp(disk.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0);
+    CHECK(mb_nvm_get_u8(&disk, MB_NVM_COMPLETED_OFF) == 1); /* persisted with FINALE */
 
     /* Lose and abort route to LOSE, LOSE routes to MENU; none of them writes nvm. */
     {

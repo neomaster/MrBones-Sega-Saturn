@@ -39,6 +39,7 @@
 #define MB_NVM_DEFAULT_LEVEL_OFF 0x1cu
 #define MB_NVM_DEFAULT_EXTRA_OFF 0x20u /* movie origin directory ID */
 #define MB_NVM_TAG_OFF 0x24u
+#define MB_NVM_TAG_VALUE 0x424f4e45u /* "BONE", written by BackupLoadNvmShadow */
 #define MB_NVM_MENU_DIR_ID 3u
 /* Directory ID (DirNameTable prefix) of a campaign index: 0 → 4 (04RUNWAY). */
 #define MB_NVM_LEVEL_ID(campaign_index) ((uint32_t)(campaign_index) + MB_NVM_LEVEL_TABLE_OFF)
