@@ -161,6 +161,42 @@ Capturas citadas ficam em `build-static/ymir-finale-*/screenshots/`, fora do con
   `20AVI`. Mesma ressalva.
 
 ## 7. Limites
+## 8. Créditos finais pós-FINALE
+
+Auditoria pedida: a "tabela de créditos finais" em `/27FINALE` e a chamada a `DirNameTable` que
+`mrbones.c` faz depois da FINALE, para ver se a rolagem e os nomes da equipe no port correspondem
+aos dados originais da ROM. **Não correspondem, e não podem**, pelo que os dumps mostram:
+
+- **Não existe tabela de créditos como dado isolado.** Nenhum dump deste repositório (`ghidra-endgame.txt`,
+  `ghidra-finale-detail.txt`, `finale-ring-analysis.md`, `finale-handoff-27676.md`) cita uma rotina ou
+  estrutura de créditos/equipe. `_DirNameTable` (`stage_catalog.c`, base `0022da00`) guarda só os 28
+  nomes de diretório do disco (`04RUNWAY`..`30MAP`); nenhum é nome de pessoa.
+- **O conteúdo de encerramento real está dentro do filme.** Na seção 6 acima, capturas do Ymir em
+  créditos coincidiram em RGBA com trechos do AVI decodificado pelo port — ou seja, **os créditos da
+  Sega Saturn são quadros do próprio `/27FINALE/20AVI`** (36.680.552 bytes no disco 2), não uma tabela
+  de texto. O `/27FINALE` do disco 1 tem todos os recursos "extra" vazios (hash de string vazia no
+  manifesto); só o disco 2 carrega a FINALE completa.
+- **A "chamada DirNameTable pós-FINALE" em `mrbones.c` é `credits_build_frame`.** Ela usa
+  `stage_catalog_dir_name()`/`stage_catalog_dir_count()` — isto é, o `_DirNameTable` — para listar
+  `"STAGE NN: /DIRNAME"` numa tela própria do host, rotulada "CAMPAIGN STAGES (DIRNAMETABLE)" e
+  "CREDITS". É uma tela inventada que reaproveita nomes de diretório como se fossem crédito de equipe;
+  não há como ela corresponder à ROM, porque a ROM não expõe nomes de equipe por essa tabela nem por
+  nenhuma outra achada até aqui.
+- **Essa tela estava, além disso, inalcançável na vitória e alcançável só na derrota.** Antes desta
+  auditoria, `stage_progress_on_outcome` tratava o fim da reprodução de `/28LOSE` (um resultado WIN
+  daquele estágio só-de-filme) do mesmo jeito que a vitória da FINALE, devolvendo
+  `STAGE_ROUTE_COMPLETE` nos dois casos. Em `mrbones.c`, o desvio para o menu só testava
+  `STAGE_KIND_FINALE`, então: a vitória real da FINALE caía no desvio e ia direto ao menu (sem nunca
+  chamar `enter_credits()`), e o fim do filme de `/28LOSE` **não** caía no desvio e acionava
+  `enter_credits()` — a tela de "créditos" aparecia depois de perder, nunca depois de vencer. O cérebro
+  original não tem passo de créditos no resultado 1 (derrota): filme de `28LOSE` e direto a `03MENU`
+  (§3 acima). Corrigido em `stage_progress.c` (`docs/stage-progress-nvm.md` seção 9): `STAGE_KIND_LOSE`
+  agora devolve `STAGE_ROUTE_MENU` diretamente, igual ao abandono. Com isso `enter_credits()` fica
+  inatingível em qualquer jogo real (comentário em `advance_after_stage`, `src/tools/mrbones.c`).
+- **Não decodifiquei os quadros do AVI para comparar pixel a pixel com a tela do host.** Extrair
+  quadros do filme para checar a equipe exigiria ler o disco além do que os testes sintéticos cobrem,
+  contra a restrição de não extrair dados brutos do disco. A conclusão acima já basta: são fontes de
+  dado diferentes (quadros de vídeo vs. uma tela gerada pelo host), então "corresponder" não se aplica.
 
 - Os dumps mostram as rotas estáticas. Não provam que os campos opcionais, ou resultados diferentes de 0,
   1 e 2, nunca sejam usados em uma partida, nem quem os configura.

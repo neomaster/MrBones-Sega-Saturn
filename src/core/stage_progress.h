@@ -7,7 +7,9 @@
  * §15 — campaign progression + automatic _NvmShadow save.
  * Win → unlock current and next playable campaign index (EMPTY dirs are
  *       skipped, never unlocked), level word = next index, persist nvmshadow.bin.
- * Lose / abort → route to /28LOSE, which then returns to MENU; nvm untouched.
+ * Lose / abort → route to /28LOSE; when that movie finishes (on_outcome WIN
+ *       on "/28LOSE" itself) routes straight to MENU, same as the original's
+ *       result-1 brain; nvm untouched either way.
  * FINALE win → byte +1 (completed) set, campaign complete.
  * begin(NULL) starts at the directory ID held in the level word at +0x1c
  * (LoadFirstLevel), else at the first unlocked stage.

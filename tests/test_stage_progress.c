@@ -297,6 +297,20 @@ int main(void) {
     CHECK(prog.route == STAGE_ROUTE_MENU);
     CHECK(prog.next_iso[0] == 0);
 
+    /* /28LOSE finishing its own playback (a WIN outcome for that movie-only
+     * stage) is not a campaign win: it must route straight to MENU, like the
+     * abort case above, never STAGE_ROUTE_COMPLETE (that would let the host
+     * show its credits roll after a loss, which the original never does:
+     * docs/fmv-routes.md section 3, result 1 = LOSE movie then 03MENU). */
+    {
+        mb_nvm_shadow before = nvm;
+        CHECK(stage_progress_on_outcome(&prog, "/28LOSE", STAGE_OUTCOME_WIN) == 0);
+        CHECK(prog.route == STAGE_ROUTE_MENU);
+        CHECK(prog.next_iso[0] == 0);
+        CHECK(memcmp(before.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0); /* not in_campaign: untouched */
+        CHECK(markers_intact(&nvm));
+    }
+
     /* Specials smoke. */
     memset(&runner, 0, sizeof runner);
     CHECK(run_smoke(&runner, &disc1, 1, &cat, "/07GUITAR") == 0);

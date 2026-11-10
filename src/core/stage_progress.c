@@ -128,11 +128,23 @@ int stage_progress_on_outcome(stage_progress *p, const char *finished_iso,
                      cur->name);
     }
 
-    if (cur->kind == STAGE_KIND_FINALE || cur->kind == STAGE_KIND_LOSE) {
+    if (cur->kind == STAGE_KIND_FINALE) {
         p->route = STAGE_ROUTE_COMPLETE;
         p->next_iso[0] = 0;
         snprintf(p->status, sizeof p->status, "PROGRESS campaign complete (%s)",
                  cur->name);
+        return 0;
+    }
+    if (cur->kind == STAGE_KIND_LOSE) {
+        /* /28LOSE finishing its own playback is a WIN outcome for that
+         * movie-only stage, not a campaign win: the original's result-1
+         * brain goes straight to 03MENU after this movie, with no credits
+         * step (docs/fmv-routes.md section 3). 28LOSE is outside 04..27, so
+         * it was never in_campaign and the unlock block above already left
+         * the nvm untouched. */
+        p->route = STAGE_ROUTE_MENU;
+        p->next_iso[0] = 0;
+        snprintf(p->status, sizeof p->status, "PROGRESS %s -> MENU", cur->name);
         return 0;
     }
 

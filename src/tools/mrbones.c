@@ -392,6 +392,16 @@ static int advance_after_stage(void) {
         }
     }
     printf("%s\n", g_prog.status);
+    /* Unreachable in a real playthrough: stage_progress_on_outcome only ever
+     * returns STAGE_ROUTE_COMPLETE for STAGE_KIND_FINALE (28LOSE now routes
+     * straight to MENU, docs/stage-progress-nvm.md section 9), and that case
+     * is always caught by the override above. Kept only for the defensive
+     * "no next stage after a non-FINALE win" fallback in stage_progress.c,
+     * which the hardcoded 28-entry catalog never actually produces. See
+     * docs/fmv-routes.md section 8 for why enter_credits() must not run on a
+     * real FINALE win: the original's end credits are rendered frames inside
+     * /27FINALE/20AVI itself, not a separate data table this host screen
+     * could reconstruct. */
     if (g_prog.route == STAGE_ROUTE_COMPLETE) {
         enter_credits();
         return 1;
