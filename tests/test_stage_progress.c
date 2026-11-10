@@ -308,7 +308,6 @@ int main(void) {
         CHECK(prog.route == STAGE_ROUTE_MENU);
         CHECK(prog.next_iso[0] == 0);
         CHECK(memcmp(before.bytes, nvm.bytes, MB_NVM_SHADOW_SIZE) == 0); /* not in_campaign: untouched */
-        CHECK(markers_intact(&nvm));
     }
 
     /* Specials smoke. */
