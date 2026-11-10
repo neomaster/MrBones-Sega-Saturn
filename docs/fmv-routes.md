@@ -1,6 +1,30 @@
-# Rotas de FMV: análise dos cérebros de término
+# Rotas de FMV: os cérebros de término das 22 fases
 
-Condição: resultado 0, campos opcionais +0x48 e +0x4c iguais a -1. Cada binário foi extraído do disco indicado e importado como SH-2 em 0x00232000. O endereço do cérebro é o prólogo revalidado; o mapa pode divergir. A associação de filme ao nível atual e de argumento ao próximo nível decorre da análise do carregador em `ghidra-fmv-loader.txt`.
+O que decide, ao fim de cada fase, se o jogo carrega a próxima direto ou passa antes por um filme é o
+`CEndLevel::Brain` do `03CODE` de cada fase. Este documento junta: a tabela das rotas de vitória, o que
+mais os mesmos cérebros mostram (derrota, saída, campos opcionais), como o carregador trata cada chamada,
+o que o port faz com isso e o que foi visto no Ymir. **Fonte de verdade:** os dumps em
+[`ghidra-fmv-brains/`](ghidra-fmv-brains/); se este texto divergir deles, os dumps vencem.
+
+## 1. De onde vêm os dumps
+
+Cada `03CODE` foi extraído do disco indicado e importado como `SuperH:BE:32:SH-2` com base `0x00232000`
+(a base `0x00200000` gera instruções inválidas; ver [`fmv-mauso-flow.md`](fmv-mauso-flow.md)). O endereço
+do cérebro é o prólogo revalidado no binário, e o `.MAP` pode divergir em alguns bytes (GUITAR: 16 antes;
+BAT3: 12 depois). O SHA-256 da tabela identifica o `03CODE` analisado.
+
+O script que reproduz um dump é [`tools/DumpFmvBrain.java`](../tools/DumpFmvBrain.java), com
+`analyzeHeadless … -postScript DumpFmvBrain.java <fase> <cérebro> [saída]`. Além do C descompilado, ele
+imprime um cabeçalho de procedência (programa, linguagem, base, SHA-256), o prólogo e os literais que a
+função lê, com o valor de cada um. Os dumps atuais não têm esses blocos: o script que os gerou não está
+no repositório, e `DumpFmvBrain.java` produz o mesmo corpo e acrescenta os três. O carregador e o menu
+têm o seu próprio script, [`tools/DumpMovieFlow.java`](../tools/DumpMovieFlow.java).
+
+## 2. Rota de vitória
+
+Condição: resultado em `+0x44` igual a 0, campos opcionais `+0x48` e `+0x4c` iguais a -1. O argumento é
+o ID da próxima fase, o prefixo numérico do diretório (`04RUNWAY` = 4). O filme, quando há, é o da fase
+que terminou (§4).
 
 | Fase | Disco | Cérebro | Literal | Destino | Próximo ID | SHA-256 do 03CODE |
 |---|---:|---|---|---|---:|---|
@@ -27,18 +51,120 @@ Condição: resultado 0, campos opcionais +0x48 e +0x4c iguais a -1. Cada binár
 | 26LAFF | 2 | `002951e8` | `00295318` | `PlayDuckMovie` | 27 | `ab073acb0bcd93dc84b56900241ccec8484f6af30519faf51601263b04931018` |
 | 27FINALE | 2 | `0028ccd0` | `0028ce00` | `PlayDuckMovie` | 3 | `19962c17f9ca3c467b05229956e98058df72d05bf083e6c30006a05f8f59528b` |
 
-Os arquivos de descompilação estão em `docs/ghidra-fmv-brains/`. Os 13 caminhos `PlayDuckMovie` anteriores a FINALE são integrados no host; FINALE é mantido separado porque o tratamento atual da fase já usa o mesmo AVI e a sobreposição de jogabilidade ainda não foi reconstruída. Os dados indicam as rotas padrão estáticas, não comprovam que campos opcionais ou resultados diferentes jamais sejam usados em runtime.
+Oito fases carregam a próxima direto e catorze passam por um filme. LOGS pula para 14 porque `12TROLL1` e
+`13TROLL2` não têm `03CODE` real; FINALE volta a 3 (`03MENU`) depois do seu filme.
 
-Em FINALE, os bytes do binário original confirmam que o literal `0028ce00` aponta para `0020b61c` (`PlayDuckMovie`), usado pelo cérebro de encerramento no ramo padrão. O mapa também identifica o cérebro `CFBones`, seus controles e `RingDefinitionTable`. A captura anterior obtida com `00228970=27` selecionou o filme, e não demonstra a apresentação da fase.
+**O que está verificado e o que está inferido.** O valor do literal foi lido no binário em cinco fases:
+MAUSO (`0029da44` → `0020b4ac`), VALLEY, GUITAR, BAT3 ([`fmv-valley-flow.md`](fmv-valley-flow.md)) e
+FINALE (`0028ce00` → `0020b61c`, `0028cdfc` → `0020b4ac`, `0028cdf8` → `0020b714`). Nas outras
+dezessete, o destino é inferido da forma da função, idêntica nas 22 (§3): quando o ramo do resultado 0
+troca o ponteiro antes de chamar, o alvo é o terceiro literal do trio e o destino é `PlayDuckMovie`;
+quando não troca, é o segundo, `LoadLevel`. A inferência se confirma rodando `DumpFmvBrain.java`, que
+imprime os valores.
 
-Em 09/11, o Ymir com disco 2 e seleção forçada de fase `0022896c=27`, filme `00228970=0`, mostrou a arena de FINALE com Mr. Bones e uma guitarra (captura `build-static/ymir-finale-review/screenshots/mr Bones [MK-81016]-20261109T133600.304.png`). Sem comandos de jogo, a execução retornou ao menu; não foi observada uma vitória. O port ainda inicia diretamente o AVI e não implementa a arena, seus controles ou a transição de vitória. O teste de campanha simulado não valida essa fase.
+## 3. O que mais os mesmos cérebros mostram
 
-Em outra execução, o breakpoint no cérebro `0028ccd0` ocorreu com `R4=06026a9c`, resultado `+0x44=1` e campos `+0x48/+0x4c=-1`. Alterar apenas o resultado de 1 para 0 em RAM levou o Ymir ao filme de FINALE. A captura `build-static/ymir-finale-winref/screenshots/mr Bones [MK-81016]-20261109T134500.548.png` coincide em RGBA com o intervalo 288 do AVI decodificado pelo port. Isso confirma o ramo sob o resultado forçado; não valida a condição de vitória normal ou a fase nativa.
+Os 22 têm a mesma forma. 14DRUM é a única diferença de corpo: não tem os dois laços de espera de oito
+iterações nem a chamada com `0x18`/`0x19`, mas a decisão final é a mesma. Depois da limpeza da fase, a
+decisão lê três campos do objeto:
 
-No Ymir, uma entrada direta forçada em GUITAR (`0022896c=7`, `00228970=0` no ponto `0020b95c`) mostrou a fase Guitar Solo: personagem com guitarra diante da plateia. O arquivo `/07GUITAR/20AVI` mostra uma cena cinematográfica diferente; sua chamada após GUITAR é indicada pela descompilação da tabela. A entrada foi forçada, portanto a observação não comprova sozinha a transição de vitória nem a fidelidade da fase nativa, ainda incompleta.
+| Condição | Chamada | Efeito |
+|---|---|---|
+| `+0x4c` ≠ -1 | `PlayNewDuckMovie(+0x4c, +0x48)` | filme da fase `+0x4c`, depois carrega `+0x48` |
+| `+0x4c` = -1, `+0x48` ≠ -1 | `LoadLevel(+0x48)` | carrega a fase pedida, sem filme |
+| ambos -1, resultado 0 | `LoadLevel(próximo)` ou `PlayDuckMovie(próximo)` | a tabela do §2 |
+| ambos -1, resultado 1 | `PlayNewDuckMovie(0x1c, 3)` | filme de `28LOSE`, depois `03MENU` |
+| ambos -1, resultado 2 | `LoadLevel(3)` | `03MENU` direto, sem filme |
+| ambos -1, outro resultado | nenhuma | a função retorna |
 
-O mesmo procedimento com `0022896c=14` mostrou DRUM com o personagem entre tambores; `/14DRUM/20AVI` contém uma sequência visual diferente. A chamada de seu FMV após a vitória padrão é uma conclusão da análise estática, não uma transição observada em uma partida completa.
+Os três alvos vêm de um trio de literais consecutivos, na mesma ordem em todas as fases:
 
-Com `0022896c=16`, o original mostrou BIGBNS como fase jogável com céu azul e personagem; um quadro de `/16BIGBNS/20AVI` é visualmente diferente. O mapa não mostrou símbolos do leitor DUCK, e a chamada do filme após vitória permanece inferida da análise estática, sem confirmação em partida normal.
+| Fase | `PlayNewDuckMovie` | `LoadLevel` | `PlayDuckMovie` |
+|---|---|---|---|
+| 04RUNWAY | `002563cc` | `002563d0` | — |
+| 05MAUSO | `0029da40` | `0029da44` | — |
+| 06VALLEY | `002be898` | `002be89c` | `002be8a0` |
+| 07GUITAR | `00262000` | `00262004` | `00262008` |
+| 08BAT1 | `002b3014` | `002b3018` | — |
+| 09BAT2 | `002b48b0` | `002b48b4` | — |
+| 10BAT3 | `002b5994` | `002b5998` | — |
+| 11LOGS | `002a7268` | `002a726c` | `002a7270` |
+| 14DRUM | `00249848` | `0024984c` | `00249850` |
+| 15GLASS | `002ac248` | `002ac24c` | — |
+| 16BIGBNS | `0023d8ec` | `0023d8f0` | `0023d8f4` |
+| 17VORTEX | `0026780c` | `00267810` | `00267814` |
+| 18RIDE | `0023f5e8` | `0023f5ec` | `0023f5f0` |
+| 19VILLAGE | `0029cfbc` | `0029cfc0` | `0029cfc4` |
+| 20ICE1 | `0029de10` | `0029de14` | — |
+| 21ICE2 | `00290ab8` | `00290abc` | — |
+| 22SHADOW | `0029e650` | `0029e654` | `0029e658` |
+| 23MOAT | `002ae978` | `002ae97c` | `002ae980` |
+| 24STAING | `0023f92c` | `0023f930` | `0023f934` |
+| 25GENRM | `0023e208` | `0023e20c` | `0023e210` |
+| 26LAFF | `00295310` | `00295314` | `00295318` |
+| 27FINALE | `0028cdf8` | `0028cdfc` | `0028ce00` |
 
-Com `0022896c=25` e disco 2, a seleção forçada apresentou GENRM jogável, com inimigos e cenário circular; o quadro 100 de `/25GENRM/20AVI` mostra uma cena cinematográfica distinta. O mapa GENROOM não apresenta símbolos `MFP_`, `DUCKPLAY`, `DUCKFILE`, `DXL_` ou `20AVI`. A chamada do filme após a vitória é inferida do cérebro de término, sem observação de uma vitória normal; a fase nativa ainda não reproduz fielmente o original.
+As fases que carregam direto não têm o terceiro literal. A identificação do primeiro como
+`PlayNewDuckMovie` tem o valor lido em MAUSO (`0029da40` → `0020b714`) e FINALE; nas demais, é a mesma
+chamada com os mesmos argumentos (`0x1c, 3` e `+0x4c, +0x48`). O que os cérebros chamam com `0x18`
+(resultado 0) e `0x19` (resultado 1) antes da decisão não foi identificado.
+
+## 4. O carregador
+
+Do `/02` (SHA-256 `02faf276ff9892d82c4b41dbfd8e6515f79b87f8883c731fa3d8aa1610d33704`, base `0x00200000`,
+[`ghidra-fmv-loader.txt`](ghidra-fmv-loader.txt)):
+
+- `_LoadLevel` (`0020b4ac`): grava a fase pedida em `0021d9e4` e zera `0021d9e8`.
+- `_PlayDuckMovie(n)` (`0020b61c`): copia `0021d9e4` (a fase corrente) para `0021d9e8`, grava `n` em
+  `0021d9e4`, roda o leitor e chama `_LoadLevel(n)`. **O filme é o da fase que terminou**; `n` é só a
+  próxima. VALLEY chama `_PlayDuckMovie(7)`: toca `/06VALLEY/20AVI` e depois carrega `/07GUITAR`.
+- `_PlayNewDuckMovie(de, para)` (`0020b714`): a origem do filme e a próxima fase são argumentos
+  separados. É o que o resultado 1 usa: filme de `28LOSE`, depois `03MENU`.
+
+## 5. No port
+
+- [`src/tools/mrbones.c`](../src/tools/mrbones.c): `g_fmv_routes[]` guarda os treze pares (fase com filme
+  → próxima) anteriores a FINALE, e `check_mode` repete a lista com o disco de cada um para simular as
+  treze transições (`test_fmv_transition`). As duas listas são cópias uma da outra e precisam andar juntas.
+- [`stage_catalog.c`](../src/core/stage_catalog.c) e [`stage_progress.c`](../src/core/stage_progress.c): a
+  ordem da campanha é a dos diretórios 04 a 27; `stage_progress_skip_empty` pula `TROLL1`/`TROLL2`, o
+  que dá LOGS → DRUM. `STAGE_OUTCOME_LOSE` e `STAGE_OUTCOME_ABORT` levam a `/28LOSE` e daí ao MENU, o
+  equivalente do resultado 1. Não há equivalente do resultado 2 (menu direto, sem filme).
+- FINALE: desde `b799d16` e `e43ee9e`, [`special_phase.c`](../src/core/special_phase.c) tem a arena de
+  dezesseis anéis, e apagar todos é o que encerra a fase; a vitória fecha a campanha
+  (`STAGE_ROUTE_COMPLETE`) em vez de voltar ao menu pelo filme como o original. O encadeamento do filme
+  com a arena está nesse arquivo e em [`finale-ring-analysis.md`](finale-ring-analysis.md), não aqui.
+
+## 6. Observado no Ymir (09/11)
+
+Capturas citadas ficam em `build-static/ymir-finale-*/screenshots/`, fora do controle de versão.
+
+- **FINALE, bytes do binário.** O literal `0028ce00` contém `0020b61c` (`PlayDuckMovie`), usado no ramo
+  do resultado 0. O mapa identifica o cérebro `CFBones`, seus controles e `RingDefinitionTable`. Uma
+  captura anterior com `00228970=27` selecionou o filme, não a fase.
+- **FINALE, fase forçada.** Disco 2, `0022896c=27`, `00228970=0`: a arena apareceu com Mr. Bones e uma
+  guitarra (`ymir-finale-review/…133600.304.png`). Sem comandos, a execução voltou ao menu; não houve
+  vitória.
+- **FINALE, cérebro.** Breakpoint em `0028ccd0` com `R4=06026a9c`, resultado `+0x44=1` e
+  `+0x48`/`+0x4c=-1`: o resultado 1 é a rota de derrota do §3, coerente com a volta ao menu acima. Trocar
+  o resultado de 1 para 0 em RAM levou ao filme de FINALE; a captura `ymir-finale-winref/…134500.548.png`
+  coincide em RGBA com o intervalo 288 do AVI decodificado pelo port. Isso confirma o ramo sob resultado
+  forçado, não a condição de vitória normal.
+- **GUITAR** (`0022896c=7`, `00228970=0` em `0020b95c`): a fase Guitar Solo, personagem com guitarra
+  diante da plateia. `/07GUITAR/20AVI` é uma cena diferente; sua chamada depois de GUITAR vem da
+  descompilação, não de uma vitória observada.
+- **DRUM** (`0022896c=14`): personagem entre tambores; `/14DRUM/20AVI` é outra sequência. Mesma ressalva.
+- **BIGBNS** (`0022896c=16`): fase jogável com céu azul; um quadro de `/16BIGBNS/20AVI` é diferente. O
+  mapa não mostra símbolos do leitor DUCK. Mesma ressalva.
+- **GENRM** (`0022896c=25`, disco 2): fase jogável com inimigos e cenário circular; o quadro 100 de
+  `/25GENRM/20AVI` é uma cena distinta. O mapa GENROOM não tem `MFP_`, `DUCKPLAY`, `DUCKFILE`, `DXL_` nem
+  `20AVI`. Mesma ressalva.
+
+## 7. Limites
+
+- Os dumps mostram as rotas estáticas. Não provam que os campos opcionais, ou resultados diferentes de 0,
+  1 e 2, nunca sejam usados em uma partida, nem quem os configura.
+- O destino de dezessete fases é inferido da forma da função (§2); o valor do literal só foi lido em cinco.
+- Nenhuma vitória normal foi observada no Ymir: todas as entradas foram forçadas.
+- Os dumps atuais não têm cabeçalho de procedência nem os valores dos literais; o script que os produziu
+  não está no repositório.
