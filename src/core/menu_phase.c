@@ -20,11 +20,22 @@ typedef struct {
     menu_phase *menu;
 } walk_ctx;
 
-/* ISO dirs like /04RUNWAY → name RUNWAY, skip empty TITL-only stubs later. */
+int menu_phase_level_selectable(int dir_id) {
+    return (dir_id >= 4 && dir_id <= 10) || (dir_id >= 18 && dir_id <= 23);
+}
+
+static int level_unlocked(const menu_phase *menu, const menu_level *lv) {
+    if (lv->dir_id < (int)MB_NVM_LEVEL_TABLE_OFF) return 0;
+    return mb_nvm_level_unlocked(&menu->nvm,
+                                 (unsigned)lv->dir_id - MB_NVM_LEVEL_TABLE_OFF);
+}
+
+/* ISO dirs like /04RUNWAY → name RUNWAY; only the 13 LevelSelect rows. */
 static int collect_level(const cd_iso_entry *e, void *user) {
     walk_ctx *ctx = user;
     const char *p;
     unsigned idx;
+    int dir_id;
     char name[MENU_LEVEL_NAME];
     size_t n;
     if (!e || e->is_dir == 0) return 0;
@@ -33,7 +44,8 @@ static int collect_level(const cd_iso_entry *e, void *user) {
     /* Top-level /NNNAME only (no nested slash). */
     if (!(p[1] >= '0' && p[1] <= '9' && p[2] >= '0' && p[2] <= '9')) return 0;
     if (strchr(p + 1, '/')) return 0;
-    if (strcmp(p, "/03MENU") == 0) return 0;
+    dir_id = (p[1] - '0') * 10 + (p[2] - '0');
+    if (!menu_phase_level_selectable(dir_id)) return 0;
     n = strlen(p + 3);
     if (n == 0 || n >= MENU_LEVEL_NAME) return 0;
     memcpy(name, p + 3, n + 1);
@@ -42,7 +54,8 @@ static int collect_level(const cd_iso_entry *e, void *user) {
     memset(&ctx->menu->levels[idx], 0, sizeof ctx->menu->levels[idx]);
     snprintf(ctx->menu->levels[idx].name, sizeof ctx->menu->levels[idx].name, "%s", name);
     snprintf(ctx->menu->levels[idx].iso_dir, sizeof ctx->menu->levels[idx].iso_dir, "%s", p);
-    ctx->menu->levels[idx].unlocked = mb_nvm_level_unlocked(&ctx->menu->nvm, idx);
+    ctx->menu->levels[idx].dir_id = dir_id;
+    ctx->menu->levels[idx].unlocked = level_unlocked(ctx->menu, &ctx->menu->levels[idx]);
     return 0;
 }
 
@@ -298,7 +311,8 @@ static void begin_level(menu_phase *menu, int level_index) {
     }
     menu->selected_level = level_index;
     menu->state = MENU_ST_START_LEVEL;
-    mb_nvm_set_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF, MB_NVM_LEVEL_ID(level_index));
+    mb_nvm_set_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF,
+                   (uint32_t)menu->levels[level_index].dir_id);
     mb_nvm_save(&menu->nvm, menu->save_dir);
     render_status(menu);
 }
@@ -670,7 +684,7 @@ int menu_phase_load(menu_phase *menu, cdimage *cd, const char *save_dir) {
         }
     }
     for (i = 0; i < menu->level_count; i++)
-        menu->levels[i].unlocked = mb_nvm_level_unlocked(&menu->nvm, i);
+        menu->levels[i].unlocked = level_unlocked(menu, &menu->levels[i]);
     if (menu->level_count > 0 && !menu->levels[0].unlocked) {
         mb_nvm_unlock_level(&menu->nvm, 0);
         menu->levels[0].unlocked = 1;

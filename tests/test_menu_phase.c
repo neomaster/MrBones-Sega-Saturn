@@ -52,6 +52,15 @@ int main(void) {
     CHECK(menu.frame_rgba);
     CHECK(menu.screen == MENU_SCR_TITLE);
     CHECK(menu.level_count > 0);
+    /* The original LevelSelect: 13 rows, IDs 04..10 and 18..23, nothing else. */
+    CHECK(menu.level_count == 13u);
+    for (i = 0; i < menu.level_count; i++) {
+        CHECK(menu_phase_level_selectable(menu.levels[i].dir_id));
+        CHECK(strcmp(menu.levels[i].name, "LOGS") != 0 && strcmp(menu.levels[i].name, "FINALE") != 0);
+        CHECK(menu.levels[i].unlocked == (menu.levels[i].dir_id == 4));
+    }
+    CHECK(!menu_phase_level_selectable(11) && !menu_phase_level_selectable(17) &&
+          !menu_phase_level_selectable(27) && !menu_phase_level_selectable(3));
     /* The observed boot video is /29INTRO, not the longer /03MENU cinematic. */
     CHECK(menu.titl_size > 0);
     CHECK(menu.avi_size > 0);

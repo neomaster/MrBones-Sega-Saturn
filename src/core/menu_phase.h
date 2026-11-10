@@ -31,11 +31,22 @@ typedef enum {
 #define MENU_LEVEL_MAX 28
 #define MENU_LEVEL_NAME 16
 
+/*
+ * One row of the original LevelSelect screen. UpdateLevels_CMenuSelector reads
+ * _NvmShadow[dir_id] for each entry; the entries are the 13 stages with IDs
+ * 04..10 and 18..23 (docs/ghidra-menu-level-table.txt). Other campaign dirs
+ * (LOGS, DRUM, GLASS, BIGBNS, VORTEX, STAING, GENRM, LAFF, FINALE) are reached
+ * only by playing.
+ */
 typedef struct {
     char name[MENU_LEVEL_NAME]; /* e.g. "RUNWAY" */
     char iso_dir[32];           /* e.g. "/04RUNWAY" */
+    int dir_id;                 /* DirNameTable prefix, 4 = 04RUNWAY */
     int unlocked;
 } menu_level;
+
+/* 1 if a directory ID is one of the 13 rows of the original LevelSelect. */
+int menu_phase_level_selectable(int dir_id);
 
 typedef struct {
     menu_phase_state state;
