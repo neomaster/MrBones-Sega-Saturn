@@ -242,6 +242,21 @@ static int test_finale_clock(void) {
     if (!audio) goto done;
     phase.movie_pcm_pending = 0;
     phase.movie.tick_external = 1;
+    {
+        saturn_pad shots = {0};
+        shots.pressed = 0x0100u;
+        phase.movie.tick_us = 0;
+        phase.ring_phase_mode = 0;
+        for (unsigned k = 0; k < FINALE_RING_SLOTS; k++) {
+            phase.ring_phase_acc = (255 - (int)(16u * k)) * 65536;
+            if (special_phase_step(&phase, &shots) || phase.state != SPECIAL_ST_PLAY ||
+                phase.movie.playback_done) {
+                puts("FINALE audio interrupted by ring clear");
+                goto done;
+            }
+        }
+        if (!phase.ring_cleared || phase.movie.cur != 1) goto done;
+    }
     saturn_pad_update_host(&pad, MB_PAD_RIGHT);
     deadline = GetTickCount64() + (full ?
         ((uint64_t)phase.movie.frame_count * phase.movie.us_per_frame / 1000u) + 30000u : 5000u);
@@ -337,6 +352,7 @@ done:
 
 int main(void) {
     if (getenv("MB_STORY_ONLY")) return test_story_clock();
+    if (getenv("MB_FINALE_ONLY")) return test_finale_clock();
     int16_t samples[44100] = {0}; /* 0.5 s of stereo silence */
     host_audio *audio = host_audio_start_pcm16(samples, 44100, 44100, 2);
     unsigned before = 0, paused = 0, after = 0;
