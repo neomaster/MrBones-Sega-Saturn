@@ -7,34 +7,42 @@ texto divergir do código, o código vence.
 
 ## 1. O que os dumps mostram
 
-- **`LoadFirstLevel` (`0020b91c`, [`ghidra-loader-backup.txt`](ghidra-loader-backup.txt)).** Quando o
-  backup está vazio: zera os bytes `[0..0x1b]` do `_NvmShadow`, grava `byte[4] = 1`, `u32@0x1c = 3`
-  e `u32@0x20 = 0`. Depois lê o par de palavras do carregador (`0021d9e4` nível, `0021d9e8` origem
-  do filme): com origem 0 e nível diferente de 3 chama `LoadLevel(nível)`; com nível 3 chama
-  `PlayNewDuckMovie(0x1d, 3)` (filme de `29INTRO`, depois `03MENU`); com origem definida chama
-  `PlayNewDuckMovie(origem, nível)`. Esse par não faz parte do `_NvmShadow`.
-- **`BackupLoadNvmShadow` / `BackupSaveNvmShadow` (`0020bce0` / `0020bd28`).** Copiam `0x28` bytes
-  (`mov #0x28, r7`). O dump não recupera o corpo da função de salvar.
-- **`UpdateLevels_CMenuSelector` (`0023c5a8`, [`ghidra-menu.txt`](ghidra-menu.txt)).** Para cada
-  entrada da seleção de fases lê **um byte** em `tabela + *(entrada + 8)` e grava o resultado em
-  `entrada + 4` (desbloqueada). A tabela e os deslocamentos por entrada não foram recuperados.
+- **`LoadFirstLevel` (`0020b91c`, [`ghidra-loader-backup.txt`](ghidra-loader-backup.txt)).** O literal
+  `0020b9c0` vale `0x00228950`: é esse bloco que ele trata. Backup vazio → zera `[0..0x1b]`,
+  `byte[4] = 1`, `u32@0x1c = 3`, `u32@0x20 = 0`. Depois lê o par em `0x228970` (literal `0020b9c8`),
+  isto é, **`+0x1c` = nível a carregar e `+0x20` = origem do filme, dentro do próprio shadow**: com
+  origem 0 e nível ≠ 3, `LoadLevel(nível)`; com nível 3, `PlayNewDuckMovie(0x1d, 3)` (`29INTRO`,
+  depois `03MENU`); com origem definida, `PlayNewDuckMovie(origem, nível)`.
+- **`BackupLoadNvmShadow` (`0020bce0`).** `r6 = 0x00228950` (literal `0020bd1c`), copia `0x28` bytes
+  e grava `"BONE"` (`0x424f4e45`, literal `0020bd20`) em `+0x24`.
+- **`UpdateLevels_CMenuSelector` (`0023c5a8`, [`ghidra-menu.txt`](ghidra-menu.txt),
+  [`ghidra-menu-level-table.txt`](ghidra-menu-level-table.txt)).** Tabela em `0x00228950` (literal
+  `0023c600`), o mesmo shadow. A tela de seleção (`0023f4a8`) tem 18 entradas; o deslocamento de cada
+  uma (`entrada + 8`) é 4, 5, 6, 7, 7, 8, 8, 9, 0xa na coluna da esquerda e 0x12, 0x13, 0x13, 0x14,
+  0x14, 0x15, 0x16, 0x17, 0x17 na da direita: **o ID do diretório** (`04RUNWAY..10BAT3` e
+  `18RIDE..23MOAT`). As entradas com `+0 = 6` repetem o byte da anterior e trazem `ID-1` em `+0x10`.
+  LOGS, DRUM, GLASS, BIGBNS, VORTEX, STAING, GENRM, LAFF e FINALE não aparecem na seleção.
+- **`ShootRing` de FINALE** ([`finale-ring-analysis.md`](finale-ring-analysis.md)) grava 1 no byte
+  `0x00228951` (`+1`) ao apagar o anel.
 
-Nada nos dumps liga a troca de disco ao `_NvmShadow`: o carregador fica residente em `0x00200000`
-e o shadow fica em RAM entre as fases; o port tem de reproduzir isso não tocando na imagem na troca.
+O endereço `0x228980` que o port usava vinha do `.MAP`; os três literais do código dizem `0x228950`.
+Nada liga a troca de disco ao shadow: o carregador fica residente e o bloco fica em RAM.
 
-## 2. Layout usado pelo port
+## 2. Layout
 
-Uma leitura dos fatos acima, **não uma estrutura decodificada**:
-
-| Bytes | Uso no port | Evidência |
+| Bytes | Uso | Evidência |
 |---|---|---|
-| `0..3` | cabeçalho, preservado | zerado pelo `LoadFirstLevel`, nunca lido |
-| `4..0x1b` | 24 bytes de fase, um por diretório `04RUNWAY..27FINALE` na ordem da `DirNameTable`; 0 = travada | `byte[4] = 1` no save vazio = RUNWAY aberta; 24 bytes cabem exatamente em `4..0x1b`; o menu lê um byte por entrada |
-| `0x1c..0x1f` | `u32` BE: índice de campanha da próxima fase a jogar | valor inicial 3 vem do `LoadFirstLevel`; o significado original não está nos dumps |
-| `0x20..0x27` | dois `u32`, preservados | `0x20 = 0` no save vazio; `0x24` recebe algo em tempo de execução no `BackupLoadNvmShadow` |
+| `0` | desconhecido, preservado | zerado no save vazio |
+| `1` | campanha concluída (FINALE) | `ShootRing` |
+| `2..3` | desconhecidos, preservados | zerados no save vazio |
+| `4..0x1b` | **um byte por ID de diretório**, `byte[ID]` para `04RUNWAY..27FINALE` = `byte[4 + índice de campanha]`; 0 = travada | deslocamentos do menu = IDs; `byte[4] = 1` no save vazio = RUNWAY |
+| `0x1c..0x1f` | `u32` BE: ID do nível a carregar na partida (3 = MENU) | `LoadFirstLevel` lê e decide por ele |
+| `0x20..0x23` | `u32` BE: ID da origem do filme (0 = nenhum) | idem |
+| `0x24..0x27` | `"BONE"`, gravado pelo carregador ao ler; preservado | `BackupLoadNvmShadow` |
 
-A ordem dos 24 bytes é escolha do port: o menu original usa deslocamentos por entrada que não
-foram lidos.
+O port indexa por índice de campanha (`MB_NVM_LEVEL_ID(i) = i + 4`), que é o ID do diretório. A
+palavra `0x1c` recebe o ID da próxima fase (3 = MENU quando a campanha acaba); `menu_phase` grava o
+ID da fase escolhida.
 
 ## 3. O que estava errado e foi corrigido
 
@@ -42,10 +50,11 @@ foram lidos.
    tempo, gravava `byte[4] = 1` como "flag" do `LoadFirstLevel`. Resultado: `mb_nvm_level_unlocked(4)`
    era 1 num save novo, e `08BAT1` (índice 4) aparecia desbloqueada no menu desde o início. Agora os
    bytes de fase começam em 4 e `byte[4]` **é** a RUNWAY.
-2. **Palavra de nível apontava para um TROLL.** `stage_progress` gravava `índice atual + 1`, que depois
-   de `11LOGS` dá 8 (`12TROLL1`, vazio), enquanto `menu_phase` grava o índice da fase selecionada.
-   Agora grava o índice da **próxima fase jogável** (depois de `11LOGS`, 10 = `14DRUM`), a mesma
-   unidade do menu.
+2. **Palavra de nível em unidade errada e apontando para um TROLL.** `stage_progress` gravava
+   `índice atual + 1` (depois de `11LOGS`, 8 = `12TROLL1`, vazio) e `menu_phase` gravava o índice da
+   fase escolhida, enquanto o `LoadFirstLevel` lê ali um **ID de diretório** (3 = MENU). Agora os dois
+   gravam o ID: a próxima fase jogável depois de uma vitória (14 = `14DRUM` depois de LOGS, 3 = MENU ao
+   fim da campanha) e a fase escolhida no menu.
 3. **`stage_progress_apply_nvm` era um laço vazio** sem chamadores. Removida.
 
 ## 4. O que foi conferido e está certo
@@ -76,10 +85,11 @@ foram lidos.
 
 ## 6. Limites
 
-- A ordem dos bytes de fase e o significado de `0x1c` e `0x20` não foram confirmados no original.
+- Os bytes `0`, `2..3` e a origem do filme (`0x20`) são preservados, não interpretados; o port não
+  grava o byte `+1` ao concluir FINALE nem o `"BONE"` em `0x24`.
 - `stage_progress_begin(NULL)` ignora a palavra de nível e começa na primeira fase aberta, que é
-  sempre a RUNWAY.
+  sempre a RUNWAY; o original carrega o nível que ela indica.
 - `mb_nvm_load` devolve -1 para um arquivo curto e volta aos padrões; `mrbones.c` e `menu_phase.c`
   ignoram o retorno, então um arquivo corrompido reinicia o progresso em silêncio.
-- `menu_phase` indexa pelas suas próprias entradas (ordem da ISO com a RUNWAY em primeiro);
-  coincide com o índice de campanha enquanto a ordem da ISO for a numérica.
+- `menu_phase` indexa pelas suas próprias entradas (ordem da ISO com a RUNWAY em primeiro) e lista
+  todas as pastas; o original só oferece 13 fases na seleção.
