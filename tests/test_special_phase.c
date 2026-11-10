@@ -155,6 +155,11 @@ int main(void) {
             CHECK(phase.movie.frames_drawn == 1 && phase.state == SPECIAL_ST_PLAY);
             CHECK(memcmp(phase.frame_rgba, duck_avi_frame_rgba(&phase.movie),
                          320u * 224u * 4u) == 0);
+            saturn_pad_update_host(&pad, MB_PAD_START);
+            CHECK(special_phase_step(&phase, &pad) == 0);
+            CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);
+            CHECK(phase.movie.frames_drawn == 1);
+            saturn_pad_update_host(&pad, 0);
             phase.movie.tick_us = phase.movie.us_per_frame + 1u;
             for (int i = 0; i < 117; i++) special_phase_step(&phase, &pad);
             {
@@ -249,9 +254,12 @@ int main(void) {
     CHECK(phase.movie.frame_count > 0);
     {
         saturn_pad pad = {0};
+        saturn_pad_update_host(&pad, MB_PAD_START);
         for (int i = 0; i < 4; i++) {
             special_phase_step(&phase, &pad);
+            CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);
             CHECK(phase.movie.frames_drawn == 1);
+            saturn_pad_update_host(&pad, 0);
         }
         special_phase_step(&phase, &pad);
         CHECK(phase.movie.frames_drawn == 2);
