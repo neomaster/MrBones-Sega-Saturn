@@ -50,6 +50,30 @@ static mb_nvm_shadow g_nvm;
 static runway_sfx g_sfx;
 static int g_sfx_ok;
 static host_audio *g_audio;
+/* Host menu options. They persist in mrbones.ini, never in nvmshadow.bin: the
+ * original keeps its option toggles in loader RAM and does not save them
+ * (docs/stage-progress-nvm.md section 8). */
+static int g_opt_music = 1, g_opt_sfx = 1;
+static unsigned g_opt_volume = MB_CONFIG_VOLUME_MAX;
+static char g_config_path[MB_PATH_MAX];
+
+static void apply_host_options(menu_phase *menu) {
+    menu->music_on = g_opt_music;
+    menu->sfx_on = g_opt_sfx;
+}
+
+/* After each interactive menu step: write the ini only when a value changed. */
+static void store_host_options(const menu_phase *menu, unsigned volume) {
+    if (!!menu->music_on == g_opt_music && !!menu->sfx_on == g_opt_sfx &&
+        volume == g_opt_volume)
+        return;
+    g_opt_music = !!menu->music_on;
+    g_opt_sfx = !!menu->sfx_on;
+    g_opt_volume = volume;
+    if (g_config_path[0] &&
+        config_save_options(g_config_path, g_opt_music, g_opt_sfx, g_opt_volume))
+        fprintf(stderr, "options not saved: cannot write %s\n", g_config_path);
+}
 static host_audio *g_movie_audio;
 static int g_movie_audio_failed;
 static ULONGLONG g_movie_last_tick;
@@ -385,6 +409,7 @@ static int advance_after_stage(void) {
         stage_runner_free(g_stage);
         menu_phase_free(g_menu);
         if (menu_phase_load(g_menu, g_cd, g_save_dir) == 0) {
+            apply_host_options(g_menu);
             menu_phase_show_start(g_menu);
             g_mode = APP_MENU;
             g_movie_last_tick = 0;
@@ -493,6 +518,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             g_menu->title_avi.tick_us = elapsed_us;
             g_menu->title_avi.tick_external = 1;
             menu_phase_step(g_menu, &pad);
+            store_host_options(g_menu, g_opt_volume);
             if (g_menu->state == MENU_ST_QUIT) {
                 fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
@@ -944,6 +970,10 @@ int main(int argc, char **argv) {
         return 0;
     }
     config_load(&cfg, NULL);
+    g_opt_music = cfg.music_on;
+    g_opt_sfx = cfg.sfx_on;
+    g_opt_volume = cfg.volume;
+    snprintf(g_config_path, sizeof g_config_path, "%s", cfg.config_path);
     snprintf(g_save_dir, sizeof g_save_dir, "%s", cfg.save_dir);
     snprintf(g_disc2_path, sizeof g_disc2_path, "%s", cfg.disc[1]);
     if (argc == 1) {
@@ -1054,6 +1084,7 @@ int main(int argc, char **argv) {
             error = 1;
             goto shutdown;
         }
+        apply_host_options(&menu);
         g_menu = &menu;
         g_nvm = menu.nvm;
         stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
