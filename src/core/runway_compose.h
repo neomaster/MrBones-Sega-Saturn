@@ -26,6 +26,12 @@ int runway_compose_blit_sprite_ex(uint8_t *dst, unsigned dst_w, unsigned dst_h,
                                   const uint8_t *src, unsigned src_w, unsigned src_h,
                                   int dst_x, int dst_y, int flip_x);
 
+/* Scaled alpha-test blit for VDP1 RWorldSprite / RGang depth scaling. */
+int runway_compose_blit_sprite_scaled(uint8_t *dst, unsigned dst_w, unsigned dst_h,
+                                      const uint8_t *src, unsigned src_w, unsigned src_h,
+                                      int dst_x, int dst_y,
+                                      unsigned out_w, unsigned out_h, int flip_x);
+
 /* §16 HUD: CSkelBar 14 segments (HEALTH.O stand-in) + optional PAUSE.O sprite. */
 int runway_compose_hud_skelbar(uint8_t *dst, unsigned dst_w, unsigned dst_h,
                                int segments, int max_segments,

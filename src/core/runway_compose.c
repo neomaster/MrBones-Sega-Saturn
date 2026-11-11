@@ -101,3 +101,34 @@ int runway_compose_hud_pause(uint8_t *dst, unsigned dst_w, unsigned dst_h,
                                255, 255, 240, 40, 24, 8, 1);
     return 0;
 }
+
+int runway_compose_blit_sprite_scaled(uint8_t *dst, unsigned dst_w, unsigned dst_h,
+                                      const uint8_t *src, unsigned src_w, unsigned src_h,
+                                      int dst_x, int dst_y,
+                                      unsigned out_w, unsigned out_h, int flip_x) {
+    unsigned dx, dy;
+    if (!dst || !src || !dst_w || !dst_h || !src_w || !src_h || !out_w || !out_h) return -1;
+    if (out_w == src_w && out_h == src_h)
+        return runway_compose_blit_sprite_ex(dst, dst_w, dst_h, src, src_w, src_h,
+                                             dst_x, dst_y, flip_x);
+    for (dy = 0; dy < out_h; dy++) {
+        int py = dst_y + (int)dy;
+        unsigned sy;
+        if (py < 0 || (unsigned)py >= dst_h) continue;
+        sy = (dy * src_h) / out_h;
+        if (sy >= src_h) sy = src_h - 1;
+        for (dx = 0; dx < out_w; dx++) {
+            int px = dst_x + (int)dx;
+            unsigned sx, rx;
+            const uint8_t *sp;
+            if (px < 0 || (unsigned)px >= dst_w) continue;
+            sx = (dx * src_w) / out_w;
+            if (sx >= src_w) sx = src_w - 1;
+            rx = flip_x ? (src_w - 1u - sx) : sx;
+            sp = src + ((size_t)sy * src_w + rx) * 4u;
+            if (sp[3])
+                put_pixel(dst, dst_w, dst_h, px, py, sp[0], sp[1], sp[2], 255);
+        }
+    }
+    return 0;
+}

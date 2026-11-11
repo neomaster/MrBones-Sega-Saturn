@@ -101,10 +101,6 @@ int pan_scroll_seek(pan_scroll *ps, unsigned target) {
         uint32_t sz = 0;
         unsigned next = ps->index + 1u;
         unsigned cur_p = next & 3u;
-        unsigned prev_p = (next - 1u) & 3u;
-        memcpy(ps->planes + (size_t)cur_p * PAN_PLANE_SIZE,
-               ps->planes + (size_t)prev_p * PAN_PLANE_SIZE,
-               PAN_PLANE_SIZE);
         if (pan_stream_record(ps->blob, ps->blob_size, next, &off, &sz)) return -1;
         if (pan_frame_decode(ps->blob + off, sz, ps->planes, PAN_BUFFER_SIZE,
                              cur_p, coll_raw, sizeof coll_raw, &csz,

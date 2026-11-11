@@ -299,19 +299,6 @@ int scrl_map_draw(const scrl_map *m, const uint8_t *palette_rgba1024,
         }
     }
 
-    /* Floor tick from collision table. */
-    if (m->strip_w) {
-        for (x = 0; x < strip_w && x < m->strip_w; x++) {
-            unsigned fy = m->floor_py[x];
-            size_t di;
-            if (fy >= strip_h) continue;
-            di = ((size_t)fy * strip_w + x) * 4u;
-            strip_rgba[di + 0] = m->wall[x] ? 180 : 110;
-            strip_rgba[di + 1] = m->wall[x] ? 60 : 90;
-            strip_rgba[di + 2] = 40;
-            strip_rgba[di + 3] = 255;
-        }
-    }
     return 0;
 }
 

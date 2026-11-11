@@ -19,7 +19,7 @@
  * BIGBONES: heavy skel zones (pan_coll + SkelBar).
  */
 
-#define STAGE_ENEMY_MAX 16u
+#define STAGE_ENEMY_MAX 24u
 #define STAGE_ENEMY_HIT_RANGE 0xB6DBu /* CheckForHit_CThrown DAT_0026daa4 */
 
 typedef enum {
@@ -32,7 +32,9 @@ typedef enum {
     STAGE_ENEMY_ZAP = 6,
     STAGE_ENEMY_RING = 7,  /* FINALE CRing */
     STAGE_ENEMY_BOLT = 8,  /* FINALE CBolt */
-    STAGE_ENEMY_THROWN = 9
+    STAGE_ENEMY_THROWN = 9,
+    STAGE_ENEMY_ZOMBIE = 10, /* BAT1..3 graveyard zombie */
+    STAGE_ENEMY_BAT = 11     /* BAT1..3 swooping bat */
 } stage_enemy_kind;
 
 typedef struct {
@@ -60,6 +62,8 @@ typedef struct {
 } stage_enemies;
 
 void stage_enemies_init_runway(stage_enemies *e, unsigned units_per_pixel);
+/* Authentic /04RUNWAY/03CODE CheckJumpys wave population (Gang waves + bone throws). */
+void stage_enemies_init_runway_rom(stage_enemies *e, unsigned units_per_pixel);
 void stage_enemies_init_sidescrl(stage_enemies *e, const char *stage_name,
                                  unsigned units_per_pixel);
 void stage_enemies_init_special(stage_enemies *e, const char *stage_name,
@@ -87,9 +91,34 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                           uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
                           uint32_t camera_x, int screen_anchor_x, int base_y);
 
+/*
+ * Extended enemy renderer supporting per-X terrain floor lookup (floor_py[0..floor_w-1])
+ * and RUNWAY RWorldSprite perspective scaling (z_perspective != 0).
+ */
+void stage_enemies_render_ex(const stage_enemies *e, const runway_hazards *haz,
+                             uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                             uint32_t camera_x, int screen_anchor_x, int base_y,
+                             const uint8_t *floor_py, unsigned floor_w,
+                             int z_perspective);
+
 /* Render Mr. Bones' authentic 04STXT 3D sprite at (foot_x, foot_y). */
 void stage_enemies_draw_bones(uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
                               int foot_x, int foot_y, int facing, int tall,
                               int airborne, unsigned anim_frame);
+
+/* Scaled variant using RWorldSprite 256-fixed-point numerator/denominator. */
+void stage_enemies_draw_bones_ex(uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                                 int foot_x, int foot_y, int facing, int tall,
+                                 int airborne, unsigned anim_frame,
+                                 unsigned scale_num, unsigned scale_den);
+
+/*
+ * Render the authentic Saturn CSkelBar "B [Skull] N E S" bone-piece HUD
+ * from /04RUNWAY/04STXT (with outline slots behind active segments), falling
+ * back to runway_compose_hud_skelbar if disc sprites are not loaded.
+ */
+void stage_enemies_draw_hud_skelbar(uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                                    int segments, int max_segments,
+                                    int dst_x, int dst_y);
 
 #endif

@@ -528,8 +528,9 @@ int sidescrl_phase_render(sidescrl_phase *phase) {
             }
         }
     }
-    stage_enemies_render(&phase->enemies, NULL, phase->frame_rgba, SCR_W, SCR_H,
-                         src_x, 0, (int)(phase->ground_y / UNITS_PER_PIXEL));
+    stage_enemies_render_ex(&phase->enemies, NULL, phase->frame_rgba, SCR_W, SCR_H,
+                            src_x, 0, (int)(phase->ground_y / UNITS_PER_PIXEL),
+                            phase->map.floor_py, phase->map.strip_w, 0);
     dx = (int)(phase->bones_x / UNITS_PER_PIXEL) - (int)src_x;
     if (dx < 12) dx = 12;
     if (dx > (int)SCR_W - 12) dx = (int)SCR_W - 12;
@@ -540,8 +541,9 @@ int sidescrl_phase_render(sidescrl_phase *phase) {
                              (phase->state == SIDESCRL_ST_WALK)
                                  ? (phase->anim_index + 1u)
                                  : 0u);
-    runway_compose_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
-                               phase->skel.segments, RUNWAY_SKEL_SEGMENTS, 8, 8);
+    stage_enemies_draw_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
+                                   phase->skel.segments, RUNWAY_SKEL_SEGMENTS,
+                                   8, 8);
     if (phase->stage_name[0]) {
         snprintf(hud_txt, sizeof hud_txt, "%s", phase->stage_name);
         mb_font_draw_text_shadow(phase->frame_rgba, SCR_W, SCR_H, 200, 8,

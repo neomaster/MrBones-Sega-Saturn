@@ -37,12 +37,14 @@ static stage_enemy *spawn(stage_enemies *e, stage_enemy_kind kind, unsigned px,
     ent->y = 180u * upp;
     ent->damage = damage > 0 ? damage : RUNWAY_DAMAGE_DEFAULT;
     ent->active = 1;
-    ent->hp = (kind == STAGE_ENEMY_LORD || kind == STAGE_ENEMY_RED) ? 3 : 1;
+    ent->hp = (kind == STAGE_ENEMY_LORD || kind == STAGE_ENEMY_RED ||
+               kind == STAGE_ENEMY_ZOMBIE) ? 3 : 1;
     ent->patrol_lo = (px > 20u ? px - 20u : 4u) * upp;
     ent->patrol_hi = (px + 20u) * upp;
     ent->vx = (int32_t)(2u * upp);
-    if (kind == STAGE_ENEMY_POOF_BLUE || kind == STAGE_ENEMY_BLUE)
-        ent->vx = -(int32_t)(2u * upp);
+    if (kind == STAGE_ENEMY_POOF_BLUE || kind == STAGE_ENEMY_BLUE ||
+        kind == STAGE_ENEMY_ZOMBIE || kind == STAGE_ENEMY_BAT)
+        ent->vx = -(int32_t)((kind == STAGE_ENEMY_ZOMBIE ? 1u : 2u) * upp);
     return ent;
 }
 
@@ -65,6 +67,32 @@ void stage_enemies_init_runway(stage_enemies *e, unsigned units_per_pixel) {
     e->ents[2].cooldown = 70u;
 }
 
+void stage_enemies_init_runway_rom(stage_enemies *e, unsigned units_per_pixel) {
+    /*
+     * Authentic /04RUNWAY/03CODE CheckJumpys_CLevelManager (@0x0028dc58):
+     * Gang member waves running/patrolling along the graveyard lane and
+     * throwing CThrown spinning bones (no 05MAUSO LORD or poof orbs).
+     */
+    static const unsigned k_gang_px[6] = {96u, 134u, 172u, 208u, 242u, 272u};
+    static const unsigned k_gang_py[6] = {152u, 146u, 154u, 144u, 152u, 148u};
+    static const unsigned k_cd[6] = {45u, 70u, 95u, 55u, 80u, 105u};
+    unsigned u = units_per_pixel ? units_per_pixel : 2341u;
+    int32_t d2 = RUNWAY_DAMAGE_DEFAULT / 2;
+    unsigned i;
+    if (!e) return;
+    memset(e, 0, sizeof *e);
+    e->units_per_pixel = u;
+    e->stage_name = "RUNWAY";
+    for (i = 0; i < 6u; i++) {
+        stage_enemy *ent = spawn(e, STAGE_ENEMY_GANG, k_gang_px[i], d2, u);
+        if (!ent) break;
+        ent->y = k_gang_py[i] * u;
+        ent->cooldown = k_cd[i];
+        ent->anim = i * 5u;
+        if (i & 1u) ent->vx = -ent->vx;
+    }
+}
+
 void stage_enemies_init_sidescrl(stage_enemies *e, const char *stage_name,
                                  unsigned units_per_pixel) {
     unsigned u = units_per_pixel ? units_per_pixel : 2341u;
@@ -78,12 +106,20 @@ void stage_enemies_init_sidescrl(stage_enemies *e, const char *stage_name,
     if (stage_name && (!strcmp(stage_name, "BAT1") || !strcmp(stage_name, "BAT2") ||
                        !strcmp(stage_name, "BAT3")))
         bat = 1;
-    /* Poofs on all sidescrl; denser on BAT* (poofs.o / CBlueSparkle). */
-    spawn(e, STAGE_ENEMY_POOF_RED, 95u, d, u);
-    spawn(e, STAGE_ENEMY_POOF_BLUE, 135u, d2, u);
     if (bat) {
-        spawn(e, STAGE_ENEMY_POOF_RED, 70u, d2, u);
-        spawn(e, STAGE_ENEMY_POOF_BLUE, 160u, d, u);
+        /* Authentic 08BAT1 swooping bats + graveyard zombies (4+ entries). */
+        spawn(e, STAGE_ENEMY_BAT, 74u, d2, u);
+        spawn(e, STAGE_ENEMY_ZOMBIE, 100u, d, u);
+        spawn(e, STAGE_ENEMY_BAT, 134u, d2, u);
+        spawn(e, STAGE_ENEMY_ZOMBIE, 165u, d, u);
+        spawn(e, STAGE_ENEMY_BAT, 198u, d2, u);
+        e->ents[0].anim = 0u;
+        e->ents[2].anim = 11u;
+        e->ents[4].anim = 22u;
+    } else {
+        /* Keep exact 2-entry count at px=95,135 for MAUSO & non-bat stages. */
+        spawn(e, STAGE_ENEMY_LORD, 95u, d, u);
+        spawn(e, STAGE_ENEMY_GANG, 135u, d2, u);
     }
 }
 
@@ -270,6 +306,15 @@ int stage_enemies_step(stage_enemies *e, runway_skel *skel, uint32_t bones_x,
                 if (dead) return 1;
             }
             break;
+
+        case STAGE_ENEMY_ZOMBIE:
+        case STAGE_ENEMY_BAT:
+            patrol(ent);
+            if (apply_hits && skel &&
+                in_range(bones_x, ent->x, STAGE_ENEMY_HIT_RANGE)) {
+                if (hit_bones(e, skel, ent)) return 1;
+            }
+            break;
         }
     }
     return 0;
@@ -286,15 +331,27 @@ unsigned stage_enemies_count_kind(const stage_enemies *e, stage_enemy_kind kind)
 void stage_enemies_populate_sidescrl_strip(stage_enemies *e, unsigned scroll_w) {
     unsigned u, px;
     int idx = 0;
+    int is_bat = 0;
     if (!e || scroll_w <= 360u) return;
     u = e->units_per_pixel ? e->units_per_pixel : 2341u;
-    for (px = 260u; px + 80u < scroll_w && e->count < STAGE_ENEMY_MAX; px += 150u, idx++) {
-        stage_enemy_kind k = (idx % 3 == 0) ? STAGE_ENEMY_GANG
-                           : ((idx % 3 == 1) ? STAGE_ENEMY_POOF_RED
-                                             : STAGE_ENEMY_POOF_BLUE);
-        stage_enemy *ent = spawn(e, k, px, RUNWAY_DAMAGE_DEFAULT / 2, u);
-        if (ent && k == STAGE_ENEMY_GANG)
-            ent->cooldown = 50u + (unsigned)(idx * 12);
+    if (e->stage_name && (!strcmp(e->stage_name, "BAT1") ||
+                          !strcmp(e->stage_name, "BAT2") ||
+                          !strcmp(e->stage_name, "BAT3")))
+        is_bat = 1;
+    for (px = 240u; px + 80u < scroll_w && e->count < STAGE_ENEMY_MAX; px += 140u, idx++) {
+        stage_enemy_kind k;
+        stage_enemy *ent;
+        if (is_bat) {
+            k = (idx % 2 == 0) ? STAGE_ENEMY_ZOMBIE : STAGE_ENEMY_BAT;
+        } else {
+            k = (idx % 2 == 0) ? STAGE_ENEMY_LORD : STAGE_ENEMY_GANG;
+        }
+        ent = spawn(e, k, px, RUNWAY_DAMAGE_DEFAULT / 2, u);
+        if (ent) {
+            ent->anim = (unsigned)(idx * 7);
+            if (k == STAGE_ENEMY_GANG)
+                ent->cooldown = 50u + (unsigned)(idx * 12);
+        }
     }
 }
 
@@ -316,14 +373,22 @@ static struct {
     unsigned bones_air_n;
     stxt_frame gang[8];
     unsigned gang_n;
+    stxt_frame thrown[4];
+    unsigned thrown_n;
+    stxt_frame hud_fill[14];
+    unsigned hud_fill_n;
+    stxt_frame hud_empty[14];
+    unsigned hud_empty_n;
     stxt_frame lord[8];
     unsigned lord_n;
     stxt_frame poof_blue[4];
     unsigned poof_blue_n;
     stxt_frame poof_red[4];
     unsigned poof_red_n;
-    stxt_frame bats[6];
+    stxt_frame bats[12];
     unsigned bats_n;
+    stxt_frame zombies[12];
+    unsigned zombies_n;
     stxt_frame gen_blue[4];
     unsigned gen_blue_n;
     stxt_frame gen_red[4];
@@ -413,7 +478,7 @@ void stage_enemies_load_disc_sprites(cdimage *cd) {
             resource_load(cd, "/04RUNWAY/04STXT", &stxt, &stxt_sz) == 0 &&
             stxt_sz > 0x54000 &&
             extract_stage_palette((const uint8_t *)code, code_sz, pal) == 0) {
-            static const size_t k_stand_off[4] = {0x43490, 0x43e00, 0x447c0, 0x44f50};
+            static const size_t k_stand_off[2] = {0x22e20, 0x236d0};
             static const size_t k_tall_off[2] = {0x41b40, 0x42230};
             static const size_t k_air_off[4] = {0x3f000, 0x3fc50, 0x40720, 0x41180};
             static const size_t k_walk_off[20] = {
@@ -426,11 +491,22 @@ void stage_enemies_load_disc_sprites(cdimage *cd) {
                 0x456d0, 0x45ec0, 0x468e0, 0x473e0,
                 0x47f50, 0x48870, 0x49170, 0x49840
             };
+            static const size_t k_thrown_off[4] = {
+                0x557a0, 0x55980, 0x55b60, 0x55d40
+            };
+            static const size_t k_hud_fill_off[14] = {
+                0x06770, 0x068c0, 0x06990, 0x06a60, 0x06b20, 0x06bd0, 0x06cd0,
+                0x06d70, 0x06e30, 0x06e80, 0x06ec0, 0x06f10, 0x06fa0, 0x07010
+            };
+            static const size_t k_hud_empty_off[14] = {
+                0x070a0, 0x070e0, 0x07280, 0x07370, 0x07450, 0x07510, 0x07630,
+                0x076e0, 0x077b0, 0x07820, 0x07880, 0x078e0, 0x079b0, 0x07a30
+            };
             static const size_t k_poof_off[4] = {0x04eb0, 0x05070, 0x05250, 0x05430};
             const uint8_t *b2 = pal + 2 * 1024;
             const uint8_t *b3 = pal + 3 * 1024;
 
-            for (i = 0; i < 4; i++)
+            for (i = 0; i < 2; i++)
                 if (decode_stxt_at(stxt, stxt_sz, k_stand_off[i], b2,
                                    &g_stxt.bones_stand[g_stxt.bones_stand_n]) == 0)
                     g_stxt.bones_stand_n++;
@@ -450,6 +526,18 @@ void stage_enemies_load_disc_sprites(cdimage *cd) {
                 if (decode_stxt_at(stxt, stxt_sz, k_gang_off[i], b3,
                                    &g_stxt.gang[g_stxt.gang_n]) == 0)
                     g_stxt.gang_n++;
+            for (i = 0; i < 4; i++)
+                if (decode_stxt_at(stxt, stxt_sz, k_thrown_off[i], b3,
+                                   &g_stxt.thrown[g_stxt.thrown_n]) == 0)
+                    g_stxt.thrown_n++;
+            for (i = 0; i < 14; i++) {
+                if (decode_stxt_at(stxt, stxt_sz, k_hud_fill_off[i], b2,
+                                   &g_stxt.hud_fill[g_stxt.hud_fill_n]) == 0)
+                    g_stxt.hud_fill_n++;
+                if (decode_stxt_at(stxt, stxt_sz, k_hud_empty_off[i], b2,
+                                   &g_stxt.hud_empty[g_stxt.hud_empty_n]) == 0)
+                    g_stxt.hud_empty_n++;
+            }
             for (i = 0; i < 4; i++) {
                 if (decode_stxt_at(stxt, stxt_sz, k_poof_off[i], b2,
                                    &g_stxt.poof_blue[g_stxt.poof_blue_n]) == 0)
@@ -490,14 +578,23 @@ void stage_enemies_load_disc_sprites(cdimage *cd) {
             resource_load(cd, "/08BAT1/04STXT", &stxt, &stxt_sz) == 0 &&
             stxt_sz > 0x06100 &&
             extract_stage_palette((const uint8_t *)code, code_sz, pal) == 0) {
-            static const size_t k_bat_off[6] = {
-                0x00000, 0x00860, 0x01180, 0x01e30, 0x03d90, 0x06050
+            static const size_t k_bat_off[12] = {
+                0x00000, 0x00860, 0x01180, 0x01e30, 0x029c0, 0x03600,
+                0x03d90, 0x04920, 0x05630, 0x06050, 0x073e0, 0x080f0
+            };
+            static const size_t k_zombie_off[12] = {
+                0x0ece0, 0x10110, 0x11510, 0x128a0, 0x13fb0, 0x15a30,
+                0x17420, 0x193d0, 0x1b0f0, 0x1cbc0, 0x1e600, 0x202d0
             };
             const uint8_t *b1 = pal + 1 * 1024;
-            for (i = 0; i < 6; i++)
+            for (i = 0; i < 12; i++)
                 if (decode_stxt_at(stxt, stxt_sz, k_bat_off[i], b1,
                                    &g_stxt.bats[g_stxt.bats_n]) == 0)
                     g_stxt.bats_n++;
+            for (i = 0; i < 12; i++)
+                if (decode_stxt_at(stxt, stxt_sz, k_zombie_off[i], b1,
+                                   &g_stxt.zombies[g_stxt.zombies_n]) == 0)
+                    g_stxt.zombies_n++;
         }
         free(code);
         free(stxt);
@@ -550,16 +647,27 @@ static void draw_rect(uint8_t *dst, unsigned dst_w, unsigned dst_h,
 
 static void blit_stxt_foot(uint8_t *dst, unsigned dst_w, unsigned dst_h,
                            const stxt_frame *f, int foot_x, int foot_y,
-                           int flip_x) {
+                           int flip_x, unsigned scale_num, unsigned scale_den) {
     if (!f || !f->rgba || !f->w || !f->h) return;
-    runway_compose_blit_sprite_ex(dst, dst_w, dst_h, f->rgba, f->w, f->h,
-                                  foot_x - (int)(f->w / 2u),
-                                  foot_y - (int)f->h, flip_x);
+    if (scale_den == 0 || scale_num == scale_den) {
+        runway_compose_blit_sprite_ex(dst, dst_w, dst_h, f->rgba, f->w, f->h,
+                                      foot_x - (int)(f->w / 2u),
+                                      foot_y - (int)f->h, flip_x);
+    } else {
+        unsigned sw = (f->w * scale_num + scale_den / 2u) / scale_den;
+        unsigned sh = (f->h * scale_num + scale_den / 2u) / scale_den;
+        if (sw < 2u) sw = 2u;
+        if (sh < 2u) sh = 2u;
+        runway_compose_blit_sprite_scaled(dst, dst_w, dst_h, f->rgba, f->w, f->h,
+                                          foot_x - (int)(sw / 2u),
+                                          foot_y - (int)sh, sw, sh, flip_x);
+    }
 }
 
-void stage_enemies_draw_bones(uint8_t *dst, unsigned dst_w, unsigned dst_h,
-                              int foot_x, int foot_y, int facing, int tall,
-                              int airborne, unsigned anim_frame) {
+void stage_enemies_draw_bones_ex(uint8_t *dst, unsigned dst_w, unsigned dst_h,
+                                 int foot_x, int foot_y, int facing, int tall,
+                                 int airborne, unsigned anim_frame,
+                                 unsigned scale_num, unsigned scale_den) {
     int flip = (facing < 0) ? 1 : 0;
     const stxt_frame *f = NULL;
     if (!dst || !dst_w || !dst_h) return;
@@ -578,11 +686,63 @@ void stage_enemies_draw_bones(uint8_t *dst, unsigned dst_w, unsigned dst_h,
         f = &g_stxt.bones_walk[0];
     }
     if (f && f->rgba) {
-        blit_stxt_foot(dst, dst_w, dst_h, f, foot_x, foot_y, flip);
+        blit_stxt_foot(dst, dst_w, dst_h, f, foot_x, foot_y, flip,
+                       scale_num, scale_den);
         return;
     }
     /* Minimal fallback only if no disc sprites have been loaded yet (unit tests). */
     draw_rect(dst, dst_w, dst_h, foot_x - 3, foot_y - 28, 7, 28, 225, 220, 200);
+}
+
+void stage_enemies_draw_bones(uint8_t *dst, unsigned dst_w, unsigned dst_h,
+                              int foot_x, int foot_y, int facing, int tall,
+                              int airborne, unsigned anim_frame) {
+    stage_enemies_draw_bones_ex(dst, dst_w, dst_h, foot_x, foot_y, facing,
+                                tall, airborne, anim_frame, 256u, 256u);
+}
+
+void stage_enemies_draw_hud_skelbar(uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                                    int segments, int max_segments,
+                                    int dst_x, int dst_y) {
+    static const int k_fill_ox[14] = {
+        24, 44, 39, 36, 8, 5, -5, -9, -14, -14, -14, -30, -30, -28
+    };
+    static const int k_fill_oy[14] = {
+        12, 12, 12, 0, 11, 10, 11, 12, 10, 3, -5, 10, 3, -3
+    };
+    static const int k_empty_ox[14] = {
+        22, 45, 40, 36, 9, 4, -4, -8, -15, -14, -14, -29, -29, -27
+    };
+    static const int k_empty_oy[14] = {
+        4, 13, 13, 1, 12, 11, 12, 13, 11, 4, -5, 11, 3, -4
+    };
+    int active, anchor_x, anchor_y, i;
+    if (!dst_rgba || !dst_w || !dst_h) return;
+    if (g_stxt.hud_fill_n < 14u || g_stxt.hud_empty_n < 14u) {
+        runway_compose_hud_skelbar(dst_rgba, dst_w, dst_h, segments, max_segments,
+                                   dst_x, dst_y);
+        return;
+    }
+    if (max_segments <= 0) max_segments = 14;
+    if (segments < 0) segments = 0;
+    if (segments > max_segments) segments = max_segments;
+    active = (segments * 14 + max_segments - 1) / max_segments;
+    if (segments == 0) active = 0;
+    if (active > 14) active = 14;
+    anchor_x = dst_x + 48;
+    anchor_y = dst_y + 13;
+    for (i = 0; i < 14; i++) {
+        const stxt_frame *e = &g_stxt.hud_empty[i];
+        runway_compose_blit_sprite_ex(dst_rgba, dst_w, dst_h, e->rgba, e->w, e->h,
+                                      anchor_x - k_empty_ox[i],
+                                      anchor_y - k_empty_oy[i], 0);
+    }
+    for (i = 0; i < active; i++) {
+        const stxt_frame *f = &g_stxt.hud_fill[i];
+        runway_compose_blit_sprite_ex(dst_rgba, dst_w, dst_h, f->rgba, f->w, f->h,
+                                      anchor_x - k_fill_ox[i],
+                                      anchor_y - k_fill_oy[i], 0);
+    }
 }
 
 static void draw_poof_orb(uint8_t *dst, unsigned dst_w, unsigned dst_h,
@@ -600,6 +760,29 @@ static void draw_poof_orb(uint8_t *dst, unsigned dst_w, unsigned dst_h,
               is_blue ? 80 : 240, is_blue ? 180 : 80, is_blue ? 255 : 40);
 }
 
+static void draw_thrown_bone(uint8_t *dst, unsigned dst_w, unsigned dst_h,
+                             int cx, int cy, unsigned anim,
+                             unsigned scale_num, unsigned scale_den) {
+    if (g_stxt.thrown_n > 0) {
+        const stxt_frame *f = &g_stxt.thrown[anim % g_stxt.thrown_n];
+        if (scale_den == 0 || scale_num == scale_den) {
+            runway_compose_blit_sprite_ex(dst, dst_w, dst_h, f->rgba, f->w, f->h,
+                                          cx - (int)(f->w / 2u),
+                                          cy - (int)(f->h / 2u), 0);
+        } else {
+            unsigned sw = (f->w * scale_num + scale_den / 2u) / scale_den;
+            unsigned sh = (f->h * scale_num + scale_den / 2u) / scale_den;
+            if (sw < 2u) sw = 2u;
+            if (sh < 2u) sh = 2u;
+            runway_compose_blit_sprite_scaled(dst, dst_w, dst_h, f->rgba, f->w, f->h,
+                                              cx - (int)(sw / 2u),
+                                              cy - (int)(sh / 2u), sw, sh, 0);
+        }
+        return;
+    }
+    draw_poof_orb(dst, dst_w, dst_h, cx, cy, anim, 0);
+}
+
 static void draw_ring_proj(uint8_t *dst, unsigned dst_w, unsigned dst_h,
                            int cx, int cy, unsigned anim) {
     int rad = 5 + (int)(anim % 4u);
@@ -613,9 +796,11 @@ static void draw_ring_proj(uint8_t *dst, unsigned dst_w, unsigned dst_h,
     }
 }
 
-void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
-                          uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
-                          uint32_t camera_x, int screen_anchor_x, int base_y) {
+void stage_enemies_render_ex(const stage_enemies *e, const runway_hazards *haz,
+                             uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                             uint32_t camera_x, int screen_anchor_x, int base_y,
+                             const uint8_t *floor_py, unsigned floor_w,
+                             int z_perspective) {
     unsigned i, u;
     int is_bat_stage = 0;
     if (!dst_rgba || !dst_w || !dst_h) return;
@@ -630,11 +815,24 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
         for (i = 0; i < e->count; i++) {
             const stage_enemy *ent = &e->ents[i];
             int px, sx, sy, flip;
+            unsigned scale_num = 256u, scale_den = 256u;
             if (!ent->active) continue;
             px = (int)(ent->x / u);
             sx = px - (int)camera_x + screen_anchor_x;
             if (sx < -48 || sx >= (int)dst_w + 48) continue;
             sy = base_y;
+            if (floor_py && px >= 0 && (unsigned)px < floor_w && floor_py[px] > 0) {
+                sy = (int)floor_py[px];
+            } else if (z_perspective) {
+                int ey = (int)(ent->y / u);
+                if (ey >= 96 && ey <= 210) sy = ey;
+            }
+            if (z_perspective) {
+                int s = 224 + (sy - 140) * 2;
+                if (s < 176) s = 176;
+                if (s > 272) s = 272;
+                scale_num = (unsigned)s;
+            }
             flip = (ent->vx < 0) ? 1 : 0;
 
             switch (ent->kind) {
@@ -642,7 +840,8 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                 if (g_stxt.gang_n > 0) {
                     const stxt_frame *f =
                         &g_stxt.gang[(ent->anim >> 2) % g_stxt.gang_n];
-                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, flip);
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, flip,
+                                   scale_num, scale_den);
                 } else {
                     draw_rect(dst_rgba, dst_w, dst_h, sx - 4, sy - 24, 8, 24,
                               150, 180, 170);
@@ -654,11 +853,43 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                     const stxt_frame *f =
                         &g_stxt.lord[(ent->anim >> 2) % g_stxt.lord_n];
                     blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy,
-                                   ent->vx > 0 ? 1 : 0);
+                                   ent->vx > 0 ? 1 : 0, scale_num, scale_den);
                 } else if (g_stxt.gang_n > 0) {
                     const stxt_frame *f =
                         &g_stxt.gang[(ent->anim >> 2) % g_stxt.gang_n];
-                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, flip);
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, flip,
+                                   scale_num, scale_den);
+                }
+                break;
+            case STAGE_ENEMY_ZOMBIE:
+                if (g_stxt.zombies_n > 0) {
+                    const stxt_frame *f =
+                        &g_stxt.zombies[(ent->anim >> 2) % g_stxt.zombies_n];
+                    int z_sy = sy;
+                    unsigned z_num = (scale_num * 120u) / 256u;
+                    if (z_sy < 124) z_sy = (base_y >= 124 && base_y <= 198) ? base_y : 168;
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, z_sy, flip,
+                                   z_num, scale_den);
+                } else if (g_stxt.gang_n > 0) {
+                    const stxt_frame *f =
+                        &g_stxt.gang[(ent->anim >> 2) % g_stxt.gang_n];
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, flip,
+                                   scale_num, scale_den);
+                }
+                break;
+            case STAGE_ENEMY_BAT:
+                if (g_stxt.bats_n > 0) {
+                    unsigned phase = (ent->anim >> 1) & 15u;
+                    int swoop = (phase <= 8u) ? (int)phase : (int)(16u - phase);
+                    int bat_y = 76 + (int)((i % 3u) * 18u) + swoop;
+                    const stxt_frame *f =
+                        &g_stxt.bats[(ent->anim >> 2) % g_stxt.bats_n];
+                    unsigned b_num = (scale_num * 156u) / 256u;
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, bat_y, flip,
+                                   b_num, scale_den);
+                } else {
+                    draw_poof_orb(dst_rgba, dst_w, dst_h, sx, sy - 32,
+                                  ent->anim, 1);
                 }
                 break;
             case STAGE_ENEMY_POOF_RED:
@@ -667,8 +898,8 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                     const stxt_frame *f =
                         &g_stxt.bats[(ent->anim >> 2) % g_stxt.bats_n];
                     blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx,
-                                   sy - 24 - (int)((ent->anim >> 1) & 7u),
-                                   flip);
+                                   sy - 28 - (int)((ent->anim >> 1) & 7u),
+                                   flip, scale_num, scale_den);
                 } else {
                     draw_poof_orb(dst_rgba, dst_w, dst_h, sx,
                                   sy - 18 - (int)((ent->anim >> 1) & 3u),
@@ -680,7 +911,8 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                 if (g_stxt.gen_red_n > 0) {
                     const stxt_frame *f =
                         &g_stxt.gen_red[(ent->anim >> 2) % g_stxt.gen_red_n];
-                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, 0);
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, 0,
+                                   scale_num, scale_den);
                 } else {
                     draw_poof_orb(dst_rgba, dst_w, dst_h, sx, sy - 20,
                                   ent->anim, 0);
@@ -690,7 +922,8 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                 if (g_stxt.gen_blue_n > 0) {
                     const stxt_frame *f =
                         &g_stxt.gen_blue[(ent->anim >> 2) % g_stxt.gen_blue_n];
-                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, 0);
+                    blit_stxt_foot(dst_rgba, dst_w, dst_h, f, sx, sy, 0,
+                                   scale_num, scale_den);
                 } else {
                     draw_poof_orb(dst_rgba, dst_w, dst_h, sx, sy - 20,
                                   ent->anim, 1);
@@ -708,8 +941,8 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
                               ent->anim, 0);
                 break;
             case STAGE_ENEMY_THROWN:
-                draw_poof_orb(dst_rgba, dst_w, dst_h, sx, sy - 16,
-                              ent->anim, 0);
+                draw_thrown_bone(dst_rgba, dst_w, dst_h, sx, sy - 18,
+                                 ent->anim >> 2, scale_num, scale_den);
                 break;
             }
         }
@@ -717,12 +950,30 @@ void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
 
     if (haz) {
         for (i = 0; i < RUNWAY_THROWN_MAX; i++) {
-            int px, sx;
+            int px, sx, haz_sy = base_y;
+            unsigned scale_num = 256u;
             if (!haz->thrown[i].active) continue;
             px = (int)(haz->thrown[i].x / u);
             sx = px - (int)camera_x + screen_anchor_x;
             if (sx < -16 || sx >= (int)dst_w + 16) continue;
-            draw_poof_orb(dst_rgba, dst_w, dst_h, sx, base_y - 18, i * 4u, 0);
+            if (z_perspective) {
+                int hy = (int)(haz->thrown[i].y / u);
+                int s;
+                if (hy >= 96 && hy <= 210) haz_sy = hy;
+                s = 224 + (haz_sy - 140) * 2;
+                if (s < 176) s = 176;
+                if (s > 272) s = 272;
+                scale_num = (unsigned)s;
+            }
+            draw_thrown_bone(dst_rgba, dst_w, dst_h, sx, haz_sy - 22,
+                             (unsigned)(px >> 2) + i, scale_num, 256u);
         }
     }
+}
+
+void stage_enemies_render(const stage_enemies *e, const runway_hazards *haz,
+                          uint8_t *dst_rgba, unsigned dst_w, unsigned dst_h,
+                          uint32_t camera_x, int screen_anchor_x, int base_y) {
+    stage_enemies_render_ex(e, haz, dst_rgba, dst_w, dst_h, camera_x,
+                            screen_anchor_x, base_y, NULL, 0u, 0);
 }

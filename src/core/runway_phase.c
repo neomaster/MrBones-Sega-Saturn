@@ -306,7 +306,7 @@ int runway_phase_load_dir(runway_phase *phase, cdimage *cd, const char *iso_dir)
     /* §22: hazards on all 7 15PAN stages (RUNWAY + LOGS/ICE1/ICE2/MOAT/RIDE/STAING). */
     runway_hazards_init_pan_stage(&phase->hazards, phase->stage_name, UNITS_PER_PIXEL);
     /* §24: gang/lord/poofs/tbones on all 15PAN stages. */
-    stage_enemies_init_runway(&phase->enemies, UNITS_PER_PIXEL);
+    if (runway) stage_enemies_init_runway_rom(&phase->enemies, UNITS_PER_PIXEL); else stage_enemies_init_runway(&phase->enemies, UNITS_PER_PIXEL);
     phase->enemies.stage_name = phase->stage_name;
     stage_enemies_load_disc_sprites(cd);
     bones_bbs_post(&phase->bbs, MSG_STAND_BOOT, 0);
@@ -819,23 +819,23 @@ int runway_phase_render(runway_phase *phase) {
     if (foot_y < 48) foot_y = 135;
     if (foot_y > (int)PAN_HEIGHT - 8) foot_y = (int)PAN_HEIGHT - 8;
 
-    stage_enemies_render(&phase->enemies, &phase->hazards,
+    stage_enemies_render_ex(&phase->enemies, &phase->hazards,
                          phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
                          phase->camera_x / UNITS_PER_PIXEL,
                          (int)(PAN_WIDTH / 2),
-                         foot_y);
-    stage_enemies_draw_bones(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
+                         foot_y, NULL, 0u, 1);
+    stage_enemies_draw_bones_ex(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
                              foot_x, foot_y, phase->facing, phase->tall,
                              phase->airborne,
                              (phase->state == RUNWAY_ST_WALK)
                                  ? (phase->anim_index + 1u)
-                                 : 0u);
+                                 : 0u, (unsigned)(foot_y < 116 ? 176 : (foot_y > 164 ? 272 : 224 + (foot_y - 140) * 2)), 256u);
     /* §16 HUD: 14-seg skelbar + stage label; PAUSE.O when paused. */
     if (phase->hud_health_rgba)
         runway_compose_blit_sprite(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
                                    phase->hud_health_rgba, phase->hud_health_w,
                                    phase->hud_health_h, 8, 8);
-    runway_compose_hud_skelbar(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
+    stage_enemies_draw_hud_skelbar(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
                                phase->skel.segments, RUNWAY_SKEL_SEGMENTS, 8, 8);
     if (phase->stage_name[0])
         mb_font_draw_text_shadow(phase->frame_rgba, PAN_WIDTH, PAN_HEIGHT,
