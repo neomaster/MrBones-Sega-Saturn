@@ -55,6 +55,7 @@ typedef struct {
     int cursor;          /* row index within screen */
     int music_on;        /* case 4 toggle */
     int sfx_on;          /* case 5 toggle */
+    unsigned volume;     /* 0..MENU_VOLUME_MAX */
     unsigned frames;
     mb_nvm_shadow nvm;
     char save_dir[1024];

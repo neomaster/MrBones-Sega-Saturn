@@ -14,6 +14,9 @@ host_audio *host_audio_start_pcm16(const int16_t *pcm, size_t samples, unsigned 
 int host_audio_movie_clock(host_audio *audio, unsigned *position_ms);
 void host_audio_movie_pause(host_audio *audio, int paused);
 void host_audio_stop(host_audio *audio);
+void host_audio_fade_stop(host_audio *audio, unsigned duration_ms);
+void host_audio_set_volume(unsigned level);
+unsigned host_audio_volume_word(unsigned level);
 
 /* Fire-and-forget mono signed PCM8 at `rate` Hz (stereo 16-bit waveOut).
  * Works with or without an active CD-DA stream. Returns 0 on queue. */

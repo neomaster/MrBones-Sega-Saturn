@@ -1,4 +1,5 @@
 #include "menu_phase.h"
+#include "core/menu_options.h"
 #include "core/cdimage.h"
 #include "core/duck_avi.h"
 #include "core/mb_font.h"
@@ -100,7 +101,7 @@ static int start_rows(const menu_phase *menu) {
 
 static int options_rows(const menu_phase *menu) {
     (void)menu;
-    return 3; /* Music / SFX / Back */
+    return 4; /* Music / SFX / Volume / Back */
 }
 
 static int level_rows(const menu_phase *menu) {
@@ -244,7 +245,7 @@ static void render_frame(menu_phase *menu) {
         mb_font_draw_text_centered(menu->frame_rgba, MENU_W, MENU_H, 16,
                                    "OPTIONS",
                                    180, 240, 160, 12, 24, 12, 2);
-        for (i = 0; i < 3; i++) {
+        for (i = 0; i < 4; i++) {
             int sel = (i == menu->cursor);
             y = 58 + i * 24;
             draw_bar(menu, y, sel);
@@ -254,6 +255,9 @@ static void render_frame(menu_phase *menu) {
             else if (i == 1)
                 snprintf(line, sizeof line, "%s SFX:   %s",
                          sel ? ">" : " ", menu->sfx_on ? "ON" : "OFF");
+            else if (i == 2)
+                snprintf(line, sizeof line, "%s VOLUME: %u/15",
+                         sel ? ">" : " ", menu->volume);
             else
                 snprintf(line, sizeof line, "%s BACK TO MAIN MENU",
                          sel ? ">" : " ");
@@ -379,7 +383,7 @@ static void activate(menu_phase *menu) {
             menu->music_on ^= 1; /* case 4 */
         } else if (menu->cursor == 1) {
             menu->sfx_on ^= 1; /* case 5 */
-        } else {
+        } else if (menu->cursor == 3) {
             menu->screen = MENU_SCR_START; /* BackTrak */
             menu->cursor = 1;
         }
@@ -662,6 +666,7 @@ int menu_phase_load(menu_phase *menu, cdimage *cd, const char *save_dir) {
     menu->cd = cd;
     menu->music_on = 1;
     menu->sfx_on = 1;
+    menu->volume = MENU_VOLUME_MAX;
     menu->screen = MENU_SCR_TITLE;
     menu->state = MENU_ST_ACTIVE;
     if (save_dir && save_dir[0])
@@ -804,13 +809,15 @@ int menu_phase_step(menu_phase *menu, const saturn_pad *pad) {
         render_frame(menu);
     }
     if (pad->pressed & 0x4000u) { /* Left */
-        menu->cursor--;
-        clamp_cursor(menu);
+        if (menu->screen == MENU_SCR_OPTIONS && menu->cursor == 2) {
+            if (menu->volume) menu->volume--;
+        } else { menu->cursor--; clamp_cursor(menu); }
         render_frame(menu);
     }
     if (pad->pressed & 0x8000u) { /* Right */
-        menu->cursor++;
-        clamp_cursor(menu);
+        if (menu->screen == MENU_SCR_OPTIONS && menu->cursor == 2) {
+            if (menu->volume < MENU_VOLUME_MAX) menu->volume++;
+        } else { menu->cursor++; clamp_cursor(menu); }
         render_frame(menu);
     }
     /* A/B/C → SelectMenuEntry */

@@ -153,6 +153,16 @@ int main(void) {
     menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(&menu, &pad);
+    CHECK(menu.cursor == 2 && menu.volume == 15);
+    saturn_pad_update_host(&pad, MB_PAD_LEFT);
+    menu_phase_step(&menu, &pad);
+    CHECK(menu.cursor == 2 && menu.volume == 14);
+    saturn_pad_update_host(&pad, 0);
+    menu_phase_step(&menu, &pad);
+    saturn_pad_update_host(&pad, MB_PAD_DOWN);
+    menu_phase_step(&menu, &pad);
+    saturn_pad_update_host(&pad, 0);
+    menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, MB_PAD_A); /* Back */
     menu_phase_step(&menu, &pad);
     CHECK(menu.screen == MENU_SCR_START);

@@ -7,6 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int test_volume_scale(void) {
+    if (host_audio_volume_word(0) != 0 ||
+        host_audio_volume_word(15) != 65535 ||
+        host_audio_volume_word(16) != 65535 ||
+        host_audio_volume_word(8) != 34952) return 1;
+    return 0;
+}
+
 static int test_opening_sync(void) {
     const char *path = getenv("MB_DISC1");
     cdimage cd;
@@ -354,6 +362,7 @@ done:
 }
 
 int main(void) {
+    if (test_volume_scale()) return 1;
     if (getenv("MB_STORY_ONLY")) return test_story_clock();
     if (getenv("MB_FINALE_ONLY")) return test_finale_clock();
     int16_t samples[44100] = {0}; /* 0.5 s of stereo silence */
