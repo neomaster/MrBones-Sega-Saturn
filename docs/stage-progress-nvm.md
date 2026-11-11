@@ -103,8 +103,9 @@ ID da fase escolhida.
   ignoram o retorno, então um arquivo corrompido reinicia o progresso em silêncio.
 - A `LevelSelect` original tem 18 entradas para 13 fases (as de `+0 = 6` repetem o byte da anterior);
   o port mostra uma linha por fase.
-- A rotina do carregador que relê `0x0021d9dc` e `0x0021d9e0` (literais `00204100` e `00203fd4`) não
-  foi decompilada; o nome "música"/"efeitos" dos dois interruptores continua sem prova.
+- A rotina do carregador que relê `0x0021d9dc` e `0x0021d9e0` foi decompilada (seção 8, "Leitura no
+  carregador"); ela mostra o efeito de cada palavra, mas o nome "música"/"efeitos" ainda depende de
+  uma observação no Ymir.
 
 ## 8. Tela de opções, StartScreen e attract
 
@@ -133,6 +134,31 @@ confirma.** O que o binário mostra:
   (`UpdateLevels`) e em `0023d264`, e `0x00228962` em `0023cd38`, que é `+0x12`, o byte de `18RIDE`,
   lido pelo caso 1 quando o disco é o 2. Nenhuma aponta para `+0`, `+2` ou `+3`.
 
+**Leitura no carregador.** Dump: [`ghidra-loader-options.txt`](ghidra-loader-options.txt), gerado
+por `tools/DumpLoaderOptions.java` sobre o `/02` (SHA-256 `02faf276…33704`, base `0x00200000`). Os
+literais iguais às duas palavras e ao byte do driver aparecem só em `00203fd4` (`0x0021d9e0`),
+`00203fd8` (`0x25a00483`) e `00204100` (`0x0021d9dc`), e todas as cargas deles estão numa única
+função, `00203db0`, a carga de som da fase: ela pede o recurso 5 da fase (`002030f0(5, 0)`, o
+`05SND1` pela numeração dos arquivos), envia seus blocos à RAM de som e monta a fila de
+`SoundEvent`:
+
+- **`0x0021d9e0` (segundo interruptor, caso 5, inicial 1)**: logo depois da carga,
+  `*(byte *)0x25a00483 = palavra ? 0x80 : 0`. É o mesmo byte e o mesmo valor que o caso 5 grava ao
+  alternar no menu. Esse interruptor age, portanto, só sobre uma variável do driver 68K na RAM de
+  som; não passa por `SoundEvent`.
+- **`0x0021d9dc` (primeiro interruptor, caso 4, inicial 0)**: depois de `SoundEvent(0)` (sempre), a
+  função chama `SoundEvent(1)` (`00204128`, literal `00204104`) **só se a palavra for 0**. Com o
+  valor inicial, o evento 1 de cada fase é disparado ao carregá-la; ligado o interruptor, ele é
+  omitido. Os dois casos do menu chamam `SoundEvent(2)` depois de alternar.
+
+O que isso prova: os dois interruptores são de som, com efeitos distintos — o primeiro omite o
+evento 1 que toda fase dispara ao começar, o segundo muda um byte do driver de efeitos. É coerente
+com o primeiro ser **música** (desligada com a palavra em 1) e o segundo **efeitos** (ligados com
+a palavra em 1), que é a convenção já usada em `menu_phase` (`music_on` no caso 4, `sfx_on` no
+caso 5). O que não prova: o conteúdo do evento 1 e o significado do bit `0x80` no driver não foram
+lidos; a confirmação pede ouvir no Ymir a fase com `0x0021d9dc = 1` (sem trilha esperada) e com
+`0x0021d9e0 = 0` (sem efeitos esperados).
+
 Consequência no port: nenhuma macro de opções em `nvm_shadow.h`, e `menu_options` não foi ligado ao
 shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro modo. O módulo
 `menu_options` (modo de áudio, 6 presets, volume 0..15) é extensão do host.
@@ -141,12 +167,14 @@ shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro 
 
 - chaves `music` e `sfx` (`on`/`off`, também `true`/`false`, `yes`/`no`, `1`/`0`) e `volume`
   (`0..15`); padrões ligado, ligado e 15; valor inválido mantém o padrão e volume acima de 15 vira 15;
-- `mrbones.c` aplica `music` e `sfx` depois de cada carga interativa do menu e chama
-  `config_save_options` quando o jogador muda uma delas;
+- `mrbones.c` aplica `music`, `sfx` e `volume` depois de cada carga interativa do menu e chama
+  `config_save_options` quando o jogador muda qualquer uma das três; o volume muda com Left/Right
+  na linha `VOLUME: n/15` da tela de opções (`menu_phase.volume`, `0..MENU_VOLUME_MAX`);
+- a cada quadro do menu, `host_audio_set_volume` publica o nível e as saídas CD-DA, PCM8 de efeitos
+  e PCM16 dos filmes o aplicam por `waveOutSetVolume` quando ele muda, sem reiniciar o som; `sfx`
+  desligado suprime os efeitos das fases e `music` desligado para a faixa do menu;
 - `config_save_options` reescreve só essas três chaves e mantém as outras linhas, para que um
-  caminho vindo de variável de ambiente não fique gravado no arquivo;
-- o volume já é lido e gravado pela configuração, mas o campo de volume do menu ainda não está em
-  `master`; até lá o valor do arquivo é preservado sem efeito.
+  caminho vindo de variável de ambiente não fique gravado no arquivo.
 
 **`StartScreen` (`0023e0f4`)**: 2 entradas em `0023e0ec`, uma coluna, sem tela anterior.
 
