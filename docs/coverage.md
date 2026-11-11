@@ -19,7 +19,7 @@ a campanha ponta a ponta.
 | (infra) composição | parcial | n/a | parcial | n/a | n/a | n/a | blit RGBA ≠ VDP1/VDP2 | `runway_compose`; `mbvisual` |
 | (infra) ObjYeild | parcial | n/a | n/a | n/a | n/a | n/a | Fibers ≠ ring SH-2 | `test_obj_scheduler` |
 | (infra) catalog/progress/swap | **parcial** | n/a | n/a | n/a | **parcial** NEED_DISC | **parcial** auto nvm | 24 campaign; stub≤20k; INSERTCD host | `test_stage_*`; `test_full_campaign` |
-| (infra) full campaign §19–§25 | **parcial** | **parcial (nativo)** | MENU+HUD+AVI | CD-DA+SND1+PCM | COMPLETE→credits 360×6 | nvmshadow.bin | 22 native; DirNameTable; TM1+scrl+enemies | `mrbones --full-campaign`; `--check` |
+| (infra) full campaign §19–§25 | **parcial** | **parcial (nativo)** | MENU+HUD+AVI | CD-DA+SND1+PCM | FINALE→MENU | nvmshadow.bin | 22 native; DirNameTable; TM1+scrl+enemies | `mrbones --full-campaign`; `--check` |
 | (infra) DirNameTable §25 | **parcial** | n/a | n/a | n/a | n/a | n/a | BSS GFS runtime → literais ISO+verify | `test_stage_catalog` |
 | (infra) duck_avi §20/§22 | **parcial** | n/a | TM1+19DUCK | 01wb→PCM8 | present step | n/a | decode simplificado ≠ FFmpeg bit-exact | `test_duck_avi` |
 | (infra) scrl_map §23 | **parcial** | n/a | ACDB..DTIL+AMAP | n/a | n/a | n/a | tilecache heap/flip/banco CRAM; VRAM/prioridade aberto | `test_scrl_map` |
@@ -48,12 +48,12 @@ a campanha ponta a ponta.
 
 ### §15–§25 — notas de integração
 
-- Campanha = 24 dirs DirNameTable (RUNWAY…FINALE). Win → `mb_nvm_unlock_level` current+next + `mb_nvm_save`. Lose → `/28LOSE`. FINALE win → COMPLETE → CREDITS (360 frames × 6 pages).
+- Campanha = 24 dirs DirNameTable (RUNWAY…FINALE). Win → `mb_nvm_unlock_level` current+next + `mb_nvm_save`. Lose → `/28LOSE`. Após o filme de FINALE, COMPLETE → MENU.
 - DUKMOVIE não é pasta ISO; player MAP `DUCKPLAY`/`mfp_avi`; host `duck_avi` + `19DUCK` em `/28LOSE` 20AVI (LIST/rec + DUCK).
 - §16 pan nativo: RUNWAY + LOGS + ICE1 + ICE2 + MOAT + RIDE + STAING.
 - §17/§23 side nativo: MAUSO + VALLEY + BAT1–3 + GLASS + VORTEX + VILLAGE + SHADOW + LAFF (`sidescrl_phase` + `scrl_map`).
 - §18 special nativo: GUITAR + DRUM (RHYTHM) + BIGBNS + GENRM (ACTION) + FINALE + LOSE/DUKMOVIE (PRESENT).
-- §19 `mrbones --full-campaign`: MENU visual → 22 fases nativas (skip TROLL) → INSERTCD → FINALE → credits; rejeita smoke; `nvmshadow.bin` 0x28.
+- §19 `mrbones --full-campaign`: MENU visual → 22 fases nativas (skip TROLL) → INSERTCD → FINALE → MENU; rejeita smoke; `nvmshadow.bin` 0x28.
 - §20 `duck_avi` soft TM1 + PCM; floor TITL; beat_period por fase.
 - §21 host **0.21.0** campanha final.
 - §22 host **0.22.0**: `duck_tm1` + 19DUCK; coll 15PAN live; hazards×7.

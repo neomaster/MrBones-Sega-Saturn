@@ -45,11 +45,28 @@ Implementação nativa em `src/core/special_phase.c` (2026-11-09):
   0x20 B = 4 pares `{dx,dy}` BE32. Slot `i` na fase `p` usa o registo
   `(p + i*16) & 255` (`paint_finale_rings` via `finale_ring_table.inc`).
 - Estado inicial do host: **16 slots acesos**. Cada disparo (A/B/C + D-pad)
-  chama `special_phase_finale_shoot`; ao desativar o último, `ring_cleared`
-  e `SPECIAL_ST_FINISHED` (caminho `EndLevel(0)` → filme).
-- O AVI de `/27FINALE/20AVI` continua a poder encerrar a fase sozinho
-  (compatível com `test_special_phase` / hashes Ymir). HUD do anel só é
-  desenhado quando `!movie_ok` (blit de filme limpo).
+  chama `special_phase_finale_shoot`; ao desactivar o último, `ring_cleared`.
+- Encadeamento de vitória (Saturno `0x28ce04(0)` → `CEndLevel` →
+  `PlayDuckMovie(3)`):
+  - **Headless/teste**: `movie_ok` no load → o filme corre de imediato
+    (hashes Ymir). Clear do anel durante o filme não o termina.
+  - **Arena jogável**: `special_phase_finale_defer_ending` (host interactivo)
+    mantém `finale_movie_armed` com `movie_ok=0`. Ao zerar os 16 slots,
+    `special_phase_finale_play_ending` reabre `/27FINALE/20AVI` e só depois
+    o fim do filme entrega `SPECIAL_ST_FINISHED` → `STAGE_ROUTE_COMPLETE`.
+  - Áudio (`mrbones`): com filme deferido, `restart_stage_audio` mantém a
+    faixa CD-DA da arena (`movie_ok` false). Em `maybe_start_movie_audio`,
+    `host_audio_stop(g_audio)` corre antes de `g_movie_audio` quando
+    `play_ending` arma `movie_pcm_pending`. O `mrbones --check`
+    (`test_fmv_transition`) entra em FINALE com o filme deferido, exige CD-DA
+    ativo e nenhum PCM durante a arena, zera os 16 slots e exige que o PCM do
+    filme substitua o CD-DA; o caso falha se `restart_stage_audio` ignorar
+    `movie_ok` ou se o CD-DA não for parado.
+  - Sem AVI armado: clear → `FINISHED` directo (fallback).
+  - Validação interativa real (LOG): jogar FINALE até zerar os 16 slots →
+    `/27FINALE/20AVI` → `MENU_SCR_START`; capturar vitória jogada no Ymir
+    (até agora só vitória forçada via RAM).
+- HUD do anel só quando `!movie_ok` (blit de filme limpo).
 - SFX por disparo (`phase->sfx_flags`, só se `!movie_ok`):
   - **acerto/destruição** (slot activo → desactiva): Saturn
     `@0x002b21f0` = `{0x2A,0x2A,0x2B,0x29}` por dir → host
@@ -59,4 +76,4 @@ Implementação nativa em `src/core/special_phase.c` (2026-11-09):
   - Chamada Saturn: `(*0x00204128)(id)`.
 
 Ainda aberto: estado inicial confirmado no Ymir, PCM por ID/dir byte-fiel,
-sprites STXTR do anel e vitória jogada ponta a ponta.
+sprites STXTR do anel.

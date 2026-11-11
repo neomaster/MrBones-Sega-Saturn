@@ -1,0 +1,753 @@
+Program intro.duck SuperH:BE:32:SH-2 imageBase 00000000 memoryStart 06010000 sha256 21d0bd94b181f834982ba9f0378839e6389f5700584615dc8245c90ce398b999
+
+=== playLoop @ 06010f50 ===
+BODY [[06010f50, 06011087]]
+REF 06011480 DATA
+REF 060113b2 COMPUTED_CALL
+
+bool FUN_06010f50(void)
+
+{
+  undefined4 *puVar1;
+  undefined *puVar2;
+  undefined4 *puVar3;
+  undefined *puVar4;
+  code *pcVar5;
+  int iVar6;
+  bool bVar7;
+  undefined4 uVar8;
+  
+  puVar2 = PTR_FUN_06011090;
+  puVar1 = DAT_0601108c;
+  (*(code *)PTR_FUN_06011090)(*DAT_0601108c,0,0,2,0);
+  (*(code *)PTR_FUN_06011098)(*(undefined4 *)PTR_DAT_06011094,0,0xfffffffe);
+  iVar6 = (*(code *)puVar2)(*puVar1,puVar1 + -8,puVar1 + -5,1,1);
+  puVar1[-9] = iVar6;
+  if (iVar6 < 0) {
+    bVar7 = false;
+  }
+  else {
+    (*(code *)PTR_FUN_0601109c)();
+    puVar3 = DAT_060110a0;
+    *DAT_060110a4 = 0;
+    *puVar3 = 0;
+    puVar4 = PTR_DAT_060110ac;
+    puVar2 = PTR_DAT_060110a8;
+    *(undefined4 *)PTR_DAT_060110ac = 0;
+    uVar8 = *(undefined4 *)puVar4;
+    *(undefined4 *)PTR_DAT_060110b0 = uVar8;
+    *(undefined4 *)puVar2 = uVar8;
+    uVar8 = (*(code *)PTR_FUN_060110b8)(*puVar1,*(undefined4 *)PTR_DAT_060110b4);
+    *DAT_060110bc = uVar8;
+    (*(code *)PTR_FUN_060110c0)();
+    (*(code *)PTR_FUN_060110c4)();
+    (*(code *)PTR_FUN_060110c8)();
+    if ((*(byte *)(puVar1 + 5) & 0x20) == 0) {
+      uVar8 = 0;
+    }
+    else {
+      uVar8 = 3;
+    }
+    (*(code *)PTR_FUN_060110cc)(uVar8);
+    pcVar5 = DAT_060110d0;
+    (*DAT_060110d0)();
+    (*(code *)PTR_FUN_060110d4)(pcVar5,0);
+    puVar2 = PTR_DAT_060110d8;
+    while( true ) {
+      iVar6 = (*(code *)PTR_FUN_060110dc)();
+      if (iVar6 != 0) {
+        if (*(int *)puVar2 != 0) {
+          (*(code *)PTR_FUN_060110e0)();
+          *(undefined4 *)puVar2 = 0;
+        }
+        (*(code *)PTR_FUN_060110c4)();
+      }
+      if ((*DAT_060110e4 & 0xf) == 0xf) break;
+      if (((*DAT_060110e4 & 8) != 0) || (*DAT_060110e8 == -1)) goto LAB_06011042;
+    }
+    *(undefined4 *)PTR_DAT_060110ec = 3;
+LAB_06011042:
+    puVar2 = PTR_DAT_060110f0;
+    *(undefined4 *)PTR_DAT_060110f0 = 0;
+    do {
+    } while (*(int *)puVar2 == 0);
+    (*DAT_060110f4)();
+    (*(code *)*DAT_060110f8)(0xffffffff,(int)DAT_06011088);
+    (*DAT_060110d0)();
+    *(undefined4 *)PTR_DAT_060110fc = 0;
+    (*(code *)PTR_FUN_06011100)();
+    bVar7 = *DAT_060110e8 != -1;
+  }
+  return bVar7;
+}
+
+
+06010f50 mov.l r8,@-r15
+06010f52 mov.l r9,@-r15
+06010f54 mov.l r10,@-r15
+06010f56 mov.l r14,@-r15
+06010f58 sts.l pr,@-r15
+06010f5a mov r15,r14
+06010f5c mov.l @(0x601108c,pc),r9
+06010f5e mov #0x0,r10
+06010f60 mov.l @(0x6011090,pc),r8
+06010f62 mov #0x2,r7
+06010f64 mov #0x0,r6
+06010f66 mov.l @r9,r4
+06010f68 mov #0x0,r5
+06010f6a jsr @r8
+06010f6c _mov.l r10,@-r15
+06010f6e mov.l @(0x6011094,pc),r1
+06010f70 mov.l @(0x6011098,pc),r0
+06010f72 mov #-0x2,r6
+06010f74 mov.l @r1,r4
+06010f76 jsr @r0
+06010f78 _mov #0x0,r5
+06010f7a mov r9,r6
+06010f7c add -0x14,r6
+06010f7e mov r9,r5
+06010f80 add -0x20,r5
+06010f82 mov.l @r9,r4
+06010f84 mov #0x1,r7
+06010f86 jsr @r8
+06010f88 _mov.l r7,@-r15
+06010f8a mov r9,r1
+06010f8c add -0x24,r1
+06010f8e mov.l r0,@r1
+06010f90 add 0x8,r15
+06010f92 cmp/pz r0
+06010f94 bt 0x06010f9a
+06010f96 bra 0x0601107a
+06010f98 _mov #0x0,r0
+06010f9a mov.l @(0x601109c,pc),r1
+06010f9c jsr @r1
+06010f9e _nop
+06010fa0 mov.l @(0x60110a0,pc),r2
+06010fa2 mov.l @(0x60110a4,pc),r1
+06010fa4 mov.l r10,@r1
+06010fa6 mov.l r10,@r2
+06010fa8 mov.l @(0x60110a8,pc),r3
+06010faa mov.l @(0x60110ac,pc),r1
+06010fac mov.l r10,@r1
+06010fae mov.l @r1,r1
+06010fb0 mov.l @(0x60110b0,pc),r2
+06010fb2 mov.l r1,@r2
+06010fb4 mov.l r1,@r3
+06010fb6 mov.l @(0x60110b4,pc),r1
+06010fb8 mov.l @r1,r5
+06010fba mov.l @(0x60110b8,pc),r0
+06010fbc jsr @r0
+06010fbe _mov.l @r9,r4
+06010fc0 mov.l @(0x60110bc,pc),r1
+06010fc2 mov.l r0,@r1
+06010fc4 mov.l @(0x60110c0,pc),r1
+06010fc6 jsr @r1
+06010fc8 _add 0x14,r9
+06010fca mov.l @(0x60110c4,pc),r1
+06010fcc jsr @r1
+06010fce _nop
+06010fd0 mov.l @(0x60110c8,pc),r1
+06010fd2 jsr @r1
+06010fd4 _nop
+06010fd6 mov.b @r9,r0
+06010fd8 and 0x20,r0
+06010fda tst r0,r0
+06010fdc bt 0x06010fe4
+06010fde mov.l @(0x60110cc,pc),r0
+06010fe0 bra 0x06010fe8
+06010fe2 _mov #0x3,r4
+06010fe4 mov.l @(0x60110cc,pc),r0
+06010fe6 mov #0x0,r4
+06010fe8 jsr @r0
+06010fea _nop
+06010fec mov.l @(0x60110d0,pc),r8
+06010fee jsr @r8
+06010ff0 _nop
+06010ff2 mov.l @(0x60110d4,pc),r1
+06010ff4 mov #0x0,r5
+06010ff6 jsr @r1
+06010ff8 _mov r8,r4
+06010ffa mov.l @(0x60110d8,pc),r8
+06010ffc mov.l @(0x60110dc,pc),r0
+06010ffe jsr @r0
+06011000 _nop
+06011002 tst r0,r0
+06011004 bt 0x0601101c
+06011006 mov.l @r8,r1
+06011008 tst r1,r1
+0601100a bt 0x06011016
+0601100c mov.l @(0x60110e0,pc),r1
+0601100e jsr @r1
+06011010 _nop
+06011012 mov #0x0,r1
+06011014 mov.l r1,@r8
+06011016 mov.l @(0x60110c4,pc),r1
+06011018 jsr @r1
+0601101a _nop
+0601101c mov.l @(0x60110e4,pc),r1
+0601101e mov.b @r1,r1
+06011020 mov r1,r0
+06011022 and 0xf,r0
+06011024 cmp/eq 0xf,r0
+06011026 bt 0x0601103c
+06011028 mov r1,r0
+0601102a and 0x8,r0
+0601102c tst r0,r0
+0601102e bf 0x06011042
+06011030 mov.l @(0x60110e8,pc),r1
+06011032 mov.l @r1,r0
+06011034 cmp/eq -0x1,r0
+06011036 bt 0x06011042
+06011038 bra 0x06010ffc
+0601103a _nop
+0601103c mov.l @(0x60110ec,pc),r2
+0601103e mov #0x3,r1
+06011040 mov.l r1,@r2
+06011042 mov.l @(0x60110f0,pc),r2
+06011044 mov #0x0,r1
+06011046 mov.l r1,@r2
+06011048 mov.l @r2,r1
+0601104a tst r1,r1
+0601104c bt 0x06011048
+0601104e mov.l @(0x60110f4,pc),r0
+06011050 jsr @r0
+06011052 _nop
+06011054 mov.l @(0x60110f8,pc),r1
+06011056 mov.w @(0x6011088,pc),r5
+06011058 mov.l @r1,r1
+0601105a jsr @r1
+0601105c _mov #-0x1,r4
+0601105e mov.l @(0x60110d0,pc),r0
+06011060 jsr @r0
+06011062 _nop
+06011064 mov.l @(0x60110fc,pc),r2
+06011066 mov #0x0,r1
+06011068 mov.l r1,@r2
+0601106a mov.l @(0x6011100,pc),r1
+0601106c jsr @r1
+0601106e _nop
+06011070 mov.l @(0x60110e8,pc),r1
+06011072 mov.l @r1,r0
+06011074 cmp/eq -0x1,r0
+06011076 movt r0
+06011078 xor 0x1,r0
+0601107a mov r14,r15
+0601107c lds.l @r15+,pr
+0601107e mov.l @r15+,r14
+06011080 mov.l @r15+,r10
+06011082 mov.l @r15+,r9
+06011084 rts
+06011086 _mov.l @r15+,r8
+
+=== DKAVIFilePlay @ 06011380 ===
+BODY [[06011380, 0601146b]]
+REF 06011584 DATA
+REF 0601151c COMPUTED_CALL
+
+undefined4 DKAVIFilePlay(undefined4 param_1,undefined4 param_2)
+
+{
+  undefined *puVar1;
+  undefined *puVar2;
+  int *piVar3;
+  undefined *puVar4;
+  int iVar5;
+  undefined4 uVar6;
+  
+  (*(code *)PTR_FUN_06011470)();
+  iVar5 = (*(code *)PTR_FUN_06011474)(param_1,param_2,0xfffffffe,0);
+  puVar2 = PTR_FUN_0601147c;
+  puVar1 = PTR_FUN_06011478;
+  if (iVar5 < 0) {
+    uVar6 = 0xffffffff;
+  }
+  else {
+    while (((iVar5 = (*(code *)PTR_FUN_06011480)(), iVar5 != 0 &&
+            (iVar5 = (*(code *)puVar1)(DAT_06011484[9],*DAT_06011484), *(int *)PTR_DAT_06011488 != 0
+            )) && (-1 < iVar5))) {
+      (*(code *)puVar2)(*(undefined4 *)PTR_DAT_06011490,*DAT_0601148c,iVar5,0xffffffff);
+      (*(code *)PTR_FUN_06011494)(iVar5);
+      *(undefined4 *)PTR_DAT_06011498 = 0;
+    }
+    (*(code *)*DAT_0601149c)(0xffffffff,(int)DAT_0601146c);
+    (*DAT_060114a0)();
+    (*(code *)PTR_FUN_06011470)();
+    puVar1 = PTR_DAT_060114a4;
+    (*(code *)PTR_FUN_060114a8)(*(undefined4 *)PTR_DAT_060114a4);
+    *(undefined4 *)puVar1 = 0;
+    piVar3 = DAT_060114ac;
+    if (*DAT_060114ac != 0) {
+      (*(code *)PTR_FUN_060114b0)();
+    }
+    *piVar3 = 0;
+    puVar1 = PTR_DAT_060114b4;
+    if (*(int *)PTR_DAT_060114b4 != 0) {
+      (*(code *)PTR_FUN_060114b8)();
+    }
+    puVar4 = PTR_DAT_060114bc;
+    puVar2 = PTR_FUN_060114b8;
+    if (*(int *)PTR_DAT_060114bc != 0) {
+      piVar3[-1] = 0;
+      (*(code *)puVar2)();
+    }
+    (*(code *)PTR_FUN_060114c0)(*DAT_0601148c);
+    (*(code *)PTR_FUN_060114c4)(*(undefined4 *)PTR_DAT_06011490);
+    *(undefined4 *)puVar1 = 0;
+    *(undefined4 *)puVar4 = 0;
+    uVar6 = 0;
+  }
+  return uVar6;
+}
+
+
+06011380 mov.l r8,@-r15
+06011382 mov.l r9,@-r15
+06011384 mov.l r10,@-r15
+06011386 mov.l r11,@-r15
+06011388 mov.l r14,@-r15
+0601138a sts.l pr,@-r15
+0601138c add -0x4,r15
+0601138e mov r15,r14
+06011390 mov r4,r9
+06011392 mov.l @(0x6011470,pc),r1
+06011394 jsr @r1
+06011396 _mov r5,r8
+06011398 mov.l @(0x6011474,pc),r0
+0601139a mov #0x0,r7
+0601139c mov #-0x2,r6
+0601139e mov r8,r5
+060113a0 jsr @r0
+060113a2 _mov r9,r4
+060113a4 cmp/pz r0
+060113a6 bt 0x060113ac
+060113a8 bra 0x0601145a
+060113aa _mov #-0x1,r0
+060113ac mov.l @(0x6011478,pc),r9
+060113ae mov.l @(0x601147c,pc),r8
+060113b0 mov.l @(0x6011480,pc),r0
+060113b2 jsr @r0
+060113b4 _nop
+060113b6 tst r0,r0
+060113b8 bt 0x060113f0
+060113ba mov.l @(0x6011484,pc),r1
+060113bc mov.l @r1,r5
+060113be jsr @r9
+060113c0 _mov.l @(0x24,r1),r4
+060113c2 mov.l @(0x6011488,pc),r1
+060113c4 mov.l @r1,r1
+060113c6 tst r1,r1
+060113c8 bt 0x060113f0
+060113ca cmp/pz r0
+060113cc bf 0x060113f0
+060113ce mov.l @(0x601148c,pc),r1
+060113d0 mov.l @r1,r5
+060113d2 mov #-0x1,r7
+060113d4 mov.l @(0x6011490,pc),r1
+060113d6 mov.l @r1,r4
+060113d8 mov r0,r6
+060113da jsr @r8
+060113dc _mov.l r0,@r14
+060113de mov.l @r14,r0
+060113e0 mov.l @(0x6011494,pc),r1
+060113e2 jsr @r1
+060113e4 _mov r0,r4
+060113e6 mov.l @(0x6011498,pc),r2
+060113e8 mov #0x0,r1
+060113ea mov.l r1,@r2
+060113ec bra 0x060113b0
+060113ee _nop
+060113f0 mov.l @(0x601149c,pc),r1
+060113f2 mov.w @(0x601146c,pc),r5
+060113f4 mov.l @r1,r1
+060113f6 jsr @r1
+060113f8 _mov #-0x1,r4
+060113fa mov.l @(0x60114a0,pc),r0
+060113fc jsr @r0
+060113fe _mov #0x0,r9
+06011400 mov.l @(0x6011470,pc),r1
+06011402 jsr @r1
+06011404 _nop
+06011406 mov.l @(0x60114a4,pc),r8
+06011408 mov.l @(0x60114a8,pc),r1
+0601140a jsr @r1
+0601140c _mov.l @r8,r4
+0601140e mov.l r9,@r8
+06011410 mov.l @(0x60114ac,pc),r8
+06011412 mov.l @r8,r4
+06011414 tst r4,r4
+06011416 bt 0x0601141e
+06011418 mov.l @(0x60114b0,pc),r1
+0601141a jsr @r1
+0601141c _nop
+0601141e mov r8,r10
+06011420 mov.l r9,@r8
+06011422 mov.l @(0x60114b4,pc),r11
+06011424 mov.l @r11,r4
+06011426 add -0x28,r10
+06011428 tst r4,r4
+0601142a bt 0x06011432
+0601142c mov.l @(0x60114b8,pc),r1
+0601142e jsr @r1
+06011430 _nop
+06011432 mov.l @(0x60114bc,pc),r8
+06011434 mov.l @r8,r4
+06011436 tst r4,r4
+06011438 bt 0x06011440
+0601143a mov.l @(0x60114b8,pc),r1
+0601143c jsr @r1
+0601143e _mov.l r9,@(0x24,r10)
+06011440 mov.l @(0x601148c,pc),r1
+06011442 mov.l @r1,r4
+06011444 mov.l @(0x60114c0,pc),r1
+06011446 jsr @r1
+06011448 _nop
+0601144a mov.l @(0x6011490,pc),r1
+0601144c mov.l @r1,r4
+0601144e mov.l @(0x60114c4,pc),r1
+06011450 jsr @r1
+06011452 _nop
+06011454 mov.l r9,@r11
+06011456 mov.l r9,@r8
+06011458 mov #0x0,r0
+0601145a add 0x4,r14
+0601145c mov r14,r15
+0601145e lds.l @r15+,pr
+06011460 mov.l @r15+,r14
+06011462 mov.l @r15+,r11
+06011464 mov.l @r15+,r10
+06011466 mov.l @r15+,r9
+06011468 rts
+0601146a _mov.l @r15+,r8
+
+=== duckplay @ 060114c8 ===
+BODY [[060114c8, 06011553]]
+
+void duckplay(void)
+
+{
+  code *pcVar1;
+  
+  (*DAT_06011554)();
+  (*(code *)PTR_FUN_06011558)();
+  pcVar1 = DAT_0601155c;
+  (*DAT_0601155c)();
+  (*DAT_06011560)(0);
+  (*(code *)PTR_FUN_06011564)();
+  (*(code *)PTR_FUN_06011568)(3,3);
+  (*(code *)PTR_FUN_0601156c)(1,1);
+  (*(code *)PTR_FUN_06011570)(2,4,2);
+  (*(code *)PTR_FUN_06011574)();
+  (*(code *)PTR_FUN_06011578)();
+  (*(code *)PTR_FUN_0601157c)();
+  (*(code *)PTR_DKAVIFilePlay_06011584)(0x14,DAT_06011580);
+  (*pcVar1)();
+  (*(code *)PTR_FUN_06011588)();
+  (*(code *)PTR_FUN_0601158c)();
+  (*(code *)PTR_FUN_06011590)();
+  (*(code *)PTR_FUN_06011594)();
+  if (*(int *)PTR_DAT_06011598 != 0) {
+    (*DAT_0601159c)();
+  }
+  return;
+}
+
+
+060114c8 mov.l r8,@-r15
+060114ca mov.l r14,@-r15
+060114cc sts.l pr,@-r15
+060114ce mov.l @(0x6011554,pc),r1
+060114d0 jsr @r1
+060114d2 _mov r15,r14
+060114d4 mov.l @(0x6011558,pc),r1
+060114d6 jsr @r1
+060114d8 _nop
+060114da mov.l @(0x601155c,pc),r8
+060114dc jsr @r8
+060114de _nop
+060114e0 mov.l @(0x6011560,pc),r1
+060114e2 jsr @r1
+060114e4 _mov #0x0,r4
+060114e6 mov.l @(0x6011564,pc),r1
+060114e8 jsr @r1
+060114ea _nop
+060114ec mov.l @(0x6011568,pc),r0
+060114ee mov #0x3,r5
+060114f0 jsr @r0
+060114f2 _mov #0x3,r4
+060114f4 mov.l @(0x601156c,pc),r0
+060114f6 mov #0x1,r5
+060114f8 jsr @r0
+060114fa _mov #0x1,r4
+060114fc mov.l @(0x6011570,pc),r0
+060114fe mov #0x2,r6
+06011500 mov #0x4,r5
+06011502 jsr @r0
+06011504 _mov #0x2,r4
+06011506 mov.l @(0x6011574,pc),r1
+06011508 jsr @r1
+0601150a _nop
+0601150c mov.l @(0x6011578,pc),r1
+0601150e jsr @r1
+06011510 _nop
+06011512 mov.l @(0x601157c,pc),r1
+06011514 jsr @r1
+06011516 _nop
+06011518 mov.l @(0x6011580,pc),r5
+0601151a mov.l @(0x6011584,pc),r0
+0601151c jsr @r0
+0601151e _mov #0x14,r4
+06011520 jsr @r8
+06011522 _nop
+06011524 mov.l @(0x6011588,pc),r1
+06011526 jsr @r1
+06011528 _nop
+0601152a mov.l @(0x601158c,pc),r1
+0601152c jsr @r1
+0601152e _nop
+06011530 mov.l @(0x6011590,pc),r1
+06011532 jsr @r1
+06011534 _nop
+06011536 mov.l @(0x6011594,pc),r1
+06011538 jsr @r1
+0601153a _nop
+0601153c mov.l @(0x6011598,pc),r1
+0601153e mov.l @r1,r4
+06011540 tst r4,r4
+06011542 bt 0x0601154a
+06011544 mov.l @(0x601159c,pc),r1
+06011546 jsr @r1
+06011548 _nop
+0601154a mov r14,r15
+0601154c lds.l @r15+,pr
+0601154e mov.l @r15+,r14
+06011550 rts
+06011552 _mov.l @r15+,r8
+
+=== getVCRControl @ 0601238c ===
+BODY [[0601238c, 060123d9]]
+
+undefined4 getVCRControl(void)
+
+{
+  if ((*(short *)PTR_DAT_060123dc != 0) || (*(int *)PTR_DAT_060123e0 != 0)) {
+    if (*(int *)PTR_DAT_060123e0 != 0) {
+      return 8;
+    }
+    if ((*(ushort *)PTR_DAT_060123dc & 0x80) != 0) {
+      return 2;
+    }
+    if ((*(ushort *)PTR_DAT_060123dc & 8) != 0) {
+      return 1;
+    }
+    if ((*(ushort *)PTR_DAT_060123dc & 0x40) != 0) {
+      return 4;
+    }
+  }
+  return 0;
+}
+
+
+0601238c mov.l r14,@-r15
+0601238e mov.l @(0x60123dc,pc),r2
+06012390 mov.w @r2,r1
+06012392 mov r15,r14
+06012394 extu.w r1,r1
+06012396 tst r1,r1
+06012398 bf 0x060123a2
+0601239a mov.l @(0x60123e0,pc),r1
+0601239c mov.l @r1,r1
+0601239e tst r1,r1
+060123a0 bt 0x060123d2
+060123a2 mov.l @(0x60123e0,pc),r1
+060123a4 mov.l @r1,r1
+060123a6 tst r1,r1
+060123a8 bt 0x060123ae
+060123aa bra 0x060123d4
+060123ac _mov #0x8,r0
+060123ae mov.w @r2,r0
+060123b0 and 0x80,r0
+060123b2 tst r0,r0
+060123b4 bt 0x060123ba
+060123b6 bra 0x060123d4
+060123b8 _mov #0x2,r0
+060123ba mov.w @r2,r0
+060123bc and 0x8,r0
+060123be tst r0,r0
+060123c0 bt 0x060123c6
+060123c2 bra 0x060123d4
+060123c4 _mov #0x1,r0
+060123c6 mov.w @r2,r0
+060123c8 and 0x40,r0
+060123ca tst r0,r0
+060123cc bt 0x060123d2
+060123ce bra 0x060123d4
+060123d0 _mov #0x4,r0
+060123d2 mov #0x0,r0
+060123d4 mov r14,r15
+060123d6 rts
+060123d8 _mov.l @r15+,r14
+
+=== waitWhilePaused @ 060123e4 ===
+BODY [[060123e4, 06012419]]
+REF 0601109c DATA
+REF 06010f9c COMPUTED_CALL
+
+void FUN_060123e4(void)
+
+{
+  code *pcVar1;
+  uint uVar2;
+  int iVar3;
+  
+  pcVar1 = DAT_06012420;
+  iVar3 = *(int *)PTR_DAT_0601241c;
+  while (iVar3 != 0) {
+    uVar2 = (*pcVar1)();
+    if ((uVar2 & 0x20) != 0) {
+      (*(code *)*DAT_06012424)();
+    }
+    iVar3 = *(int *)PTR_DAT_0601241c;
+  }
+  return;
+}
+
+
+060123e4 mov.l r8,@-r15
+060123e6 mov.l r14,@-r15
+060123e8 sts.l pr,@-r15
+060123ea mov.l @(0x601241c,pc),r1
+060123ec mov.l @r1,r1
+060123ee mov r15,r14
+060123f0 tst r1,r1
+060123f2 bt 0x06012410
+060123f4 mov.l @(0x6012420,pc),r8
+060123f6 jsr @r8
+060123f8 _nop
+060123fa and 0x20,r0
+060123fc tst r0,r0
+060123fe bt 0x06012408
+06012400 mov.l @(0x6012424,pc),r1
+06012402 mov.l @r1,r1
+06012404 jsr @r1
+06012406 _nop
+06012408 mov.l @(0x601241c,pc),r1
+0601240a mov.l @r1,r1
+0601240c tst r1,r1
+0601240e bf 0x060123f6
+06012410 mov r14,r15
+06012412 lds.l @r15+,pr
+06012414 mov.l @r15+,r14
+06012416 rts
+06012418 _mov.l @r15+,r8
+
+=== duckSetVBlank @ 060126f8 ===
+BODY [[060126f8, 0601278b]]
+REF 0601220e COMPUTED_CALL
+REF 0601222e COMPUTED_CALL
+REF 060122a0 DATA
+
+void FUN_060126f8(void)
+
+{
+  undefined4 *puVar1;
+  undefined4 *puVar2;
+  undefined4 *puVar3;
+  undefined4 uVar4;
+  
+  (*(code *)PTR_FUN_06012790)();
+  puVar1 = DAT_06012794;
+  (*(code *)*DAT_06012794)(0xffffffff,6);
+  (*(code *)*puVar1)(0xffffffff,2);
+  puVar2 = DAT_06012798;
+  (*(code *)*DAT_06012798)(0x41,PTR_LAB_0601279c);
+  (*(code *)*puVar1)(0xfffffffd,0);
+  *DAT_060127a0 = 1;
+  (*(code *)*puVar1)(0xffffffff,(int)DAT_0601278c);
+  (*(code *)*puVar2)(0x4d,PTR_LAB_060127a4);
+  (*(code *)*puVar2)(0x40,PTR_LAB_060127a8);
+  (*(code *)*puVar1)(0xfffffffe,0);
+  puVar3 = DAT_060127ac;
+  uVar4 = (*(code *)*DAT_060127b0)(0x41);
+  *puVar3 = uVar4;
+  (*(code *)*puVar2)(0x41,PTR_LAB_060127b4);
+  (*(code *)*puVar1)(0xfffffffd,0);
+  (*(code *)*puVar2)(0x42,PTR_LAB_060127b8);
+  (*(code *)*puVar1)(0xfffffffb,0);
+  return;
+}
+
+
+060126f8 mov.l r8,@-r15
+060126fa mov.l r9,@-r15
+060126fc mov.l r10,@-r15
+060126fe mov.l r14,@-r15
+06012700 sts.l pr,@-r15
+06012702 mov.l @(0x6012790,pc),r0
+06012704 jsr @r0
+06012706 _mov r15,r14
+06012708 mov.l @(0x6012794,pc),r8
+0601270a mov #0x6,r5
+0601270c mov.l @r8,r1
+0601270e jsr @r1
+06012710 _mov #-0x1,r4
+06012712 mov #0x2,r5
+06012714 mov.l @r8,r1
+06012716 jsr @r1
+06012718 _mov #-0x1,r4
+0601271a mov.l @(0x6012798,pc),r10
+0601271c mov.l @(0x601279c,pc),r5
+0601271e mov.l @r10,r1
+06012720 jsr @r1
+06012722 _mov #0x41,r4
+06012724 mov #0x0,r5
+06012726 mov.l @r8,r1
+06012728 jsr @r1
+0601272a _mov #-0x3,r4
+0601272c mov.l @(0x60127a0,pc),r2
+0601272e mov #0x1,r1
+06012730 mov.l r1,@r2
+06012732 mov.w @(0x601278c,pc),r5
+06012734 mov.l @r8,r1
+06012736 jsr @r1
+06012738 _mov #-0x1,r4
+0601273a mov.l @(0x60127a4,pc),r5
+0601273c mov.l @r10,r1
+0601273e jsr @r1
+06012740 _mov #0x4d,r4
+06012742 mov.l @(0x60127a8,pc),r5
+06012744 mov.l @r10,r1
+06012746 jsr @r1
+06012748 _mov #0x40,r4
+0601274a mov #0x0,r5
+0601274c mov.l @r8,r1
+0601274e jsr @r1
+06012750 _mov #-0x2,r4
+06012752 mov.l @(0x60127ac,pc),r9
+06012754 mov.l @(0x60127b0,pc),r1
+06012756 mov.l @r1,r0
+06012758 jsr @r0
+0601275a _mov #0x41,r4
+0601275c mov.l r0,@r9
+0601275e mov.l @(0x60127b4,pc),r5
+06012760 mov.l @r10,r1
+06012762 jsr @r1
+06012764 _mov #0x41,r4
+06012766 mov #0x0,r5
+06012768 mov.l @r8,r1
+0601276a jsr @r1
+0601276c _mov #-0x3,r4
+0601276e mov.l @(0x60127b8,pc),r5
+06012770 mov.l @r10,r1
+06012772 jsr @r1
+06012774 _mov #0x42,r4
+06012776 mov #0x0,r5
+06012778 mov.l @r8,r1
+0601277a jsr @r1
+0601277c _mov #-0x5,r4
+0601277e mov r14,r15
+06012780 lds.l @r15+,pr
+06012782 mov.l @r15+,r14
+06012784 mov.l @r15+,r10
+06012786 mov.l @r15+,r9
+06012788 rts
+0601278a _mov.l @r15+,r8
