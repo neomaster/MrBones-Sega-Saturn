@@ -92,10 +92,16 @@ int main(void) {
                     fprintf(stderr, "disc %u %s: %s\n", d + 1, list.paths[i], movie.status);
                     duck_avi_free(&movie); free(blob); cd_close(&cd); return 1;
                 }
-                if (d == 1 && !strcmp(list.paths[i], "/27FINALE/20AVI")) {
-                    const char *expected = interval == 2653 ? "205f46bcc8e94c4d4a399b7e3bde621bfd49f1b55cbda9533b59fdd6dbe872d3" :
-                                           interval == 3954 ? "f5e3b5d5e996d6dadf51fcd23c3feb7adf03775afd7968c8b4699588f48d977f" :
-                                           interval == 5038 ? "e9ab38a026ea3969b377c3022a03bc79888857a33ee295f3b5f461943a0ffcb0" : NULL;
+                {
+                    const char *expected = NULL;
+                    if (d == 0 && !strcmp(list.paths[i], "/06VALLEY/20AVI"))
+                        expected = interval == 228 ? "653977c30018f5657e209f483436f56fce4a4985db8076c0352733af11ef0c37" :
+                                   interval == 401 ? "c923491e4e5603fbdac3c7fb2c1885564d7e2f167096256bd67bfed64493a69d" :
+                                   interval == 837 ? "1e578e67e575ed5f4a1fff7abfc0016cfe562d7590307a7a866169c22d371b42" : NULL;
+                    else if (d == 1 && !strcmp(list.paths[i], "/27FINALE/20AVI"))
+                        expected = interval == 2653 ? "205f46bcc8e94c4d4a399b7e3bde621bfd49f1b55cbda9533b59fdd6dbe872d3" :
+                                   interval == 3954 ? "f5e3b5d5e996d6dadf51fcd23c3feb7adf03775afd7968c8b4699588f48d977f" :
+                                   interval == 5038 ? "e9ab38a026ea3969b377c3022a03bc79888857a33ee295f3b5f461943a0ffcb0" : NULL;
                     if (expected) {
                         sha256_ctx hash;
                         uint8_t digest[32];
@@ -103,7 +109,7 @@ int main(void) {
                         sha256_init(&hash); sha256_update(&hash, movie.rgba, 320u * 224u * 4u);
                         sha256_final(&hash, digest); sha256_hex(digest, hex);
                         if (strcmp(hex, expected)) {
-                            fprintf(stderr, "FINALE: interval %u differs from Ymir\n", interval);
+                            fprintf(stderr, "%s: interval %u differs from Ymir\n", list.paths[i], interval);
                             return 1;
                         }
                     }

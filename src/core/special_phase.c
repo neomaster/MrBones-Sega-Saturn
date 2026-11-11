@@ -53,6 +53,48 @@ static void finale_ring_init(special_phase *phase) {
     phase->ring_shots = 0;
     phase->ring_last_index = -1;
     phase->ring_last_activated = 0;
+    /* finale_movie_armed is set from load once 20AVI opens. */
+}
+
+/* PlayDuckMovie(3): reopen /27FINALE/20AVI from the start and arm playback. */
+int special_phase_finale_play_ending(special_phase *phase) {
+    if (!phase || phase->kind != STAGE_KIND_FINALE || !phase->avi ||
+        !phase->avi_size)
+        return -1;
+    duck_avi_free(&phase->movie);
+    if (duck_avi_open_with_duck(&phase->movie, phase->avi, phase->avi_size,
+                                phase->duck, phase->duck_size) != 0)
+        return -1;
+    if (!duck_avi_step(&phase->movie))
+        return -1;
+    phase->movie_ok = 1;
+    phase->finale_movie_armed = 1;
+    {
+        unsigned need = phase->movie.frame_count;
+        if (need < 4u) need = 4u;
+        phase->pages_needed = need;
+    }
+    phase->movie_pcm_pending = phase->movie.pcm_samples > 0 ? 1 : 0;
+    snprintf(phase->status, sizeof phase->status,
+             "%s PlayDuckMovie(3) frames=%u pcm=%zu",
+             phase->stage_name, phase->movie.frame_count,
+             phase->movie.pcm_samples);
+    return 0;
+}
+
+int special_phase_finale_defer_ending(special_phase *phase) {
+    if (!phase || phase->kind != STAGE_KIND_FINALE)
+        return -1;
+    if (!phase->finale_movie_armed && !(phase->avi && phase->avi_size))
+        return -1;
+    phase->movie_ok = 0;
+    phase->movie_pcm_pending = 0;
+    phase->finale_movie_armed = 1;
+    phase->movie.playback_done = 0;
+    snprintf(phase->status, sizeof phase->status,
+             "%s arena (ending deferred) slots=%d/%u",
+             phase->stage_name, phase->ring_active_count, FINALE_RING_SLOTS);
+    return 0;
 }
 
 /* Brain_CRing: advance phase accumulator and publish high-16 to +0x704. */
@@ -445,11 +487,15 @@ int special_phase_load(special_phase *phase, cdimage *cd, const char *iso_dir,
         if (phase->textures_size == 0 && phase->avi_size == 0) goto fail;
     }
 
-    /* §20/§22: open DUCK AVI with 19DUCK tables when present. */
+    /* §20/§22: open DUCK AVI with 19DUCK tables when present.
+     * FINALE: armed for PlayDuckMovie(3); movie_ok starts the film immediately
+     * (headless/tests). Interactive host may defer via finale_defer_ending. */
     if (phase->avi_size > 0 &&
         duck_avi_open_with_duck(&phase->movie, phase->avi, phase->avi_size,
                                 phase->duck, phase->duck_size) == 0) {
         phase->movie_ok = 1;
+        if (kind == STAGE_KIND_FINALE)
+            phase->finale_movie_armed = 1;
         if (phase->mode == SPECIAL_MODE_PRESENT) {
             unsigned need = phase->movie.frame_count;
             if (need < 4) need = 4;
@@ -763,21 +809,29 @@ static void step_present(special_phase *phase, const saturn_pad *pad) {
         (void)stage_enemies_step(&phase->enemies, &phase->skel, phase->bones_x,
                                  0, 0);
 
-    /* FINALE arena: Brain_CRing + CBlueShot→ShootRing (docs/finale-ring-analysis.md). */
+    /* FINALE arena: Brain_CRing + CBlueShot→ShootRing (docs/finale-ring-analysis.md).
+     * Clear-all → Saturn 0x28ce04(0) → CEndLevel → PlayDuckMovie(3). */
     if (phase->kind == STAGE_KIND_FINALE && !phase->ring_cleared) {
         finale_ring_brain(phase);
         /* A / B / C fire a blue shot; D-pad selects direction 0..3. */
         if (pad->pressed & (0x0400u | 0x0100u | 0x0200u)) {
-            if (special_phase_finale_shoot(phase, finale_dir_from_pad(pad)) &&
-                !phase->movie_ok) {
-                /* An active ending movie must finish on its own clock. */
-                phase->state = SPECIAL_ST_FINISHED;
-                snprintf(phase->status, sizeof phase->status,
-                         "%s finished (ring clear) shots=%u phase=%d "
-                         "enemies_rings=%u",
-                         phase->stage_name, phase->ring_shots, phase->ring_phase,
-                         phase->enemies.rings_fired);
-                return;
+            if (special_phase_finale_shoot(phase, finale_dir_from_pad(pad))) {
+                if (phase->movie_ok) {
+                    /* Headless/tests: film already running; wait for its clock. */
+                } else if (special_phase_finale_play_ending(phase) == 0) {
+                    snprintf(phase->status, sizeof phase->status,
+                             "%s ring clear → ending movie shots=%u phase=%d",
+                             phase->stage_name, phase->ring_shots,
+                             phase->ring_phase);
+                } else {
+                    phase->state = SPECIAL_ST_FINISHED;
+                    snprintf(phase->status, sizeof phase->status,
+                             "%s finished (ring clear, no AVI) shots=%u phase=%d "
+                             "enemies_rings=%u",
+                             phase->stage_name, phase->ring_shots,
+                             phase->ring_phase, phase->enemies.rings_fired);
+                    return;
+                }
             }
         }
     }
@@ -882,7 +936,7 @@ int special_phase_render(special_phase *phase) {
                                  phase->facing, 0,
                                  phase->airborne,
                                  phase->frames >> 2);
-        runway_compose_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
+        stage_enemies_draw_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
                                    phase->skel.segments, RUNWAY_SKEL_SEGMENTS,
                                    8, 8);
         if (phase->stage_name[0])
@@ -909,7 +963,7 @@ int special_phase_render(special_phase *phase) {
             if (phase->enemies.count > 0)
                 stage_enemies_render(&phase->enemies, NULL, phase->frame_rgba,
                                      SCR_W, SCR_H, 0, 0, 180);
-            runway_compose_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
+            stage_enemies_draw_hud_skelbar(phase->frame_rgba, SCR_W, SCR_H,
                                        phase->skel.segments, RUNWAY_SKEL_SEGMENTS,
                                        8, 8);
             snprintf(ring_hud, sizeof ring_hud, "RING %d/%u",

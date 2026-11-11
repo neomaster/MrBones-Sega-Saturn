@@ -152,6 +152,16 @@ if (WIN32)
 endif()
 
 enable_testing()
+if (MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    get_filename_component(_msvc_linker_dir "${CMAKE_LINKER}" DIRECTORY)
+    if (NOT EXISTS "${_msvc_linker_dir}/dumpbin.exe")
+        message(FATAL_ERROR "dumpbin.exe is required to verify mrbones static imports")
+    endif()
+    add_test(NAME test_static_imports COMMAND ${CMAKE_COMMAND}
+        "-DDUMPBIN=${_msvc_linker_dir}/dumpbin.exe"
+        "-DEXE=$<TARGET_FILE:mrbones>"
+        -P "${CMAKE_SOURCE_DIR}/tests/test_static_imports.cmake")
+endif()
 if (MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND
     CMAKE_C_CL_SHOWINCLUDES_PREFIX MATCHES "^Observa")
     add_test(NAME test_msvc_dependencies COMMAND ${CMAKE_COMMAND}

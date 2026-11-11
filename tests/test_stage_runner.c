@@ -100,6 +100,8 @@ int main(void) {
         CHECK(strcmp(hex, "c8d30f83e58d728e403dce6718cfb28ad710a88d9ff6870af1ca42acdb8d0ec8") == 0);
     }
     saturn_pad_update_host(&pad, MB_PAD_START);
+    saturn_pad_update_host(&pad, MB_PAD_START);
+    CHECK(!pad.pressed && (pad.held & 0x0800u));
     CHECK(stage_runner_step(&runner, &pad) == 1);
     CHECK(stage_runner_done(&runner) && runner.outcome == STAGE_OUTCOME_WIN);
     stage_runner_free(&runner);

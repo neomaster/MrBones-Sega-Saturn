@@ -254,6 +254,34 @@ int main(void) {
             CHECK(phase.movie.cur == phase.movie.frame_count);
         }
         special_phase_free(&phase);
+
+        /* Arena-first: defer ending → clear rings → PlayDuckMovie(3) → FINISHED. */
+        CHECK(special_phase_load(&phase, &disc2, "/27FINALE", STAGE_KIND_FINALE) == 0);
+        CHECK(phase.movie_ok == 1 && phase.finale_movie_armed == 1);
+        CHECK(special_phase_finale_defer_ending(&phase) == 0);
+        CHECK(phase.movie_ok == 0 && phase.finale_movie_armed == 1);
+        {
+            saturn_pad input = {0};
+            input.pressed = 0x0100u;
+            phase.ring_phase_mode = 1;
+            for (unsigned k = 0; k < FINALE_RING_SLOTS; k++) {
+                phase.ring_phase_acc = (255 - (int)(16u * k)) * 65536;
+                CHECK(special_phase_step(&phase, &input) == 0);
+            }
+            CHECK(phase.ring_cleared && phase.movie_ok);
+            CHECK(phase.state == SPECIAL_ST_PLAY && !phase.movie.playback_done);
+            CHECK(phase.movie.cur >= 1u);
+            input.pressed = 0;
+            phase.movie.tick_external = 1;
+            phase.movie.tick_us = 100000000u;
+            for (unsigned k = 0; k < 5 && phase.state == SPECIAL_ST_PLAY; k++)
+                CHECK(special_phase_step(&phase, &input) == 0);
+            CHECK(phase.state == SPECIAL_ST_FINISHED && phase.movie.playback_done);
+            CHECK(phase.movie.cur == phase.movie.frame_count);
+        }
+        printf("FINALE arena→ending movie: shots=%u frames=%u OK\n",
+               phase.ring_shots, phase.movie.frames_drawn);
+        special_phase_free(&phase);
     }
 
     CHECK(special_phase_load(&phase, &disc1, "/28LOSE", STAGE_KIND_LOSE) == 0);

@@ -105,7 +105,8 @@ typedef struct {
     int ring_phase_acc;                 /* Brain accumulator before >>16 */
     int ring_phase_mode;                /* index into 0x002b2158 incr table */
     int ring_active_count;              /* object+0x708 */
-    int ring_cleared;                   /* EndLevel(0) fired */
+    int ring_cleared;                   /* EndLevel(0) / clear flag fired */
+    int finale_movie_armed;             /* 20AVI opened; PlayDuckMovie ready */
     unsigned ring_shots;
     int ring_last_index;                /* last ShootRing slot, -1 none */
     int ring_last_activated;            /* 1=activated, 0=deactivated */
@@ -123,6 +124,12 @@ typedef struct {
 /* ShootRing_CRing stand-in: dir 0..3 (table 0,128,192,64). Returns 1 if
  * deactivating the last active ring triggered EndLevel(0). */
 int special_phase_finale_shoot(special_phase *phase, unsigned dir);
+
+/* Interactive arena-first: hide ending AVI until rings clear (PlayDuckMovie).
+ * Headless/tests leave movie_ok set so the film starts immediately. */
+int special_phase_finale_defer_ending(special_phase *phase);
+/* PlayDuckMovie(3) stand-in: rewind/open /27FINALE/20AVI and set movie_ok. */
+int special_phase_finale_play_ending(special_phase *phase);
 
 int special_phase_load(special_phase *phase, cdimage *cd, const char *iso_dir,
                        stage_kind kind);
