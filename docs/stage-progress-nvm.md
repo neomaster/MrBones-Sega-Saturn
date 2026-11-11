@@ -104,8 +104,8 @@ ID da fase escolhida.
 - A `LevelSelect` original tem 18 entradas para 13 fases (as de `+0 = 6` repetem o byte da anterior);
   o port mostra uma linha por fase.
 - As duas opções originais são **MUSIC** (`0x0021d9dc`) e **STEREO** (`0x0021d9e0`), pela tela
-  OPTIONS no Ymir e pela decompilação do carregador (seção 8). Não há interruptor de efeitos; a linha
-  SFX do port não tem correspondente no original.
+  OPTIONS no Ymir e pela decompilação do carregador (seção 8). Não há interruptor de efeitos; o port
+  agora oferece MUSIC e STEREO como o original.
 
 ## 8. Tela de opções, StartScreen e attract
 
@@ -169,9 +169,16 @@ nenhum outro código do carregador escreve, e de cada seleção inverter a linha
 driver de som não foi analisado, então o uso interno do byte `0x25a00483` é inferido do rótulo. Os
 ensaios foram feitos no menu; o efeito audível na fase não foi medido.
 
-**Não existe opção de efeitos sonoros no original.** O port chama o caso 5 de SFX
-(`menu_phase.sfx_on`, chave `sfx` do `mrbones.ini`) e o usa para suprimir efeitos; isso é extensão
-do host. O original oferece ali saída estéreo ou mono.
+**Não existe opção de efeitos sonoros no original.** O port seguia outro desenho (caso 5 = SFX) e
+passou a seguir o original: o caso 5 é `menu_phase.stereo_on`, rotulado `STEREO: ON/OFF`, com
+padrão OFF como no boot do Saturn. Com STEREO OFF, `host_audio` mistura cada buffer de CD-DA em
+mono, `(L+R)/2` nos dois canais (`host_audio_mono_downmix`), e a troca vale no buffer seguinte. O
+PCM dos filmes mantém os canais gravados e os efeitos PCM8 já são mono. Captura do processo no
+menu (CD-DA, 65 s): com OFF, `max|L−R| = 3` e correlação L/R 1,000000; com ON, `max|L−R| = 32896`
+e correlação 0,862. Os filmes ficam fora da mistura porque o original também os toca em estéreo
+com STEREO OFF: na captura de referência do FINALE no Ymir, cada canal correlacionou 0,998632 e
+0,998315 com os canais do AVI, contra 0,773206 e 0,741143 com a mistura mono (LOG, 2026-11-11).
+Não foi medido se o mono do original afeta o CD-DA; essa parte da regra do host parte do rótulo.
 
 Consequência no port: nenhuma macro de opções em `nvm_shadow.h`, e `menu_options` não foi ligado ao
 shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro modo. O módulo
@@ -179,14 +186,15 @@ shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro 
 
 **Persistência no host.** As opções do menu ficam no `mrbones.ini`, nunca no `nvmshadow.bin`:
 
-- chaves `music` e `sfx` (`on`/`off`, também `true`/`false`, `yes`/`no`, `1`/`0`) e `volume`
-  (`0..15`); padrões ligado, ligado e 15; valor inválido mantém o padrão e volume acima de 15 vira 15;
-- `mrbones.c` aplica `music`, `sfx` e `volume` depois de cada carga interativa do menu e chama
+- chaves `music` e `stereo` (`on`/`off`, também `true`/`false`, `yes`/`no`, `1`/`0`) e `volume`
+  (`0..15`); padrões ligado, desligado e 15; valor inválido mantém o padrão e volume acima de 15
+  vira 15; uma linha `sfx` antiga não é lida e é mantida como qualquer outra chave;
+- `mrbones.c` aplica `music`, `stereo` e `volume` depois de cada carga interativa do menu e chama
   `config_save_options` quando o jogador muda qualquer uma das três; o volume muda com Left/Right
   na linha `VOLUME: n/15` da tela de opções (`menu_phase.volume`, `0..MENU_VOLUME_MAX`);
 - a cada quadro do menu, `host_audio_set_volume` publica o nível e as saídas CD-DA, PCM8 de efeitos
-  e PCM16 dos filmes o aplicam por `waveOutSetVolume` quando ele muda, sem reiniciar o som; `sfx`
-  desligado suprime os efeitos das fases e `music` desligado para a faixa do menu;
+  e PCM16 dos filmes o aplicam por `waveOutSetVolume` quando ele muda, sem reiniciar o som;
+  `host_audio_set_stereo` faz o mesmo com STEREO, e `music` desligado para a faixa do menu;
 - `config_save_options` reescreve só essas três chaves e mantém as outras linhas, para que um
   caminho vindo de variável de ambiente não fique gravado no arquivo.
 

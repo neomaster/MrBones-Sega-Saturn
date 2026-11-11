@@ -149,6 +149,13 @@ int main(void) {
     menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(&menu, &pad);
+    /* Case 5 is STEREO, OFF at boot as in the original. */
+    CHECK(menu.cursor == 1 && menu.stereo_on == 0);
+    saturn_pad_update_host(&pad, MB_PAD_A);
+    menu_phase_step(&menu, &pad);
+    CHECK(menu.stereo_on == 1 && strstr(menu.status, "stereo=1"));
+    saturn_pad_update_host(&pad, 0);
+    menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, MB_PAD_DOWN);
     menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, 0);

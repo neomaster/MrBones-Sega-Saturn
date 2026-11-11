@@ -9,11 +9,28 @@ unsigned host_audio_volume_word(unsigned level) {
     return level * 0xffffu / MENU_VOLUME_MAX;
 }
 
+void host_audio_mono_downmix(int16_t *pcm, size_t frames) {
+    for (size_t i = 0; i < frames; i++) {
+        int16_t m = (int16_t)(((int)pcm[i * 2] + (int)pcm[i * 2 + 1]) / 2);
+        pcm[i * 2] = m;
+        pcm[i * 2 + 1] = m;
+    }
+}
+
 #ifdef _WIN32
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 static volatile LONG g_volume_level = MENU_VOLUME_MAX;
+static volatile LONG g_stereo;
+
+void host_audio_set_stereo(int on) {
+    InterlockedExchange(&g_stereo, on != 0);
+}
+
+static int stereo_on(void) {
+    return InterlockedCompareExchange(&g_stereo, 0, 0) != 0;
+}
 
 void host_audio_set_volume(unsigned level) {
     if (level > MENU_VOLUME_MAX) level = MENU_VOLUME_MAX;
@@ -95,6 +112,7 @@ static DWORD WINAPI audio_thread(void *param) {
             if (count < BUF_FRAMES) eof = 1;
             if (!count) continue;
             if (a->menu_mix) cdda_mix_menu(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
+            if (!stereo_on()) host_audio_mono_downmix(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
             hdr[i].dwBufferLength = (DWORD)(count * CDDA_SAMPLES_PER_SECTOR * sizeof(int16_t));
             hdr[i].dwFlags = 0;
             if (waveOutPrepareHeader(a->wave, &hdr[i], sizeof hdr[i]) != MMSYSERR_NOERROR) { eof = 1; break; }
@@ -338,6 +356,7 @@ void host_audio_movie_pause(host_audio *audio, int paused) { (void)audio; (void)
 void host_audio_stop(host_audio *audio) { free(audio); }
 void host_audio_fade_stop(host_audio *audio, unsigned duration_ms) { (void)duration_ms; host_audio_stop(audio); }
 void host_audio_set_volume(unsigned level) { (void)level; }
+void host_audio_set_stereo(int on) { (void)on; }
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     (void)pcm; (void)length; (void)rate; return -1;
 }

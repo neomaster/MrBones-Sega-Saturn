@@ -57,25 +57,25 @@ static host_audio *g_audio;
 /* Host menu options. They persist in mrbones.ini, never in nvmshadow.bin: the
  * original keeps its option toggles in loader RAM and does not save them
  * (docs/stage-progress-nvm.md section 8). */
-static int g_opt_music = 1, g_opt_sfx = 1;
+static int g_opt_music = 1, g_opt_stereo = 0;
 static unsigned g_opt_volume = MB_CONFIG_VOLUME_MAX;
 static char g_config_path[MB_PATH_MAX];
 
 static void apply_host_options(menu_phase *menu) {
     menu->music_on = g_opt_music;
-    menu->sfx_on = g_opt_sfx;
+    menu->stereo_on = g_opt_stereo;
 }
 
 /* After each interactive menu step: write the ini only when a value changed. */
 static void store_host_options(const menu_phase *menu, unsigned volume) {
-    if (!!menu->music_on == g_opt_music && !!menu->sfx_on == g_opt_sfx &&
+    if (!!menu->music_on == g_opt_music && !!menu->stereo_on == g_opt_stereo &&
         volume == g_opt_volume)
         return;
     g_opt_music = !!menu->music_on;
-    g_opt_sfx = !!menu->sfx_on;
+    g_opt_stereo = !!menu->stereo_on;
     g_opt_volume = volume;
     if (g_config_path[0] &&
-        config_save_options(g_config_path, g_opt_music, g_opt_sfx, g_opt_volume))
+        config_save_options(g_config_path, g_opt_music, g_opt_stereo, g_opt_volume))
         fprintf(stderr, "options not saved: cannot write %s\n", g_config_path);
 }
 static unsigned g_menu_volume = 15;
@@ -181,7 +181,7 @@ static void maybe_start_movie_audio(void) {
 static void maybe_play_sfx(void) {
     unsigned flags = 0;
     maybe_start_movie_audio();
-    if (!g_stage || !g_sfx_ok || (g_menu && !g_menu->sfx_on)) return;
+    if (!g_stage || !g_sfx_ok) return;
     if (g_stage->runway_live) {
         if (g_stage->runway.sound_event_id)
             runway_sfx_sound_event(&g_sfx, g_stage->runway.sound_event_id);
@@ -595,6 +595,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             g_menu_volume = g_menu->volume;
             store_host_options(g_menu, g_menu_volume);
             host_audio_set_volume(g_menu_volume);
+            host_audio_set_stereo(g_menu->stereo_on);
             if (g_menu->state == MENU_ST_QUIT) {
                 fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
@@ -1168,8 +1169,9 @@ int main(int argc, char **argv) {
     }
     config_load(&cfg, NULL);
     g_opt_music = cfg.music_on;
-    g_opt_sfx = cfg.sfx_on;
+    g_opt_stereo = cfg.stereo_on;
     g_opt_volume = cfg.volume;
+    host_audio_set_stereo(cfg.stereo_on);
     snprintf(g_config_path, sizeof g_config_path, "%s", cfg.config_path);
     g_menu_volume = cfg.volume;
     snprintf(g_save_dir, sizeof g_save_dir, "%s", cfg.save_dir);

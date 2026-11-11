@@ -38,23 +38,24 @@ int main(void) {
     CHECK(!strcmp(d.disc[0], "X:\\one.cue"));
 
     /* Host menu options: defaults, parsing, clamping, round trip. */
-    CHECK(d.music_on == 1 && d.sfx_on == 1 && d.volume == MB_CONFIG_VOLUME_MAX); /* via config_save_ini */
+    CHECK(d.music_on == 1 && d.stereo_on == 0 && d.volume == MB_CONFIG_VOLUME_MAX); /* via config_save_ini */
     CHECK(config_load(&c, "does_not_exist.ini") == -1);
-    CHECK(c.music_on == 1 && c.sfx_on == 1 && c.volume == MB_CONFIG_VOLUME_MAX);
-    c.music_on = 0; c.sfx_on = 0; c.volume = 99;
+    CHECK(c.music_on == 1 && c.stereo_on == 0 && c.volume == MB_CONFIG_VOLUME_MAX);
+    c.music_on = 0; c.stereo_on = 1; c.volume = 99;
     CHECK(config_save_ini(&c, "test_config_out.ini") == 0);
     CHECK(config_load(&d, "test_config_out.ini") == 0);
-    CHECK(d.music_on == 0 && d.sfx_on == 0 && d.volume == MB_CONFIG_VOLUME_MAX);
+    CHECK(d.music_on == 0 && d.stereo_on == 1 && d.volume == MB_CONFIG_VOLUME_MAX);
     {
-        static const struct { const char *text; int music, sfx; unsigned vol; } cases[] = {
-            {"music = off\nsfx = OFF\nvolume = 7\n", 0, 0, 7u},
-            {"music=0\nsfx=false\nvolume=0\n", 0, 0, 0u},
-            {"music = no\nsfx = On\nvolume = 15\n", 0, 1, 15u},
-            {"music = maybe\nsfx = 2\nvolume = loud\n", 1, 1, 15u}, /* junk keeps defaults */
-            {"volume = 16\n", 1, 1, 15u},                           /* clamps */
-            {"volume = 99999999999999999999\n", 1, 1, 15u},         /* no overflow */
-            {"volume = 3\nvolume = -1\nvolume = 3x\nvolume =\n", 1, 1, 3u},
-            {"volume = 4\nvolume = 9\n", 1, 1, 9u},                 /* last one wins */
+        static const struct { const char *text; int music, stereo; unsigned vol; } cases[] = {
+            {"music = off\nstereo = ON\nvolume = 7\n", 0, 1, 7u},
+            {"music=0\nstereo=true\nvolume=0\n", 0, 1, 0u},
+            {"music = no\nstereo = Off\nvolume = 15\n", 0, 0, 15u},
+            {"music = maybe\nstereo = 2\nvolume = loud\n", 1, 0, 15u}, /* junk keeps defaults */
+            {"sfx = on\n", 1, 0, 15u},                                 /* not an option key */
+            {"volume = 16\n", 1, 0, 15u},                              /* clamps */
+            {"volume = 99999999999999999999\n", 1, 0, 15u},            /* no overflow */
+            {"volume = 3\nvolume = -1\nvolume = 3x\nvolume =\n", 1, 0, 3u},
+            {"volume = 4\nvolume = 9\n", 1, 0, 9u},                    /* last one wins */
         };
         unsigned i;
         for (i = 0; i < sizeof cases / sizeof cases[0]; i++) {
@@ -62,7 +63,7 @@ int main(void) {
             fputs(cases[i].text, f);
             fclose(f);
             CHECK(config_load(&c, ini) == 0);
-            CHECK(c.music_on == cases[i].music && c.sfx_on == cases[i].sfx &&
+            CHECK(c.music_on == cases[i].music && c.stereo_on == cases[i].stereo &&
                   c.volume == cases[i].vol);
         }
     }
@@ -75,7 +76,7 @@ int main(void) {
         remove(opt);
         CHECK(config_save_options(opt, 0, 1, 5) == 0); /* creates the file */
         CHECK(config_load(&c, opt) == 0);
-        CHECK(c.music_on == 0 && c.sfx_on == 1 && c.volume == 5u);
+        CHECK(c.music_on == 0 && c.stereo_on == 1 && c.volume == 5u);
         CHECK(c.disc[0][0] == 0);
 
         f = fopen(opt, "wb");
@@ -91,10 +92,10 @@ int main(void) {
         buf[n] = 0;
         fclose(f);
         CHECK(!strcmp(buf, "# keep me\r\ndisc1 = Q:\\a b.cue\r\nvolume = 15\r\nbogus = 1\r\n"
-                           "save_dir = S:\\sv\nmusic = on\nsfx = off\n"));
+                           "save_dir = S:\\sv\nmusic = on\nstereo = off\n"));
         CHECK(config_load(&c, opt) == 0);
         CHECK(!strcmp(c.disc[0], "Q:\\a b.cue") && !strcmp(c.save_dir, "S:\\sv"));
-        CHECK(c.music_on == 1 && c.sfx_on == 0 && c.volume == 15u);
+        CHECK(c.music_on == 1 && c.stereo_on == 0 && c.volume == 15u);
         /* "volumex" and "music_dir" are not option keys */
         f = fopen(opt, "wb");
         fputs("volumex = 1\nmusic_dir = M\n", f);
@@ -104,7 +105,7 @@ int main(void) {
         n = fread(buf, 1, sizeof buf - 1, f);
         buf[n] = 0;
         fclose(f);
-        CHECK(!strcmp(buf, "volumex = 1\nmusic_dir = M\nmusic = off\nsfx = off\nvolume = 1\n"));
+        CHECK(!strcmp(buf, "volumex = 1\nmusic_dir = M\nmusic = off\nstereo = off\nvolume = 1\n"));
         CHECK(config_save_options("no_such_dir_xyz\\o.ini", 1, 1, 1) == -1);
         CHECK(config_save_options("", 1, 1, 1) == -1 && config_save_options(NULL, 1, 1, 1) == -1);
         remove(opt);

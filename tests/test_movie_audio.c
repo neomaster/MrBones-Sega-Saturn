@@ -15,6 +15,13 @@ static int test_volume_scale(void) {
     return 0;
 }
 
+static int test_downmix(void) {
+    int16_t pcm[] = {100, -100, 32767, 32767, -32768, -32767, 1, 2, -1, -2};
+    static const int16_t want[] = {0, 0, 32767, 32767, -32767, -32767, 1, 1, -1, -1};
+    host_audio_mono_downmix(pcm, 5);
+    return memcmp(pcm, want, sizeof want) != 0;
+}
+
 static int test_opening_sync(void) {
     const char *path = getenv("MB_DISC1");
     cdimage cd;
@@ -363,6 +370,7 @@ done:
 
 int main(void) {
     if (test_volume_scale()) return 1;
+    if (test_downmix()) return 1;
     if (getenv("MB_STORY_ONLY")) return test_story_clock();
     if (getenv("MB_FINALE_ONLY")) return test_finale_clock();
     int16_t samples[44100] = {0}; /* 0.5 s of stereo silence */

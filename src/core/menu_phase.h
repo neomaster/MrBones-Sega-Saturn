@@ -54,7 +54,7 @@ typedef struct {
     menu_screen screen;
     int cursor;          /* row index within screen */
     int music_on;        /* case 4 toggle */
-    int sfx_on;          /* case 5 toggle */
+    int stereo_on;       /* case 5 toggle: STEREO (0 = mono) */
     unsigned volume;     /* 0..MENU_VOLUME_MAX */
     unsigned frames;
     mb_nvm_shadow nvm;

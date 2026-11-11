@@ -21,7 +21,7 @@ void config_defaults(mb_config *c) {
     snprintf(c->manifest, MB_PATH_MAX, "manifest\\versions.txt");
     snprintf(c->config_path, MB_PATH_MAX, "%s\\mrbones.ini", u);
     c->music_on = 1;
-    c->sfx_on = 1;
+    c->stereo_on = 0;
     c->volume = MB_CONFIG_VOLUME_MAX;
 }
 
@@ -75,7 +75,7 @@ int config_load_ini(mb_config *c, const char *path) {
         else if (!strcmp(k, "save_dir")) set(c->save_dir, v);
         else if (!strcmp(k, "manifest")) set(c->manifest, v);
         else if (!strcmp(k, "music")) parse_switch(v, &c->music_on);
-        else if (!strcmp(k, "sfx")) parse_switch(v, &c->sfx_on);
+        else if (!strcmp(k, "stereo")) parse_switch(v, &c->stereo_on);
         else if (!strcmp(k, "volume")) parse_volume(v, &c->volume);
     }
     fclose(f);
@@ -107,14 +107,14 @@ int config_save_ini(const mb_config *c, const char *path) {
     fprintf(f, "# Mr. Bones port configuration. Paths may be absolute or relative to the working directory.\n");
     fprintf(f, "disc1 = %s\ndisc2 = %s\ndata_dir = %s\nsave_dir = %s\nmanifest = %s\n",
             c->disc[0], c->disc[1], c->data_dir, c->save_dir, c->manifest);
-    fprintf(f, "music = %s\nsfx = %s\nvolume = %u\n", c->music_on ? "on" : "off",
-            c->sfx_on ? "on" : "off",
+    fprintf(f, "music = %s\nstereo = %s\nvolume = %u\n", c->music_on ? "on" : "off",
+            c->stereo_on ? "on" : "off",
             c->volume > MB_CONFIG_VOLUME_MAX ? MB_CONFIG_VOLUME_MAX : c->volume);
     fclose(f);
     return 0;
 }
 
-static const char *const k_option_keys[3] = {"music", "sfx", "volume"};
+static const char *const k_option_keys[3] = {"music", "stereo", "volume"};
 
 /* Index into k_option_keys if `line` is "key = ...", else -1. */
 static int option_key(const char *line) {
@@ -130,7 +130,7 @@ static int option_key(const char *line) {
     return -1;
 }
 
-int config_save_options(const char *path, int music_on, int sfx_on, unsigned volume) {
+int config_save_options(const char *path, int music_on, int stereo_on, unsigned volume) {
     char *old = NULL, *out, *w;
     size_t old_len = 0;
     int seen[3] = {0, 0, 0}, i;
@@ -139,7 +139,7 @@ int config_save_options(const char *path, int music_on, int sfx_on, unsigned vol
     if (!path || !*path) return -1;
     if (volume > MB_CONFIG_VOLUME_MAX) volume = MB_CONFIG_VOLUME_MAX;
     snprintf(val[0], sizeof val[0], "%s", music_on ? "on" : "off");
-    snprintf(val[1], sizeof val[1], "%s", sfx_on ? "on" : "off");
+    snprintf(val[1], sizeof val[1], "%s", stereo_on ? "on" : "off");
     snprintf(val[2], sizeof val[2], "%u", volume);
 
     f = fopen(path, "rb");

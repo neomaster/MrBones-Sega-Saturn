@@ -17,6 +17,10 @@ void host_audio_stop(host_audio *audio);
 void host_audio_fade_stop(host_audio *audio, unsigned duration_ms);
 void host_audio_set_volume(unsigned level);
 unsigned host_audio_volume_word(unsigned level);
+/* STEREO option affects CD-DA; AVI PCM retains its recorded channels. */
+void host_audio_set_stereo(int on);
+/* In place: each interleaved L/R frame becomes (L+R)/2 on both channels. */
+void host_audio_mono_downmix(int16_t *pcm, size_t frames);
 
 /* Fire-and-forget mono signed PCM8 at `rate` Hz (stereo 16-bit waveOut).
  * Works with or without an active CD-DA stream. Returns 0 on queue. */

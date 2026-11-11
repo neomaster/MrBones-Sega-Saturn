@@ -101,7 +101,7 @@ static int start_rows(const menu_phase *menu) {
 
 static int options_rows(const menu_phase *menu) {
     (void)menu;
-    return 4; /* Music / SFX / Volume / Back */
+    return 4; /* Music / Stereo / Volume / Back */
 }
 
 static int level_rows(const menu_phase *menu) {
@@ -148,9 +148,9 @@ static void render_status(menu_phase *menu) {
         return;
     }
     snprintf(menu->status, sizeof menu->status,
-             "MENU %s cur=%d music=%d sfx=%d levels=%u gfx=%u avi=%zu titl=%zu "
+             "MENU %s cur=%d music=%d stereo=%d levels=%u gfx=%u avi=%zu titl=%zu "
              "nvm=%s",
-             scr, menu->cursor, menu->music_on, menu->sfx_on, menu->level_count,
+             scr, menu->cursor, menu->music_on, menu->stereo_on, menu->level_count,
              menu->gfx_count, menu->avi_size, menu->titl_size,
              menu->nvm.loaded ? "loaded" : "default");
 }
@@ -253,8 +253,8 @@ static void render_frame(menu_phase *menu) {
                 snprintf(line, sizeof line, "%s MUSIC: %s",
                          sel ? ">" : " ", menu->music_on ? "ON" : "OFF");
             else if (i == 1)
-                snprintf(line, sizeof line, "%s SFX:   %s",
-                         sel ? ">" : " ", menu->sfx_on ? "ON" : "OFF");
+                snprintf(line, sizeof line, "%s STEREO: %s",
+                         sel ? ">" : " ", menu->stereo_on ? "ON" : "OFF");
             else if (i == 2)
                 snprintf(line, sizeof line, "%s VOLUME: %u/15",
                          sel ? ">" : " ", menu->volume);
@@ -382,7 +382,7 @@ static void activate(menu_phase *menu) {
         if (menu->cursor == 0) {
             menu->music_on ^= 1; /* case 4 */
         } else if (menu->cursor == 1) {
-            menu->sfx_on ^= 1; /* case 5 */
+            menu->stereo_on ^= 1; /* case 5 */
         } else if (menu->cursor == 3) {
             menu->screen = MENU_SCR_START; /* BackTrak */
             menu->cursor = 1;
@@ -665,7 +665,7 @@ int menu_phase_load(menu_phase *menu, cdimage *cd, const char *save_dir) {
     memset(menu, 0, sizeof *menu);
     menu->cd = cd;
     menu->music_on = 1;
-    menu->sfx_on = 1;
+    menu->stereo_on = 0; /* the original boots with STEREO: OFF */
     menu->volume = MENU_VOLUME_MAX;
     menu->screen = MENU_SCR_TITLE;
     menu->state = MENU_ST_ACTIVE;
