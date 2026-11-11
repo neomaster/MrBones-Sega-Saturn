@@ -103,9 +103,9 @@ ID da fase escolhida.
   ignoram o retorno, então um arquivo corrompido reinicia o progresso em silêncio.
 - A `LevelSelect` original tem 18 entradas para 13 fases (as de `+0 = 6` repetem o byte da anterior);
   o port mostra uma linha por fase.
-- A rotina do carregador que relê `0x0021d9dc` e `0x0021d9e0` foi decompilada (seção 8, "Leitura no
-  carregador"); ela mostra o efeito de cada palavra, mas o nome "música"/"efeitos" ainda depende de
-  uma observação no Ymir.
+- As duas opções originais são **MUSIC** (`0x0021d9dc`) e **STEREO** (`0x0021d9e0`), pela tela
+  OPTIONS no Ymir e pela decompilação do carregador (seção 8). Não há interruptor de efeitos; a linha
+  SFX do port não tem correspondente no original.
 
 ## 8. Tela de opções, StartScreen e attract
 
@@ -151,13 +151,27 @@ função, `00203db0`, a carga de som da fase: ela pede o recurso 5 da fase (`002
   valor inicial, o evento 1 de cada fase é disparado ao carregá-la; ligado o interruptor, ele é
   omitido. Os dois casos do menu chamam `SoundEvent(2)` depois de alternar.
 
-O que isso prova: os dois interruptores são de som, com efeitos distintos — o primeiro omite o
-evento 1 que toda fase dispara ao começar, o segundo muda um byte do driver de efeitos. É coerente
-com o primeiro ser **música** (desligada com a palavra em 1) e o segundo **efeitos** (ligados com
-a palavra em 1), que é a convenção já usada em `menu_phase` (`music_on` no caso 4, `sfx_on` no
-caso 5). O que não prova: o conteúdo do evento 1 e o significado do bit `0x80` no driver não foram
-lidos; a confirmação pede ouvir no Ymir a fase com `0x0021d9dc = 1` (sem trilha esperada) e com
-`0x0021d9e0 = 0` (sem efeitos esperados).
+**Rótulos no jogo (Ymir 0.4.1, 10/11).** Disco 1, perfil isolado, entrada só pelo controle
+emulado: abertura saltada com Start, START → OPTIONS. A tela mostra três linhas, na ordem das
+entradas de `OptionsScreen` (tipos 3, 4 e 5): **LEVEL SELECT**, **MUSIC: ON** e **STEREO: OFF**.
+Selecionar a segunda linha a mudou para **MUSIC: OFF**; selecionar a terceira, para **STEREO: ON**.
+Capturas em `build-static/ymir-options-labels/` (fora do controle de versão).
+
+Com a decompilação, o significado fica fechado:
+
+| Palavra | Caso | Opção | Valor inicial | Efeito |
+|---|---|---|---|---|
+| `0x0021d9dc` | 4 | MUSIC | 0 = ON | em 1 (OFF), a carga de som da fase omite `SoundEvent(1)` |
+| `0x0021d9e0` | 5 | STEREO | 1 = OFF | `0x25a00483` recebe `0x80` com STEREO OFF (mono) e `0` com STEREO ON |
+
+As polaridades vêm de o boot mostrar ON e OFF com as palavras nos valores da imagem (0 e 1), que
+nenhum outro código do carregador escreve, e de cada seleção inverter a linha correspondente. O
+driver de som não foi analisado, então o uso interno do byte `0x25a00483` é inferido do rótulo. Os
+ensaios foram feitos no menu; o efeito audível na fase não foi medido.
+
+**Não existe opção de efeitos sonoros no original.** O port chama o caso 5 de SFX
+(`menu_phase.sfx_on`, chave `sfx` do `mrbones.ini`) e o usa para suprimir efeitos; isso é extensão
+do host. O original oferece ali saída estéreo ou mono.
 
 Consequência no port: nenhuma macro de opções em `nvm_shadow.h`, e `menu_options` não foi ligado ao
 shadow. Ligar gravaria significado inventado em bytes que o jogo trata de outro modo. O módulo
