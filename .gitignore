@@ -10,6 +10,7 @@ saves/
 # Build output (build/, build-static/, build-mt-validation/, ...) and loose compiler objects
 build/
 build-*/
+dist-windows-clean/
 out/
 /*.obj
 *.exe
