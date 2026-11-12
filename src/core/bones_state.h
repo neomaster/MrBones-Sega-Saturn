@@ -22,4 +22,19 @@ void bones_first_state(bones_state_context *c, const bones_state *next);
 void bones_set_latch(bones_state_context *c, uint32_t target, const uint32_t position[3]);
 void bones_clear_latch(bones_state_context *c);
 void bones_kill_velocity_acceleration(bones_state_context *c);
+
+/*
+ * NearVel_25B1C8 core (03CODE base 0x00232000):
+ *   vel @0x2858FC += accel @0x285908
+ *   then world @0x2858BC[+0/+4/+8] += vel
+ * Order differs from CMover_Move_259D28 (pos then vel). Signed int32 on Saturn words.
+ * wx/wy/wz may be NULL to skip an axis (host often gates X/Y with collision first).
+ */
+void bones_near_vel_integrate(int32_t vel[3], const int32_t accel[3]);
+void bones_near_vel_apply(const int32_t vel[3], uint32_t *wx, uint32_t *wy, uint32_t *wz);
+/* Integrate then apply — full core without projection/collision. */
+void bones_near_vel(int32_t vel[3], const int32_t accel[3],
+                    uint32_t *wx, uint32_t *wy, uint32_t *wz);
+/* KillVelAccel_25E088 on freestanding vec3s (phase vel/accel cells). */
+void bones_kill_vel_accel_vec(int32_t vel[3], int32_t accel[3]);
 #endif

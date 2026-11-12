@@ -36,6 +36,25 @@ int main(void) {
     bones_kill_velocity_acceleration(&c);
     for (unsigned i=0;i<3;i++) assert(c.velocity[i]==0 && c.acceleration[i]==0);
     assert(c.position_x==123 && c.position_y==456 && c.latch_target==0xfedcba98);
+    /* NearVel_25B1C8 core: vel+=accel then world@0x2858BC += vel. */
+    {
+        int32_t vel[3] = {100, -20, 7};
+        int32_t accel[3] = {3, 5, -1};
+        uint32_t wx = 1000, wy = 2000, wz = 3000;
+        bones_near_vel_integrate(vel, accel);
+        assert(vel[0] == 103 && vel[1] == -15 && vel[2] == 6);
+        bones_near_vel_apply(vel, &wx, &wy, &wz);
+        assert(wx == 1103 && wy == 1985 && wz == 3006);
+        vel[0] = 10; vel[1] = 20; vel[2] = 30;
+        accel[0] = 1; accel[1] = 2; accel[2] = 3;
+        wx = 0; wy = 50; wz = 0;
+        bones_near_vel(vel, accel, &wx, &wy, NULL);
+        assert(vel[0] == 11 && vel[1] == 22 && vel[2] == 33);
+        assert(wx == 11 && wy == 72 && wz == 0);
+        bones_kill_vel_accel_vec(vel, accel);
+        assert(vel[0] == 0 && vel[1] == 0 && vel[2] == 0);
+        assert(accel[0] == 0 && accel[1] == 0 && accel[2] == 0);
+    }
     return 0;
 }
 

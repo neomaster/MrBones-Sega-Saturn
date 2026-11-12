@@ -125,6 +125,15 @@ Dumps: `ghidra-hitchk-config.txt`, `ghidra-hitchk-writers.txt`, `ghidra-stride38
 | Coll física | — | §22 live pandcomp; rec0 absolute, >0 viewport `coll_probe_px` |
 | `Mplaynext`/`Mnext` | cue stride `0xc`, dur≈8 | `mplay_seq` no walk |
 
+## Refino host (pós-FINALE PCM) — NearVel / TallSet / HitChk
+
+| Peça | Nativo |
+|---|---|
+| `bones_near_vel_integrate` / `_apply` | `vel+=accel` então `world@0x2858BC+=vel`; fase aplica com gate de colisão |
+| `bones_kill_vel_accel_vec` | KillVelAccel em vec3 da fase |
+| Stand→Walk msgs | posta `0x11001`/`0x11000` na borda STAND→WALK |
+| `brain_switch` | TallSet + BonesSetConfig HitChk a partir do template `0x2873EC` (AABB idêntico nos crouch8) |
+
 ## Não resolvidos (bloqueiam fidelidade byte-a-byte; não bloqueiam jogatina RUNWAY)
 
 - SCSP; cue table Bones literal no 03CODE; Mid HitChk; coll 15PAN por frame alinhada ao scroll.

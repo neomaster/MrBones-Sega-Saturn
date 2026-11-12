@@ -1,4 +1,6 @@
 #include "bones_state.h"
+#include <stddef.h>
+
 /* RUNWAY _BonesFirstState (0x0025d460). */
 void bones_first_state(bones_state_context *c, const bones_state *next) {
     c->last = 0;
@@ -26,6 +28,37 @@ void bones_kill_velocity_acceleration(bones_state_context *c) {
         c->acceleration[i] = 0;
         c->velocity[i] = 0;
     }
+}
+
+void bones_kill_vel_accel_vec(int32_t vel[3], int32_t accel[3]) {
+    unsigned i;
+    if (!vel || !accel) return;
+    for (i = 0; i < 3; ++i) {
+        accel[i] = 0;
+        vel[i] = 0;
+    }
+}
+
+/* NearVel_25B1C8: vel += accel (cells 0x2858FC / 0x285908). */
+void bones_near_vel_integrate(int32_t vel[3], const int32_t accel[3]) {
+    unsigned i;
+    if (!vel || !accel) return;
+    for (i = 0; i < 3; ++i)
+        vel[i] += accel[i];
+}
+
+/* NearVel world write: *0x2858BC[+0/+4/+8] += vel. */
+void bones_near_vel_apply(const int32_t vel[3], uint32_t *wx, uint32_t *wy, uint32_t *wz) {
+    if (!vel) return;
+    if (wx) *wx = (uint32_t)((int32_t)*wx + vel[0]);
+    if (wy) *wy = (uint32_t)((int32_t)*wy + vel[1]);
+    if (wz) *wz = (uint32_t)((int32_t)*wz + vel[2]);
+}
+
+void bones_near_vel(int32_t vel[3], const int32_t accel[3],
+                    uint32_t *wx, uint32_t *wy, uint32_t *wz) {
+    bones_near_vel_integrate(vel, accel);
+    bones_near_vel_apply(vel, wx, wy, wz);
 }
 
 int bones_change_state(bones_state_context *c, const bones_state *next) {

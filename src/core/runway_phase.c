@@ -1,4 +1,5 @@
 #include "runway_phase.h"
+#include "core/bones_state.h"
 #include "core/bones_tall.h"
 #include "core/mb_font.h"
 #include "core/runway_sfx.h"
@@ -30,6 +31,9 @@
 #define MSG_C_B 0x00020600u
 #define MSG_STAND_BOOT 0x00020A00u
 #define MSG_JUMP 0x00020800u /* Stand flag&8 peek → brain switch (rea-runway-session) */
+/* Stand peeks 0x11001 / 0x11000 → BonesWalk @0x260370 (rea-runway-session §12e). */
+#define MSG_WALK_A 0x00011001u
+#define MSG_WALK_B 0x00011000u
 #define MAX_STEP_UP 4
 #define MAX_STEP_DOWN 4
 /* Air: bones_y grows downward (tile row). Jump = negative vel[1]; gravity positive.
@@ -56,9 +60,35 @@
 /* HitChk config origin is bones center; native bones_y is feet → raise by bot_y. */
 #define HITCHK_CENTER_LIFT 12
 
-/* BrainSwitch_25d534 stand-in: install config slot then TallSet → *0x28DB8C. */
+/*
+ * BonesSetConfig @0x25d75c ← bnscfg 0x2873EC +0x50..0x6c.
+ * All 8 crouch slots share AABB TR/TL/BR/BL = (±5,−8)/(±5,+12) (verified in 03CODE).
+ * Image HitChkScrn* @0x285A6C..88 are zero until this copy runs.
+ */
+static const uint8_t k_bnscfg_2873ec_aabb[0x70] = {
+    /* 0x00..0x4f unused by pan_hit_offsets_from_config */
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    /* +0x50 TR X/Y, +0x58 TL X/Y, +0x60 BR X/Y, +0x68 BL X/Y (BE32) */
+    0x00,0x00,0x00,0x05, 0xFF,0xFF,0xFF,0xF8,
+    0xFF,0xFF,0xFF,0xFB, 0xFF,0xFF,0xFF,0xF8,
+    0x00,0x00,0x00,0x05, 0x00,0x00,0x00,0x0C,
+    0xFF,0xFF,0xFF,0xFB, 0x00,0x00,0x00,0x0C
+};
+
+/* BonesSetConfig stand-in: refresh HitChk AABB from crouch bnscfg template. */
+static void bones_set_config_hitchk(runway_phase *phase) {
+    if (!phase) return;
+    if (pan_hit_offsets_from_config(&phase->hit, k_bnscfg_2873ec_aabb,
+                                    sizeof k_bnscfg_2873ec_aabb) != 0)
+        pan_hit_offsets_default(&phase->hit);
+}
+
+/* BrainSwitch_25d534 stand-in: install config slot, BonesSetConfig HitChk, TallSet → *0x28DB8C. */
 static void brain_switch(runway_phase *phase, uint32_t slot) {
     phase->brain_slot = slot;
+    bones_set_config_hitchk(phase);
     phase->tall = bones_tall_set(slot);
 }
 
@@ -297,7 +327,8 @@ int runway_phase_load_dir(runway_phase *phase, cdimage *cd, const char *iso_dir)
     phase->vel_a = 0;
     phase->vel_b = 0;
     phase->airborne = 0;
-    pan_hit_offsets_default(&phase->hit);
+    /* BonesSetConfig ← bnscfg 0x2873EC HitChk AABB (same as crouch8). */
+    bones_set_config_hitchk(phase);
     phase->audio_track = 2;
     phase->state = RUNWAY_ST_STAND;
     phase->pre_pause_state = RUNWAY_ST_STAND;
@@ -603,11 +634,11 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
         phase->sfx_flags |= SFX_TALL;
 
     /*
-     * §12h/§12i vel chain + air:
+     * §12h/§12i NearVel + air:
      *  - pad L/R → vel[0] / vel_a / vel_b (R nontall via vel, not InputBrain)
      *  - B edge → MSG_JUMP 0x20800 + upward vel[1] (Stand flag&8 path)
-     *  - airborne: accel[1]=GRAVITY; vel+=accel; integrate X/Y; land on ground_ty
-     *  - grounded walk snaps Y to ground column
+     *  - NearVel_25B1C8: vel+=accel then world @0x2858BC += vel (collision-gated)
+     *  - grounded walk snaps Y to ground column; HitChk push-out after integrate
      */
     {
         uint32_t held = pad->held;
@@ -652,10 +683,8 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
         if (phase->airborne) {
             phase->accel[1] = GRAVITY_Y;
             phase->accel[2] = 0;
-            /* CMover: vel += accel */
-            phase->vel[0] += phase->accel[0];
-            phase->vel[1] += phase->accel[1];
-            phase->vel[2] += phase->accel[2];
+            /* NearVel integrate first (vel+=accel); apply gated by coll. */
+            bones_near_vel_integrate(phase->vel, phase->accel);
 
             int64_t next_x64 = (int64_t)phase->bones_x + (int64_t)phase->vel[0];
             if (next_x64 < 0) next_x64 = 0;
@@ -687,7 +716,7 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
         } else {
             phase->vel[1] = 0;
             phase->accel[1] = 0;
-            phase->vel[0] += phase->accel[0];
+            bones_near_vel_integrate(phase->vel, phase->accel);
 
             if (phase->vel[0] != 0) {
                 int64_t next64 = (int64_t)phase->bones_x + (int64_t)phase->vel[0];
@@ -701,8 +730,7 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
                     phase->state = RUNWAY_ST_WALK;
                     phase->obj_flags |= 0x02u;
                 } else {
-                    phase->vel[0] = phase->vel[1] = phase->vel[2] = 0;
-                    phase->accel[0] = phase->accel[1] = phase->accel[2] = 0;
+                    bones_kill_vel_accel_vec(phase->vel, phase->accel);
                     phase->vel_a = phase->vel_b = 0;
                     phase->state = RUNWAY_ST_STAND;
                 }
@@ -714,11 +742,22 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
         if (bones_bbs_consume(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_JUMP, NULL) == 1)
             phase->last_message = MSG_JUMP;
 
+        /* Stand → BonesWalk message edge (peek 0x11001 / 0x11000 in Stand_Brain). */
+        if (was_state == RUNWAY_ST_STAND && phase->state == RUNWAY_ST_WALK) {
+            bones_bbs_post(&phase->bbs, MSG_WALK_A, 1);
+            bones_bbs_post(&phase->bbs, MSG_WALK_B, 1);
+            phase->sfx_flags |= SFX_WALK;
+        }
+        if (bones_bbs_peek(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_WALK_A, NULL) == 1) {
+            phase->last_message = MSG_WALK_A;
+            bones_bbs_consume(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_WALK_A, NULL);
+        }
+        if (bones_bbs_peek(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_WALK_B, NULL) == 1)
+            bones_bbs_consume(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_WALK_B, NULL);
+
         apply_push_out(phase);
-        phase->input_cell = phase->bones_x;
+        phase->input_cell = phase->bones_x; /* ≡ world X @0x2858BC after NearVel */
     }
-    if (was_state == RUNWAY_ST_STAND && phase->state == RUNWAY_ST_WALK)
-        phase->sfx_flags |= SFX_WALK;
 
     /* Camera follows bones with light lag. */
     int32_t dx = (int32_t)(phase->bones_x - phase->camera_x) / 8;

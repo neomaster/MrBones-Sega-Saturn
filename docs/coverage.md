@@ -38,9 +38,9 @@ a campanha ponta a ponta.
 
 ### RUNWAY / pan — diferenças conhecidas (fase nativa)
 
-- Stand/Walk **não** reproduzem a árvore completa; BBS nativo: post/peek/consume + máscara (`rea-runway-session.md` §12e).
-- Tall = `TallSet_26D784` (brain ∈ crouch set). Vel→NearVel em `0x2858BC`.
-- Colisão §12k/§12l: mapa fino 40×112; HitChk AABB bnscfg. §22 `15PAN` seek visual + coll live: record-0 world-absolute; pandcomp>0 viewport via `coll_probe_px`.
+- Stand/Walk: BBS post/peek/consume + máscara; Stand→Walk posta `0x11001`/`0x11000` (BonesWalk). Árvore completa de flags ainda parcial (`rea-runway-session.md` §12e).
+- Tall = `TallSet_26D784` (brain ∈ crouch set) + `BonesSetConfig` HitChk no `brain_switch`. Vel→`bones_near_vel_*` → world `0x2858BC` (sem matriz/câmera completa do NearVel SH-2).
+- Colisão §12k/§12l: mapa fino 40×112; HitChk AABB bnscfg `0x2873EC` (±5,−8)/(±5,+12) — idêntico nos 8 crouch slots. §22 `15PAN` seek visual + coll live: record-0 world-absolute; pandcomp>0 viewport via `coll_probe_px`.
 - §12n: CD-DA + `05SND1` PCM8 host (**não** SCSP). §12o/§16/§22: skelbar 14 segs + PAUSE HUD; hazards em todas as 7 fases pan.
 - §13–§25: MENU STXT+title AVI + NvmShadow + campanha 24 + pan/sidescrl/special + duck_avi/19DUCK + scrl_map + rhythm/enemies + DirNameTable + créditos + host **1.0.0**.
 - Ymir RUNWAY-001 **não capturada**.

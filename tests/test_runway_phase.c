@@ -46,7 +46,8 @@ int main(int argc, char **argv) {
         runway_phase_step(&phase, &boot);
         CHECK(phase.last_message == 0x00020A00u || phase.obj_flags & 0x01u);
     }
-    /* Down → 0x10700 → SoundEvent(0xc) + BrainSwitch crouch → TallSet; release → stand. */
+    /* Down → 0x10700 → SoundEvent(0xc) + BrainSwitch crouch → TallSet + BonesSetConfig HitChk;
+     * release → stand. Crouch8 AABB ≡ bnscfg 0x2873EC (±5,−8)/(±5,+12). */
     {
         saturn_pad down = {0};
         saturn_pad_update_host(&down, MB_PAD_DOWN);
@@ -57,12 +58,15 @@ int main(int argc, char **argv) {
         CHECK(phase.sound_event_id == 0xcu); /* §12n: _SoundEvent@0x204128 */
         CHECK(bones_is_crouch_slot(phase.brain_slot));
         CHECK(phase.brain_slot == BONES_CROUCH_SLOT0);
+        CHECK(phase.hit.top_right_x == 5 && phase.hit.top_right_y == -8);
+        CHECK(phase.hit.top_left_x == -5 && phase.hit.bot_left_y == 12);
         saturn_pad_update_host(&down, 0);
         runway_phase_step(&phase, &down);
         CHECK(phase.tall == 0);
         CHECK(phase.brain_slot == BONES_BRAIN_STAND);
         CHECK(!bones_is_crouch_slot(phase.brain_slot));
         CHECK(phase.sound_event_id == 0u);
+        CHECK(phase.hit.bot_right_x == 5 && phase.hit.bot_right_y == 12);
     }
     /* C edge posts 0x10600 then 0x20600; last seen is 0x20600 after probes. */
     {
@@ -79,6 +83,11 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 30; i++) runway_phase_step(&phase, &pad);
     CHECK(phase.bones_x != start_x || phase.state == RUNWAY_ST_STAND);
     CHECK(phase.facing == 1);
+    /* Stand→Walk posts 0x11001 (BonesWalk entry); NearVel drives bones_x @0x2858BC. */
+    if (phase.bones_x != start_x && phase.state == RUNWAY_ST_WALK) {
+        CHECK(phase.last_message == 0x00011001u || phase.obj_flags & 0x02u);
+        CHECK(phase.vel[0] != 0 || phase.vel_a != 0);
+    }
     /* §22: camera advance may seek pandcomp; collision tracks live pan map. */
     if (phase.pan.index != pan0) {
         CHECK(memcmp(&phase.collision, &phase.pan.collision,
