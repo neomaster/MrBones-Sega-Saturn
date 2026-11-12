@@ -42,6 +42,8 @@ typedef enum {
 /* CRing: 16 entries of 0x6c bytes; docs/finale-ring-analysis.md */
 #define FINALE_RING_SLOTS 16u
 #define FINALE_RING_PHASE_WRAP 0x01000000
+/* CRing STXTR frames @ CG 0x25C29AA0..0x25C2CF60 (112×30, /27FINALE/04STXT). */
+#define FINALE_RING_SPRITE_FRAMES 5u
 
 typedef struct {
     special_phase_state state;
@@ -110,6 +112,12 @@ typedef struct {
     unsigned ring_shots;
     int ring_last_index;                /* last ShootRing slot, -1 none */
     int ring_last_activated;            /* 1=activated, 0=deactivated */
+    unsigned ring_sfx_event;            /* Saturn SoundEvent id from last shot */
+    /* Lit anim frames from /27FINALE/04STXT (idle + hit/activate strip). */
+    uint8_t *ring_sprite_rgba[FINALE_RING_SPRITE_FRAMES];
+    unsigned ring_sprite_w[FINALE_RING_SPRITE_FRAMES];
+    unsigned ring_sprite_h[FINALE_RING_SPRITE_FRAMES];
+    unsigned ring_sprite_count;
 
     /* Present */
     unsigned page;

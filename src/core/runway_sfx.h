@@ -38,7 +38,7 @@ typedef struct {
     size_t blob_size;
     runway_sfx_sample samples[RUNWAY_SFX_COUNT];
     uint32_t seq_counters[2]; /* SoundStartSequence groups */
-    unsigned event_hits[16];  /* SoundEvent(index) host tally */
+    unsigned event_hits[64];  /* SoundEvent(index) host tally */
 } runway_sfx;
 
 int runway_sfx_load(runway_sfx *sfx, cdimage *cd);
@@ -48,6 +48,15 @@ void runway_sfx_free(runway_sfx *sfx);
 
 /* _SoundEvent stand-in: record index hit (SND1 event table). */
 void runway_sfx_sound_event(runway_sfx *sfx, unsigned event_index);
+
+/*
+ * Resolve Saturn SoundEvent(id) from the loaded SND1 blob to PCM8.
+ * Type-3 records use word[4] as span-4 sample index (FINALE ring IDs
+ * 0x29/2A/2B → samples 11/12/13; 0x31/32/33 cite 19/20/21 which exceed
+ * span4 — host falls back to sample 15). Returns 0 if a sample was found.
+ */
+int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
+                         const int8_t **pcm, size_t *length);
 
 /*
  * _SoundStartSequence stand-in then play mapped PCM for `id`.

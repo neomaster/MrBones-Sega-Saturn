@@ -33,13 +33,20 @@ static const int k_finale_dir[4] = {0, 128, 192, 64};
 #include "finale_ring_table.inc"
 
 /*
- * ShootRing sound stand-in (Saturn play @0x00204128).
+ * ShootRing sound stand-in (Saturn SoundEvent @0x00204128).
  * Deactivate/hit table @0x002b21f0 = {0x2A,0x2A,0x2B,0x29} by dir.
  * Activate table     @0x002b2200 = {0x32,0x32,0x33,0x31} by dir.
- * Host remaps into the five RUNWAY_SFX slots (no per-dir PCM yet).
+ * Event records resolve to /27FINALE/05SND1 span4 samples via word[4].
+ * Flags keep the legacy RUNWAY_SFX dispatch path for headless tests.
  */
 #define FINALE_SFX_HIT      (RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C)
 #define FINALE_SFX_ACTIVATE (RUNWAY_SFX_FLAG_C)
+static const unsigned k_finale_sfx_hit[4] = {0x2Au, 0x2Au, 0x2Bu, 0x29u};
+static const unsigned k_finale_sfx_act[4] = {0x32u, 0x32u, 0x33u, 0x31u};
+/* STXTR offsets = CG - 0x25C08000 for frames @0x28b4f4 / hit anim strip. */
+static const size_t k_finale_ring_stxt_off[FINALE_RING_SPRITE_FRAMES] = {
+    0x21aa0u, 0x227d0u, 0x23500u, 0x24230u, 0x24f60u
+};
 
 static void finale_ring_init(special_phase *phase) {
     unsigned i;
@@ -53,6 +60,7 @@ static void finale_ring_init(special_phase *phase) {
     phase->ring_shots = 0;
     phase->ring_last_index = -1;
     phase->ring_last_activated = 0;
+    phase->ring_sfx_event = 0;
     /* finale_movie_armed is set from load once 20AVI opens. */
 }
 
@@ -126,9 +134,11 @@ static int finale_ring_select(int phase_field, unsigned dir) {
 
 int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
     int idx;
+    unsigned d;
     if (!phase || phase->kind != STAGE_KIND_FINALE || phase->ring_cleared)
         return 0;
-    idx = finale_ring_select(phase->ring_phase, dir);
+    d = dir & 3u;
+    idx = finale_ring_select(phase->ring_phase, d);
     phase->ring_shots++;
     phase->ring_last_index = idx;
     /* Ending movie carries its own audio — skip ring SFX while movie_ok. */
@@ -137,14 +147,20 @@ int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
         phase->ring_active[idx] = 1;
         phase->ring_active_count++;
         phase->ring_last_activated = 1;
-        if (!phase->movie_ok) phase->sfx_flags |= FINALE_SFX_ACTIVATE;
+        if (!phase->movie_ok) {
+            phase->sfx_flags |= FINALE_SFX_ACTIVATE;
+            phase->ring_sfx_event = k_finale_sfx_act[d];
+        }
         return 0;
     }
     /* active → hit/destroy, decrement; count==0 → EndLevel(0); IDs @0x2b21f0. */
     phase->ring_active[idx] = 0;
     phase->ring_active_count--;
     phase->ring_last_activated = 0;
-    if (!phase->movie_ok) phase->sfx_flags |= FINALE_SFX_HIT;
+    if (!phase->movie_ok) {
+        phase->sfx_flags |= FINALE_SFX_HIT;
+        phase->ring_sfx_event = k_finale_sfx_hit[d];
+    }
     if (phase->ring_active_count < 0)
         phase->ring_active_count = 0;
     if (phase->ring_active_count == 0) {
@@ -164,8 +180,9 @@ static unsigned finale_dir_from_pad(const saturn_pad *pad) {
 
 /*
  * Brain_CRing: slot i at published phase p reads RingDefinitionTable record
- * ((p + i*16) & 255) — base + p*0x20, then +0x200 per slot with wrap -0x2000.
- * Each record holds four signed {dx,dy} sprite offsets from the arena centre.
+ * ((p + i*16) & 255). Lit slots blit the 112×30 STXTR frame (CG strip); Saturn
+ * unlinks inactive entries from the draw list, so unlit slots are skipped.
+ * Hit flash walks the deactivate anim frames @0x28b60c.
  */
 static void paint_finale_rings(const special_phase *phase, uint8_t *dst) {
     unsigned i, part;
@@ -178,31 +195,102 @@ static void paint_finale_rings(const special_phase *phase, uint8_t *dst) {
         const int lit = phase->ring_active[i];
         const int flash =
             (phase->ring_last_index == (int)i && (phase->frames & 4u) == 0);
+        int sx = 0, sy = 0;
+        if (!lit) continue; /* Saturn draw-list unlink when entry+0x68 == 0 */
         for (part = 0; part < 4u; part++) {
-            const int x = cx + (int)xy[part * 2u];
-            const int y = cy + (int)xy[part * 2u + 1u];
-            int dy, dx;
-            for (dy = -2; dy <= 2; dy++) {
-                for (dx = -2; dx <= 2; dx++) {
-                    int px = x + dx, py = y + dy;
-                    uint8_t *p;
-                    if (px < 0 || py < 0 || px >= (int)SCR_W || py >= (int)SCR_H)
-                        continue;
-                    if (dx * dx + dy * dy > 5) continue;
-                    p = dst + ((size_t)py * SCR_W + (size_t)px) * 4u;
-                    if (lit) {
+            sx += (int)xy[part * 2u];
+            sy += (int)xy[part * 2u + 1u];
+        }
+        sx = cx + sx / 4;
+        sy = cy + sy / 4;
+        if (phase->ring_sprite_count > 0) {
+            unsigned fi = 0;
+            if (flash && phase->ring_sprite_count > 1u) {
+                fi = 1u + ((phase->frames >> 2) % (phase->ring_sprite_count - 1u));
+            }
+            if (fi >= phase->ring_sprite_count) fi = 0;
+            runway_compose_blit_sprite(
+                dst, SCR_W, SCR_H, phase->ring_sprite_rgba[fi],
+                phase->ring_sprite_w[fi], phase->ring_sprite_h[fi],
+                sx - (int)phase->ring_sprite_w[fi] / 2,
+                sy - (int)phase->ring_sprite_h[fi] / 2);
+        } else {
+            /* Fallback dots when STXT decode failed. */
+            for (part = 0; part < 4u; part++) {
+                const int x = cx + (int)xy[part * 2u];
+                const int y = cy + (int)xy[part * 2u + 1u];
+                int dy, dx;
+                for (dy = -2; dy <= 2; dy++) {
+                    for (dx = -2; dx <= 2; dx++) {
+                        int px = x + dx, py = y + dy;
+                        uint8_t *p;
+                        if (px < 0 || py < 0 || px >= (int)SCR_W ||
+                            py >= (int)SCR_H)
+                            continue;
+                        if (dx * dx + dy * dy > 5) continue;
+                        p = dst + ((size_t)py * SCR_W + (size_t)px) * 4u;
                         p[0] = 255;
                         p[1] = flash ? 255 : 200;
                         p[2] = flash ? 80 : 40;
-                    } else {
-                        p[0] = 40;
-                        p[1] = 50;
-                        p[2] = 70;
+                        p[3] = 255;
                     }
-                    p[3] = 255;
                 }
             }
         }
+    }
+}
+
+/* Decode one uncompressed/compressed STXTR record at a fixed /04STXT offset. */
+static int decode_finale_ring_frame(const void *stxt, size_t stxt_size,
+                                    size_t offset, const uint8_t *palette,
+                                    uint8_t **out, unsigned *w, unsigned *h) {
+    stxtr_record rec;
+    size_t off = offset, sz, j;
+    uint8_t *px;
+    if (!stxt || offset >= stxt_size || !palette || !out || !w || !h) return -1;
+    if (stxtr_next(stxt, stxt_size, &off, &rec) != 1) return -1;
+    if (rec.width != 112u || rec.height != 30u) return -1;
+    sz = (size_t)rec.width * rec.height * 4u;
+    px = malloc(sz);
+    if (!px) return -1;
+    if (rec.size == (size_t)rec.width * rec.height) {
+        for (j = 0; j < (size_t)rec.width * rec.height; j++) {
+            uint8_t idx = rec.data[j];
+            if (idx == 0) {
+                px[4 * j + 0] = px[4 * j + 1] = px[4 * j + 2] = px[4 * j + 3] = 0;
+            } else {
+                px[4 * j + 0] = palette[4 * idx + 1];
+                px[4 * j + 1] = palette[4 * idx + 2];
+                px[4 * j + 2] = palette[4 * idx + 3];
+                px[4 * j + 3] = 255;
+            }
+        }
+    } else if (mb_sprite_decode(rec.data, rec.size, rec.width, rec.height, 0x04a0,
+                                palette, 1024, px, sz)) {
+        free(px);
+        return -1;
+    }
+    *out = px;
+    *w = rec.width;
+    *h = rec.height;
+    return 0;
+}
+
+static void load_finale_ring_sprites(special_phase *phase,
+                                     const uint8_t *palette) {
+    unsigned i;
+    if (!phase || !phase->textures || !phase->textures_size || !palette) return;
+    for (i = 0; i < FINALE_RING_SPRITE_FRAMES; i++) {
+        uint8_t *px = NULL;
+        unsigned w = 0, h = 0;
+        if (decode_finale_ring_frame(phase->textures, phase->textures_size,
+                                     k_finale_ring_stxt_off[i], palette, &px, &w,
+                                     &h))
+            break;
+        phase->ring_sprite_rgba[i] = px;
+        phase->ring_sprite_w[i] = w;
+        phase->ring_sprite_h[i] = h;
+        phase->ring_sprite_count++;
     }
 }
 
@@ -526,6 +614,8 @@ int special_phase_load(special_phase *phase, cdimage *cd, const char *iso_dir,
         fill_bg(phase->bg_rgba, 8, 16, 40);
 
     build_palette((const uint8_t *)phase->code, phase->code_size, palette);
+    if (kind == STAGE_KIND_FINALE)
+        load_finale_ring_sprites(phase, palette);
     off = 0;
     guard = 0;
     while (phase->gfx_count < SPECIAL_GFX_MAX && guard++ < 128 &&
@@ -589,6 +679,8 @@ void special_phase_free(special_phase *phase) {
     if (!phase) return;
     for (i = 0; i < phase->gfx_count && i < SPECIAL_GFX_MAX; i++)
         free(phase->gfx_rgba[i]);
+    for (i = 0; i < phase->ring_sprite_count && i < FINALE_RING_SPRITE_FRAMES; i++)
+        free(phase->ring_sprite_rgba[i]);
     duck_avi_free(&phase->movie);
     free(phase->title);
     free(phase->textures);

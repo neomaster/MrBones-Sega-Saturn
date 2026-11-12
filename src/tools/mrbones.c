@@ -189,7 +189,20 @@ static void maybe_play_sfx(void) {
     } else if (g_stage->sidescrl_live) {
         flags = g_stage->sidescrl.sfx_flags;
     } else if (g_stage->special_live) {
-        flags = g_stage->special.sfx_flags;
+        /* FINALE ShootRing: prefer Saturn SoundEvent id → span4 PCM. */
+        if (g_stage->special.ring_sfx_event) {
+            const int8_t *pcm = NULL;
+            size_t len = 0;
+            unsigned id = g_stage->special.ring_sfx_event;
+            g_stage->special.ring_sfx_event = 0;
+            runway_sfx_sound_event(&g_sfx, id);
+            if (runway_sfx_event_pcm(&g_sfx, id, &pcm, &len) == 0)
+                host_play_pcm(NULL, pcm, len, RUNWAY_SFX_RATE);
+            else
+                flags = g_stage->special.sfx_flags;
+        } else {
+            flags = g_stage->special.sfx_flags;
+        }
     }
     if (flags)
         runway_sfx_dispatch(&g_sfx, flags, host_play_pcm, NULL);

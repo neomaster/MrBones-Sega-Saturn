@@ -72,15 +72,24 @@ static int play_present(special_phase *ph) {
 int main(void) {
     {
         special_phase arena = {0};
+        unsigned si;
         arena.kind = STAGE_KIND_FINALE;
-        arena.ring_active[0] = 1;
-        arena.ring_active_count = FINALE_RING_SLOTS;
-        /* HIT = JUMP|C (Saturn @0x2b21f0); ACTIVATE = C (Saturn @0x2b2200). */
+        for (si = 0; si < FINALE_RING_SLOTS; si++) arena.ring_active[si] = 1;
+        arena.ring_active_count = (int)FINALE_RING_SLOTS;
+        /* HIT = JUMP|C + SoundEvent 0x2A; ACTIVATE = C + SoundEvent 0x32. */
         CHECK(special_phase_finale_shoot(&arena, 0) == 0);
         CHECK(arena.sfx_flags == (RUNWAY_SFX_FLAG_JUMP | RUNWAY_SFX_FLAG_C));
+        CHECK(arena.ring_sfx_event == 0x2Au);
         arena.sfx_flags = 0;
+        arena.ring_sfx_event = 0;
         CHECK(special_phase_finale_shoot(&arena, 0) == 0);
         CHECK(arena.sfx_flags == RUNWAY_SFX_FLAG_C);
+        CHECK(arena.ring_sfx_event == 0x32u);
+        arena.sfx_flags = 0;
+        arena.ring_sfx_event = 0;
+        /* dir LEFT selects slot 12 (still lit) → hit SoundEvent 0x2B. */
+        CHECK(special_phase_finale_shoot(&arena, 2) == 0);
+        CHECK(arena.ring_sfx_event == 0x2Bu);
     }
     const char *d1 = getenv("MB_DISC1");
     const char *d2 = getenv("MB_DISC2");
@@ -209,6 +218,22 @@ int main(void) {
         CHECK(special_phase_load(&phase, &disc2, "/27FINALE", STAGE_KIND_FINALE) == 0);
         CHECK(phase.ring_active_count == (int)FINALE_RING_SLOTS);
         CHECK(phase.ring_cleared == 0);
+        /* STXTR ring strip: 5×112×30 from CG 0x25C29AA0..0x25C2CF60. */
+        CHECK(phase.ring_sprite_count == FINALE_RING_SPRITE_FRAMES);
+        CHECK(phase.ring_sprite_w[0] == 112u && phase.ring_sprite_h[0] == 30u);
+        CHECK(phase.sound_size > 0);
+        {
+            runway_sfx sfx;
+            const int8_t *pcm = NULL;
+            size_t len = 0;
+            CHECK(runway_sfx_load_dir(&sfx, &disc2, "/27FINALE") == 0);
+            CHECK(runway_sfx_event_pcm(&sfx, 0x2Au, &pcm, &len) == 0 && len == 68u);
+            CHECK(runway_sfx_event_pcm(&sfx, 0x29u, &pcm, &len) == 0 && len == 68u);
+            CHECK(runway_sfx_event_pcm(&sfx, 0x2Bu, &pcm, &len) == 0 && len == 68u);
+            /* Activate IDs cite span4[19..21]; host falls back to sample 15. */
+            CHECK(runway_sfx_event_pcm(&sfx, 0x32u, &pcm, &len) == 0 && len == 516u);
+            runway_sfx_free(&sfx);
+        }
         {
             unsigned k;
             for (k = 0; k < FINALE_RING_SLOTS; k++) {

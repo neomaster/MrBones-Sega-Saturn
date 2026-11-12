@@ -67,13 +67,25 @@ Implementação nativa em `src/core/special_phase.c` (2026-11-09):
     `/27FINALE/20AVI` → `MENU_SCR_START`; capturar vitória jogada no Ymir
     (até agora só vitória forçada via RAM).
 - HUD do anel só quando `!movie_ok` (blit de filme limpo).
-- SFX por disparo (`phase->sfx_flags`, só se `!movie_ok`):
-  - **acerto/destruição** (slot activo → desactiva): Saturn
-    `@0x002b21f0` = `{0x2A,0x2A,0x2B,0x29}` por dir → host
-    `FINALE_SFX_HIT` = `JUMP|C`.
-  - **activação** (slot inactivo → acende): Saturn `@0x002b2200` =
-    `{0x32,0x32,0x33,0x31}` por dir → host `FINALE_SFX_ACTIVATE` = `C`.
-  - Chamada Saturn: `(*0x00204128)(id)`.
+- **Sprites STXTR do anel** (`/27FINALE/04STXT`):
+  - Descritores de animação em `03CODE`: hit `@0x0028b60c` → nós
+    `0x28b514/54c/584/5bc/5f4`; activate `@0x0028b648` (ordem inversa).
+  - CG VRAM `0x25C29AA0…0x25C2CF60` → offsets STXT
+    `{0x21AA0,0x227D0,0x23500,0x24230,0x24F60}`; cada quadro **112×30**
+    (3360 B, 8 bpp). Idle = frame 0; flash de acerto percorre 1…4.
+  - Slot inactivo não é desenhado (Brain desliga da draw-list).
+  - Posição: centróide dos 4 `{dx,dy}` do registo
+    `RingDefinitionTable` + centro do ecrã.
+- **SFX por disparo** (`!movie_ok`):
+  - Chamada Saturn: `SoundEvent(id)` `@0x00204128`.
+  - **acerto** `@0x002b21f0` = `{0x2A,0x2A,0x2B,0x29}` por dir → registo
+    tipo 3 com `word[4]` = sample span4 `{12,12,13,11}` (68 B cada).
+  - **activação** `@0x002b2200` = `{0x32,0x32,0x33,0x31}` → `word[4]` =
+    `{0x14,0x14,0x15,0x13}` (indices ≥19 fora de span4 count=19); host
+    usa sample 15 (516 B) via `runway_sfx_event_pcm`.
+  - Flags legado: `FINALE_SFX_HIT`=`JUMP|C`, `FINALE_SFX_ACTIVATE`=`C`.
+  - `phase->ring_sfx_event` + `mrbones` despacha o PCM do evento.
 
-Ainda aberto: estado inicial confirmado no Ymir, PCM por ID/dir byte-fiel,
-sprites STXTR do anel.
+Ainda aberto: estado inicial confirmado no Ymir; mapeamento SCSP dos
+indices 0x13–0x15 de activação além do fallback span4[15]; vitória
+jogada ponta a ponta.

@@ -2,6 +2,7 @@
 #include "resource.h"
 #include "snd1.h"
 #include "snd1_pcm.h"
+#include "sound_event.h"
 #include "sound_sequence.h"
 #include <stdlib.h>
 #include <string.h>
@@ -85,8 +86,43 @@ void runway_sfx_free(runway_sfx *sfx) {
 }
 
 void runway_sfx_sound_event(runway_sfx *sfx, unsigned event_index) {
-    if (!sfx || event_index >= 16u) return;
+    if (!sfx || event_index >= 64u) return;
     sfx->event_hits[event_index]++;
+}
+
+int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
+                         const int8_t **pcm, size_t *length) {
+    mb_sound_event ev;
+    mb_sound_event_record rec;
+    snd1_span spans[SND1_SPAN_COUNT];
+    snd1_pcm_table table;
+    unsigned sample = 0;
+    int got_sample = 0, rc;
+    if (!sfx || !pcm || !length || !sfx->blob || !sfx->blob_size) return -1;
+    *pcm = NULL;
+    *length = 0;
+    rc = mb_sound_event_open(&ev, sfx->blob, sfx->blob_size, event_id);
+    if (rc != 1) return -1;
+    while (mb_sound_event_next(&ev, &rec) == 1) {
+        /* Type 3 oneshot: word[4] holds the span-4 sample index. */
+        if (rec.words[1] == 3u) {
+            sample = rec.words[4];
+            got_sample = 1;
+            break;
+        }
+    }
+    if (!got_sample) return -1;
+    if (snd1_parse(sfx->blob, sfx->blob_size, spans) || !spans[4].size)
+        return -1;
+    memset(&table, 0, sizeof table);
+    if (snd1_pcm_open(&table, &spans[4])) return -1;
+    if (snd1_pcm_sample(&table, sample, pcm, length) == 0 && *pcm && *length)
+        return 0;
+    /* FINALE activate IDs cite 0x13..0x15 past span4 count — use s15 body. */
+    if (sample >= table.count &&
+        snd1_pcm_sample(&table, 15u, pcm, length) == 0 && *pcm && *length)
+        return 0;
+    return -1;
 }
 
 static uint8_t seq_cb(void *context, uint8_t slot, uint8_t a, uint8_t b, uint8_t c) {
