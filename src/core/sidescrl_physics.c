@@ -55,9 +55,20 @@ static bool has_support(const SidescrlActor *a, const Collider *platforms,
                                SIDESCRL_PHYS_FLOOR_SNAP_PX) < 0;
 }
 
+int32_t sidescrl_project_impulse(const SidescrlActor *actor, int32_t world_impulse) {
+    return clamp_i32((int64_t)world_impulse * actor->projection_px / 28);
+}
+
 void sidescrl_actor_init(SidescrlActor *actor, int32_t x, int32_t y) {
     if (actor == NULL)
         return;
+    actor->spring_held = false;
+    actor->spring_ticks = 0;
+    actor->jump_impulse = BONES_SPRING_IMPULSE;
+    actor->walk_speed = SIDESCRL_MOTION_WALK_MAX;
+    actor->boost_duration = BONES_SPRING_TICKS;
+    actor->projection_px = 28;
+    actor->hit_width = actor->hit_height = 0;
     actor->x = x;
     actor->y = y;
     actor->vx = 0;
@@ -83,10 +94,10 @@ BoundingBox sidescrl_actor_box(const SidescrlActor *actor) {
         b.h = 0;
         return b;
     }
-    height = pose_height(actor->pose);
-    b.x = actor->x;
+    height = actor->hit_height ? actor->hit_height : pose_height(actor->pose);
+    b.w = actor->hit_width ? actor->hit_width : SIDESCRL_ACTOR_WIDTH;
+    b.x = clamp_i32((int64_t)actor->x + SIDESCRL_ACTOR_WIDTH / 2 - b.w / 2);
     b.y = clamp_i32((int64_t)actor->y + (SIDESCRL_STAND_HEIGHT - height));
-    b.w = SIDESCRL_ACTOR_WIDTH;
     b.h = height;
     return b;
 }
@@ -122,17 +133,21 @@ bool sidescrl_actor_set_pose(SidescrlActor *actor, SidescrlPose pose,
 void sidescrl_physics_step(SidescrlActor *actor, const Collider *platforms,
                            size_t count) {
     Collider self;
-    int64_t vy;
+    int32_t old_y;
     int32_t lift;
 
     if (actor == NULL)
         return;
 
-    /* 1. gravity with terminal speed */
-    vy = (int64_t)actor->vy + SIDESCRL_PHYS_GRAVITY_ACCEL;
-    if (vy > SIDESCRL_PHYS_MAX_FALL_SPEED)
-        vy = SIDESCRL_PHYS_MAX_FALL_SPEED;
-    actor->vy = (int32_t)vy;
+    old_y = actor->y;
+    int32_t gravity = SIDESCRL_PHYS_GRAVITY_ACCEL;
+    if (actor->jumping && actor->spring_ticks) {
+        if (actor->spring_held) {
+            gravity -= BONES_SPRING_BOOST;
+            actor->spring_ticks--;
+        } else actor->spring_ticks = 0;
+    }
+    actor->vy = clamp_i32((int64_t)actor->vy + sidescrl_project_impulse(actor, gravity));
 
     /* 2. integrate */
     move_axis(&actor->x, &actor->rem_x, actor->vx);
@@ -142,6 +157,17 @@ void sidescrl_physics_step(SidescrlActor *actor, const Collider *platforms,
     self = actor_collider(actor);
     lift = hitchk_ground_clamp(&self, platforms, count,
                                SIDESCRL_PHYS_FLOOR_SNAP_PX);
+    if (platforms && actor->y > old_y) {
+        /* Sweep the feet so a thin platform survives a high-speed fall. */
+        int64_t bottom = (int64_t)actor->y + SIDESCRL_STAND_HEIGHT;
+        for (size_t i = 0; i < count; i++) {
+            const BoundingBox *p = &platforms[i].box;
+            if (p->h > 0 && p->w > 0 && hitchk_layers_match(self.layer_mask, platforms[i].layer_mask) &&
+                (int64_t)self.box.x + self.box.w > p->x && (int64_t)p->x + p->w > self.box.x &&
+                (int64_t)old_y + SIDESCRL_STAND_HEIGHT <= p->y && p->y < bottom + lift)
+                lift = clamp_i32(p->y - bottom);
+        }
+    }
     if (lift < 0) {
         actor->y = clamp_i32((int64_t)actor->y + lift);
         actor->vy = 0;

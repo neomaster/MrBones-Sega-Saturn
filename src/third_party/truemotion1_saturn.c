@@ -80,7 +80,7 @@ typedef struct TrueMotion1Context {
     int last_deltaset, last_vectable;
 
     unsigned int *vert_pred;
-    int vert_pred_size;
+    unsigned int vert_pred_size;
 
 } TrueMotion1Context;
 

@@ -39,6 +39,8 @@ typedef struct {
     runway_sfx_sample samples[RUNWAY_SFX_COUNT];
     uint32_t seq_counters[2]; /* SoundStartSequence groups */
     unsigned event_hits[64];  /* SoundEvent(index) host tally */
+    int8_t *event_pcm_scratch; /* 16->8-bit converted buffer for type-1 SCSP tones */
+    size_t event_pcm_cap;
 } runway_sfx;
 
 int runway_sfx_load(runway_sfx *sfx, cdimage *cd);
@@ -50,10 +52,10 @@ void runway_sfx_free(runway_sfx *sfx);
 void runway_sfx_sound_event(runway_sfx *sfx, unsigned event_index);
 
 /*
- * Resolve Saturn SoundEvent(id) from the loaded SND1 blob to PCM8.
- * Type-3 records use word[4] as span-4 sample index (FINALE ring IDs
- * 0x29/2A/2B → samples 11/12/13; 0x31/32/33 cite 19/20/21 which exceed
- * span4 — host falls back to sample 15). Returns 0 if a sample was found.
+ * Resolve Saturn SoundEvent(id) from 05SND1 span 0 to 8-bit signed PCM.
+ * Type-1 note-on events (e.g. FINALE ring hit 0x29..0x2B and activate
+ * 0x31..0x33) select the channel's SCSP voice/layer in span 4; type-3
+ * records use word[4] as a span-4 table index. Returns 0 on success.
  */
 int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
                          const int8_t **pcm, size_t *length);

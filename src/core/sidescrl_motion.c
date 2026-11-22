@@ -89,9 +89,9 @@ void sidescrl_motion_step(SidescrlActor *actor, int32_t walk_dir, bool jump_edge
     if (dir != 0)
         actor->facing_left = dir < 0;
     if (actor->on_ground) {
-        actor->vx = approach(actor->vx, dir * SIDESCRL_MOTION_WALK_MAX,
-                             dir != 0 ? SIDESCRL_MOTION_WALK_ACCEL
-                                      : SIDESCRL_MOTION_FRICTION);
+        actor->vx = approach(actor->vx, dir * sidescrl_project_impulse(actor, actor->walk_speed),
+                             sidescrl_project_impulse(actor, dir != 0 ? SIDESCRL_MOTION_WALK_ACCEL
+                                                                      : SIDESCRL_MOTION_FRICTION));
     }
 
     /* b) horizontal move, stopped by walls */
@@ -126,9 +126,10 @@ void sidescrl_motion_step(SidescrlActor *actor, int32_t walk_dir, bool jump_edge
 
     /* c) jump */
     if (jump_edge && actor->on_ground) {
-        actor->vy = SIDESCRL_MOTION_JUMP_IMPULSE;
+        actor->vy = sidescrl_project_impulse(actor, actor->jump_impulse);
         actor->on_ground = false;
         actor->jumping = true;
+        actor->spring_ticks = actor->boost_duration;
     }
 
     /* d) vertical move; x was already integrated, so hold vx at 0 for this call */

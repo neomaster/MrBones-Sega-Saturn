@@ -1,97 +1,97 @@
-#include "rhythm_table.h"
+#include "special_phase.h"
+#include <stdlib.h>
 #include <string.h>
 
-/* Median positive delta in DrumSequence ≈ 7; host DRUM period 12. */
-#define RHYTHM_DRUM_TIME_STEP 7u
+#define CODE_BASE 0x232000u
+#define DRUM_RECORDS (0x26b58cu - CODE_BASE)
+#define LICK_RECORDS (0x283bc0u - CODE_BASE)
 
-/*
- * First 48 notes of _DrumSequence @0x0026b58c (DRUM 03CODE base 0x232000,
- * file off 0x3958C). Extracted 2026-11-07 from /14DRUM/03CODE.
- */
-static const rhythm_note k_drum_notes[] = {
-    {0u, 0u, 0u},   {0u, 3u, 0u},   {22u, 2u, 0u},  {44u, 1u, 0u},
-    {66u, 3u, 0u},  {88u, 3u, 0u},  {102u, 2u, 0u}, {110u, 2u, 0u},
-    {132u, 0u, 0u}, {154u, 0u, 0u}, {176u, 0u, 0u}, {176u, 3u, 0u},
-    {191u, 0u, 0u}, {198u, 2u, 0u}, {205u, 1u, 0u}, {212u, 3u, 0u},
-    {219u, 2u, 0u}, {240u, 1u, 0u}, {255u, 3u, 0u}, {262u, 2u, 0u},
-    {284u, 2u, 0u}, {299u, 3u, 0u}, {306u, 1u, 0u}, {327u, 0u, 0u},
-    {327u, 1u, 0u}, {327u, 3u, 0u}, {349u, 0u, 2u}, {349u, 3u, 2u},
-    {371u, 2u, 2u}, {393u, 1u, 2u}, {415u, 3u, 2u}, {437u, 3u, 2u},
-    {450u, 2u, 2u}, {456u, 2u, 2u}, {481u, 0u, 2u}, {503u, 0u, 2u},
-    {525u, 0u, 2u}, {525u, 3u, 2u}, {540u, 0u, 2u}, {547u, 2u, 2u},
-    {554u, 1u, 2u}, {561u, 3u, 2u}, {568u, 2u, 2u}, {589u, 1u, 2u},
-    {604u, 3u, 2u}, {611u, 2u, 2u}, {633u, 2u, 2u}, {655u, 0u, 2u},
-};
+static const rhythm_table drum = {NULL, 0, 1, 10, 0, "DRUM", "CheckJoy 24897c / DrumSequence 26b58c"};
+static const rhythm_table guitar = {NULL, 0, 1, 9, 0, "GUITAR", "CGBones 261368 / LickStruct 283bc0"};
 
-/*
- * GUITAR host table: DrumSequence kinds remapped onto period-16 beat grid.
- * Phrase lengths 5/6/10/12 from SequenceTable@0x0028c3ac header words.
- * Times = beat_index * 16 (host frames).
- */
-static const rhythm_note k_guitar_notes[] = {
-    {0u, 0u, 0u},   {16u, 3u, 0u},  {32u, 2u, 0u},  {48u, 1u, 0u},
-    {64u, 3u, 0u},  {80u, 3u, 0u},  {96u, 2u, 0u},  {112u, 2u, 0u},
-    {128u, 0u, 0u}, {144u, 0u, 0u}, {160u, 0u, 0u}, {160u, 3u, 0u},
-    {176u, 0u, 0u}, {192u, 2u, 0u}, {208u, 1u, 0u}, {224u, 3u, 0u},
-    {240u, 2u, 0u}, {256u, 1u, 0u}, {272u, 3u, 0u}, {288u, 2u, 0u},
-    {304u, 2u, 0u}, {320u, 3u, 0u}, {336u, 1u, 0u}, {352u, 0u, 0u},
-    {352u, 1u, 0u}, {352u, 3u, 0u}, {368u, 0u, 0u}, {384u, 3u, 0u},
-    {400u, 2u, 0u}, {416u, 1u, 0u}, {432u, 3u, 0u}, {448u, 3u, 0u},
-};
+const rhythm_table *rhythm_table_for_stage(const char *name) {
+    if (name && !strcmp(name, "DRUM")) return &drum;
+    if (name && !strcmp(name, "GUITAR")) return &guitar;
+    return NULL;
+}
 
-static const rhythm_table k_drum = {
-    k_drum_notes,
-    (unsigned)(sizeof k_drum_notes / sizeof k_drum_notes[0]),
-    12u,
-    6u,
-    8u,
-    "DRUM",
-    "DrumSequence@0026b58c drumtab.o",
-};
+static uint32_t word(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+}
 
-static const rhythm_table k_guitar = {
-    k_guitar_notes,
-    (unsigned)(sizeof k_guitar_notes / sizeof k_guitar_notes[0]),
-    16u,
-    6u,
-    8u,
-    "GUITAR",
-    "SequenceTable@0028c3ac + DrumSequence kinds; period 16",
-};
-
-const rhythm_table *rhythm_table_for_stage(const char *stage_name) {
-    if (!stage_name) return 0;
-    if (!strcmp(stage_name, "DRUM")) return &k_drum;
-    if (!strcmp(stage_name, "GUITAR")) return &k_guitar;
+int special_phase_read_music(special_phase *p) {
+    const uint8_t *code = p->code;
+    const rhythm_table *type = rhythm_table_for_stage(p->stage_name);
+    if (!type) return -1;
+    p->score = *type;
+    p->rhythm = &p->score;
+    p->beat_period = 1;
+    if (type == &guitar) {
+        if (p->code_size < LICK_RECORDS + 6u * 16u) return -1;
+        for (unsigned i = 0; i < 6; ++i) {
+            const uint8_t *lick = code + LICK_RECORDS + 16u*i;
+            uint32_t mask = word(lick + 12) >> 16;
+            if (!word(lick) || word(lick + 8) < CODE_BASE ||
+                word(lick + 8) - CODE_BASE >= p->code_size ||
+                !(mask & 0x0770u) || (mask & (mask - 1u))) return -1;
+            p->music_masks[i] = (uint16_t)mask;
+            p->lick_durations[i] = word(lick);
+        }
+        p->music_wait = 0x500;
+        p->active_lick = -1;
+        runway_skel_loose(&p->skel, 0x15555);
+        return 0;
+    }
+    if (p->code_size < DRUM_RECORDS + 16u) return -1;
+    unsigned records = 0, groups = 0, previous = 0;
+    for (size_t off = DRUM_RECORDS; ; off += 16u) {
+        if (off > p->code_size - 16u) return -1;
+        const uint8_t *entry = code + off;
+        uint32_t at = word(entry);
+        if (at == UINT32_MAX) break;
+        if (at > UINT16_MAX || at < previous || word(entry + 4) > 3 || word(entry + 8) > 3) return -1;
+        if (!records || at != previous) ++groups;
+        previous = at;
+        ++records;
+    }
+    if (!groups) return -1;
+    p->drum_notes = calloc(groups, sizeof *p->drum_notes);
+    if (!p->drum_notes) return -1;
+    for (unsigned i = 0; i < records; ++i) {
+        const uint8_t *entry = code + DRUM_RECORDS + 16u*i;
+        uint16_t at = (uint16_t)word(entry);
+        if (i && p->drum_notes[p->score.count-1].time == at) continue;
+        /* CheckJoy takes the animation and group from the first simultaneous record. */
+        p->drum_notes[p->score.count++] = (rhythm_note){at, (uint8_t)word(entry+8), (uint8_t)word(entry+4)};
+    }
+    for (unsigned i = 0; i < 4; ++i) {
+        const uint8_t *mask = code + (0x26b574u - CODE_BASE) + 2u*i;
+        p->music_masks[i] = (uint16_t)((mask[0] << 8) | mask[1]);
+        if (p->music_masks[i] != rhythm_kind_button_mask(i)) return -1;
+    }
+    p->score.notes = p->drum_notes;
     return 0;
 }
 
-uint16_t rhythm_kind_button_mask(unsigned kind) {
-    switch (kind & 3u) {
-    case RHYTHM_KIND_A: return 0x0400u;
-    case RHYTHM_KIND_B: return 0x0100u;
-    case RHYTHM_KIND_C: return 0x0200u;
-    default: return 0x8000u; /* RIGHT */
-    }
+unsigned special_phase_autoplay_frame_limit(const special_phase *phase) {
+    if (phase->kind==STAGE_KIND_BIGBONES || phase->kind==STAGE_KIND_GENROOM) return 12000;
+    if (phase->mode!=SPECIAL_MODE_RHYTHM) return 0;
+    const rhythm_table *score = phase->rhythm;
+    if (score && score->count)
+        return rhythm_note_host_frame(score, score->count - 1u);
+    /* Guitar's last CD sector is 0x38a4 at 75 sectors/s. */
+    return 0x38a4u * 60u / 75u + 2u;
 }
 
-unsigned rhythm_note_host_frame(const rhythm_table *t, unsigned note_index) {
-    unsigned time, period;
-    if (!t || !t->notes || note_index >= t->count) return 0;
-    time = t->notes[note_index].time;
-    period = t->period ? t->period : 12u;
-    if (period == 12u) {
-        /* DrumSequence time → host frames (step ≈ 7 → period 12). */
-        return (time * period) / (RHYTHM_DRUM_TIME_STEP ? RHYTHM_DRUM_TIME_STEP : 7u);
-    }
-    /* GUITAR table already stores host-frame times. */
-    return time;
+uint16_t rhythm_kind_button_mask(unsigned group) {
+    static const uint16_t mask[4] = {0x1000u, 0x2000u, 0x8000u, 0x4000u};
+    return group < 4 ? mask[group] : 0;
 }
 
-int rhythm_buttons_match(unsigned kind, uint16_t buttons) {
-    uint16_t need = rhythm_kind_button_mask(kind);
-    /* Exact pad, or RIGHT strum as universal (--check / held-RIGHT path). */
-    if (buttons & need) return 1;
-    if (buttons & 0x8000u) return 1;
-    return 0;
+unsigned rhythm_note_host_frame(const rhythm_table *t, unsigned index) {
+    return t && t->notes && index < t->count ? 206u + t->notes[index].time : 0;
+}
+
+int rhythm_buttons_match(unsigned group, uint16_t buttons) {
+    return (rhythm_kind_button_mask(group) & buttons) != 0;
 }

@@ -18,7 +18,7 @@
  *           +6   BE16          not interpreted
  *           +8   16 x BE32     cell descriptors, a 4x4 grid of 8x8 cells, row by row
  *           +72  payload       packed form (DecompTile when map[+0x20] is NULL)
- *           +136 payload       heap form (DecompTile when map[+0x20] is set); +72..+135 unused
+ *           +136 payload       heap form (DecompTile when map[+0x20] is set); +72..+135 collision hixels
  *         The build votes per file: each compressed record is tried at +72 and, when the
  *         record is long enough, at +136; the offset with more clean decodes wins for the
  *         whole TIL (MAUSO plane A is heap; MENU and MAUSO B/C/D are packed). A descriptor is
@@ -93,6 +93,12 @@ typedef struct {
 } scrl_tc_fail;
 
 typedef struct {
+    uint8_t bits[64];
+    uint8_t valid;
+} scrl_hixel_block;
+
+typedef struct {
+    scrl_hixel_block *hixels; /* Heap records only, independent of graphics decode. */
     uint8_t *pixels;    /* cols * rows blocks of 32x32 character dots, row by row; owned */
     uint8_t *present;   /* per block: 1 when it has a usable record (2: dropped); owned */
     uint8_t *cell_bank; /* per cell (blocks * 16): palette bank 0..3 from the descriptor; owned */
@@ -123,6 +129,10 @@ void scrl_tilecache_free(scrl_tile_cache *c);
 
 /* Character dot (0..255) at plane pixel (x, y), or -1 when the cache is unusable, the pixel is
  * outside the plane, or its block is missing. 0 is a valid result: a transparent dot. */
+int scrl_tilecache_hixel(const scrl_tile_cache *c, unsigned x, unsigned y);
+/* Signed displacement returned by SCRLCOLLfindfloor for a map-space probe. */
+int scrl_tilecache_floor_offset(const scrl_tile_cache *cache, int x, int y);
+
 int scrl_tilecache_pixel(const scrl_tile_cache *c, unsigned x, unsigned y);
 
 /* CRAM colour index for a 256-colour cell: (palette_bank << 8) | character_dot. Returns -1 when

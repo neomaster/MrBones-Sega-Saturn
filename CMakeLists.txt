@@ -64,6 +64,8 @@ add_library(mbcore STATIC
     src/core/stage_assets.c
     src/core/stage_runner.c
     src/core/stage_progress.c
+    src/core/batwood_body.c
+    src/core/finale_body.c
     src/core/sidescrl_phase.c
     src/core/scrl_map.c
     src/core/scrl_decomp.c
@@ -71,6 +73,7 @@ add_library(mbcore STATIC
     src/core/special_phase.c
     src/core/rhythm_table.c
     src/core/stage_enemy.c
+    src/core/upscale.c
     src/core/duck_avi.c
     src/core/duck_tm1.c
     src/core/mb_font.c
@@ -128,11 +131,13 @@ if (WIN32)
         "-DMANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt"
         "-DDISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue"
         -P "${CMAKE_SOURCE_DIR}/tests/test_mrbones_paths.cmake")
+    set_tests_properties(test_mrbones_paths PROPERTIES ENVIRONMENT "MB_MUTE=1")
     add_executable(test_movie_audio tests/test_movie_audio.c src/platform/host_audio.c)
     target_link_libraries(test_movie_audio mbcore winmm)
-    add_test(NAME test_movie_audio COMMAND test_movie_audio)
+    add_test(NAME test_movie_audio COMMAND test_movie_audio
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
     set_tests_properties(test_movie_audio PROPERTIES
-        ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue")
+        ENVIRONMENT "MB_MUTE=1;MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue")
     # §19: headless native campaign (MENU→Disc1→INSERTCD→Disc2→FINALE→credits)
     add_test(NAME test_full_campaign
         COMMAND mrbones
@@ -140,15 +145,32 @@ if (WIN32)
             "${CMAKE_SOURCE_DIR}/manifest/versions.txt"
             --disc2 "${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue"
             --full-campaign
+            --mute
             --save-dir "${CMAKE_BINARY_DIR}/full_campaign_save"
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-    set_tests_properties(test_full_campaign PROPERTIES TIMEOUT 300)
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+    set_tests_properties(test_full_campaign PROPERTIES
+        TIMEOUT 300
+        ENVIRONMENT "MB_MUTE=1")
+    function(add_finale_replay name tape column clear request visible)
+        add_test(NAME ${name} COMMAND ${CMAKE_COMMAND}
+            "-DEXE=$<TARGET_FILE:mrbones>" "-DROOT=${CMAKE_SOURCE_DIR}"
+            "-DTEST_DIR=${CMAKE_BINARY_DIR}/${name}" "-DTAPE=${tape}" "-DCOLUMN=${column}"
+            "-DEXPECTED_SUMMARY=ticks=2480 clear_tick=${clear} movie_tick=${request} shots=16 hits=2 energy=52430 movie_frames=5658 first_visible=${visible}"
+            -P "${CMAKE_SOURCE_DIR}/tests/test_finale_replay.cmake")
+        set_tests_properties(${name} PROPERTIES ENVIRONMENT "MB_MUTE=1")
+    endfunction()
+    add_finale_replay(test_finale_saturn_replay finale-victory-usa.csv 0 2064 2127 2286)
+    add_finale_replay(test_finale_short_pulse finale-short-pulse-usa.csv 1 2060 2123 2282)
+    add_finale_replay(test_finale_displaced_pulse finale-displaced-usa.csv 2 2062 2125 2284)
     add_test(NAME test_fmv_transition COMMAND mrbones
         "${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue"
         "${CMAKE_SOURCE_DIR}/manifest/versions.txt"
         --disc2 "${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue"
-        --check --save-dir "${CMAKE_BINARY_DIR}/test_fmv_transition")
-    set_tests_properties(test_fmv_transition PROPERTIES TIMEOUT 300)
+        --check --mute --save-dir "${CMAKE_BINARY_DIR}/test_fmv_transition"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+    set_tests_properties(test_fmv_transition PROPERTIES
+        TIMEOUT 300
+        ENVIRONMENT "MB_MUTE=1")
 endif()
 
 enable_testing()
@@ -179,13 +201,13 @@ if (WIN32 AND MB_FFMPEG_ROOT)
     set_tests_properties(test_fmv_all PROPERTIES TIMEOUT 300
         ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue")
 endif()
-foreach(t test_sha256 test_cdimage test_config test_stxtr test_bones_state test_sprite_decode test_runway_sprite test_snd1 test_snd1_pcm test_mover test_cdda test_runway_projection test_bones_message test_bones_bbs test_runway_input test_sound_sequence test_pan_collision test_sound_event test_saturn_pad test_pan_frame test_pan_palette test_runway_compose test_host_input test_obj_scheduler test_pan_collision_map test_bones_tall test_mplay_cue test_runway_phase test_runway_sfx test_runway_skel test_nvm_shadow test_menu_phase test_stage_catalog test_stage_runner test_stage_progress test_sidescrl_phase test_scrl_map test_special_phase test_duck_avi test_rhythm_enemies test_menu_options test_aabb_hitchk test_sidescrl_physics test_sidescrl_slope test_menu_options_view test_sidescrl_wall test_sidescrl_motion test_scrl_decomp test_scrl_tilecache)
+foreach(t test_sha256 test_cdimage test_config test_stxtr test_bones_state test_sprite_decode test_runway_sprite test_snd1 test_snd1_pcm test_mover test_cdda test_runway_projection test_bones_message test_bones_bbs test_runway_input test_sound_sequence test_pan_collision test_sound_event test_saturn_pad test_pan_frame test_pan_palette test_runway_compose test_host_input test_obj_scheduler test_pan_collision_map test_bones_tall test_mplay_cue test_runway_phase test_runway_sfx test_runway_skel test_nvm_shadow test_menu_phase test_stage_catalog test_stage_runner test_stage_progress test_sidescrl_phase test_scrl_map test_special_phase test_duck_avi test_rhythm_enemies test_menu_options test_aabb_hitchk test_sidescrl_physics test_sidescrl_slope test_menu_options_view test_sidescrl_wall test_sidescrl_motion test_scrl_decomp test_scrl_tilecache test_upscale)
     add_executable(${t} tests/${t}.c)
     target_link_libraries(${t} mbcore)
     add_test(NAME ${t} COMMAND ${t} WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 endforeach()
 set_tests_properties(test_runway_phase PROPERTIES
-    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
+    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_runway_sfx PROPERTIES
     ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_menu_phase PROPERTIES
@@ -199,7 +221,7 @@ set_tests_properties(test_stage_progress PROPERTIES
 set_tests_properties(test_sidescrl_phase PROPERTIES
     ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_scrl_map PROPERTIES
-    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
+    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_special_phase PROPERTIES
     ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_duck_avi PROPERTIES

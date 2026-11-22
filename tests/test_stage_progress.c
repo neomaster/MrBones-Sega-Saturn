@@ -43,6 +43,12 @@ static int run_smoke(stage_runner *r, cdimage *cd, int disc, stage_catalog *cat,
     if (r->state == STAGE_RS_NEED_DISC) return 1; /* caller swaps */
     /* Empty/smoke stubs finish fast; special/runway/sidescrl need input. */
     max_frames = (r->special_live || r->runway_live || r->sidescrl_live) ? 5000 : 16;
+    if (r->special_live) {
+        unsigned duration = special_phase_autoplay_frame_limit(&r->special);
+        if (duration > (unsigned)max_frames) max_frames = (int)duration;
+    }
+    if (r->runway_live && r->runway.pan.count * 4u + 120u > (unsigned)max_frames)
+        max_frames = (int)(r->runway.pan.count * 4u + 120u);
     if (r->special_live && r->special.mode == SPECIAL_MODE_PRESENT && r->special.movie_ok) {
         r->special.movie.tick_external = 1;
         r->special.movie.tick_us = r->special.movie.us_per_frame + 1u;
@@ -50,13 +56,14 @@ static int run_smoke(stage_runner *r, cdimage *cd, int disc, stage_catalog *cat,
             max_frames = (int)r->special.movie.frame_count + 2;
     }
     for (i = 0; i < max_frames && !stage_runner_done(r); i++) {
-        if (r->runway_live || r->sidescrl_live) {
-            saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        if (r->runway_live) {
+            saturn_pad_update_host(&pad, runway_phase_autoplay_buttons(&r->runway, (unsigned)i));
+        } else if (r->sidescrl_live) {
+            saturn_pad_update_host(&pad, sidescrl_phase_autoplay_buttons(&r->sidescrl, (unsigned)i));
         } else if (r->special_live) {
             unsigned btn = MB_PAD_RIGHT;
-            if (r->special.mode == SPECIAL_MODE_RHYTHM &&
-                (i % (int)SPECIAL_BEAT_PERIOD) <= 2)
-                btn |= MB_PAD_A;
+            if (r->special.mode == SPECIAL_MODE_RHYTHM || r->special.mode == SPECIAL_MODE_ACTION)
+                btn = special_phase_autoplay_buttons(&r->special, (unsigned)i);
             saturn_pad_update_host(&pad, btn);
         }
         stage_runner_step(r, &pad);
@@ -313,8 +320,10 @@ int main(void) {
     /* Specials smoke. */
     memset(&runner, 0, sizeof runner);
     CHECK(run_smoke(&runner, &disc1, 1, &cat, "/07GUITAR") == 0);
+    CHECK(runner.outcome == STAGE_OUTCOME_WIN);
     stage_runner_free(&runner);
     CHECK(run_smoke(&runner, &disc1, 1, &cat, "/14DRUM") == 0);
+    CHECK(runner.outcome == STAGE_OUTCOME_WIN);
     stage_runner_free(&runner);
     CHECK(run_smoke(&runner, &disc1, 1, &cat, "/16BIGBNS") == 0);
     stage_runner_free(&runner);
@@ -344,7 +353,11 @@ int main(void) {
             saturn_pad pad = {0};
             int f;
             for (f = 0; f < 5000 && !stage_runner_done(&runner); f++) {
-                saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+                uint32_t btn = runner.special_live
+                                   ? special_phase_autoplay_buttons(
+                                         &runner.special, (unsigned)f)
+                                   : MB_PAD_RIGHT;
+                saturn_pad_update_host(&pad, btn);
                 stage_runner_step(&runner, &pad);
             }
         }

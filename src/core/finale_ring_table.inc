@@ -263,6 +263,6 @@ static const int16_t k_finale_ring_xy[256][8] = {
 };
 
 /* Brain_CRing adds these to the phase accumulator each tick (wrap 0x01000000). */
-static const int k_finale_phase_incr[16] = {
-    65536, 32768, 36044, 39321, 42598, 45875, 49152, 52428, 55705, 58982, 62259, 65536, 72089, 78643, 91750, 104857
+static const int k_finale_phase_incr[17] = {
+    65536, 32768, 36044, 39321, 42598, 45875, 49152, 52428, 55705, 58982, 62259, 65536, 72089, 78643, 91750, 104857, 131072
 };

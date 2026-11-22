@@ -71,7 +71,7 @@ int main(void) {
         CHECK(sfx.seq_counters[1] == 4u); /* group 1 advanced (jump) */
     }
 
-    /* Phase sync: Down → SoundEvent 0xc; walk edge → WALK; jump → JUMP; land → LAND. */
+    /* Phase sync: crouch, footsteps in the running cycle, jump and landing. */
     CHECK(runway_phase_load(&phase, &cd) == 0);
     {
         saturn_pad pad = {0};
@@ -89,11 +89,19 @@ int main(void) {
 
         saturn_pad_update_host(&pad, MB_PAD_RIGHT);
         runway_phase_step(&phase, &pad);
-        if (phase.state == RUNWAY_ST_WALK)
-            CHECK(phase.sfx_flags & RUNWAY_SFX_FLAG_WALK);
+        CHECK(phase.state == RUNWAY_ST_WALK && !(phase.sfx_flags & RUNWAY_SFX_FLAG_WALK));
 
         saturn_pad_update_host(&pad, 0);
-        runway_phase_step(&phase, &pad);
+        unsigned steps_seen = 0;
+        for (int i = 0; i < 64; i++) {
+            unsigned previous = phase.mplay.index;
+            runway_phase_step(&phase, &pad);
+            int footfall = phase.state == RUNWAY_ST_WALK && phase.mplay.index != previous &&
+                           (phase.mplay.index == 3 || phase.mplay.index == 13);
+            CHECK(!!(phase.sfx_flags & RUNWAY_SFX_FLAG_WALK) == footfall);
+            if (footfall) steps_seen |= phase.mplay.index == 3 ? 1u : 2u;
+        }
+        CHECK(steps_seen == 3u);
         saturn_pad_update_host(&pad, MB_PAD_B);
         runway_phase_step(&phase, &pad);
         if (phase.airborne)

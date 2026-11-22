@@ -30,6 +30,23 @@ int pan_collision_hixel_pixel(const pan_collision_map *map, int pixel_x, int pix
                                    pixel_y - PAN_COLL_Y_BIAS);
 }
 
+/* _PANCOLLfindfloor (RUNWAY 0x256b60), returning the last free row above
+ * support. Native callers can probe outside the 320x224 collision buffer. */
+int pan_collision_floor(const pan_collision_map *map, int x, int y) {
+    if (!map || map->size != PAN_COLL_SIZE || x < 0 || x > PAN_COLL_X_MAX ||
+        y < 0 || y > PAN_COLL_Y_MAX) return -1;
+    int hixel = pan_collision_hixel_pixel(map, x, y);
+    if (hixel & 1) {
+        while (y >= 2 && (pan_collision_hixel_pixel(map, x, y) & 1)) y -= 2;
+        return y;
+    }
+    while (y + 2 <= PAN_COLL_Y_MAX) {
+        if (pan_collision_hixel_pixel(map, x, y + 2) & 1) return y;
+        y += 2;
+    }
+    return -1;
+}
+
 int pan_collision_map_solid_tile(const pan_collision_map *map, int tx, int ty) {
     int px0, py0, dx, dy;
     if (!map || map->size != PAN_COLL_SIZE) return 0;

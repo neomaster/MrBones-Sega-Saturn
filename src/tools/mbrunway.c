@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
     if (check_only) {
         saturn_pad pad = {0};
         int dumped = 0;
-        for (int i = 0; i < 5000 && !runway_phase_done(&phase); i++) {
+        for (int i = 0; (unsigned)i <= 4u * phase.runway_win_record && !runway_phase_done(&phase); i++) {
             saturn_pad_update_host(&pad, MB_PAD_RIGHT);
             runway_phase_step(&phase, &pad);
             maybe_play_sfx();

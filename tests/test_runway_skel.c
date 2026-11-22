@@ -5,6 +5,9 @@
 #define CHECK(c) do { if (!(c)) { printf("FAIL %d: %s\n", __LINE__, #c); return 1; } } while (0)
 
 int main(void) {
+    const runway_hazard_zone damage_zone = {
+        110u * 2341u, 125u * 2341u, RUNWAY_DAMAGE_DEFAULT
+    };
     runway_skel s;
     runway_hazards h;
 
@@ -38,9 +41,10 @@ int main(void) {
     CHECK(runway_skel_hit(&s, RUNWAY_DAMAGE_DEFAULT) == 0); /* paused ignores */
     runway_skel_set_paused(&s, 0);
 
-    /* Hazards: zone at 120–135 px with u=2341. */
     runway_hazards_init_runway(&h, 2341u);
-    CHECK(h.zone_count == 3u);
+    CHECK(h.zone_count == 0u);
+    h.zone_count = 1;
+    h.zones[0] = damage_zone;
     runway_skel_init(&s);
     CHECK(runway_hazards_step(&h, &s, 100u * 2341u) == 0); /* outside */
     CHECK(h.hits_applied == 0u);
@@ -53,10 +57,15 @@ int main(void) {
         runway_skel_tick_cooldown(&s);
     CHECK(runway_hazards_step(&h, &s, 50u * 2341u) == 0);
     CHECK(h.hits_applied == 2u);
+    CHECK(s.skeletism == RUNWAY_SKEL_MAX - 2 * RUNWAY_DAMAGE_DEFAULT);
+    runway_skel_add(&s, RUNWAY_DAMAGE_DEFAULT);
+    CHECK(s.skeletism == RUNWAY_SKEL_MAX - RUNWAY_DAMAGE_DEFAULT);
 
     /* Drain to death via repeated hits. */
-    runway_skel_init(&s);
     runway_hazards_init_runway(&h, 2341u);
+    h.zone_count = 1;
+    h.zones[0] = damage_zone;
+    runway_skel_init(&s);
     {
         int dead = 0;
         for (int n = 0; n < 32 && !dead; n++) {
@@ -68,23 +77,15 @@ int main(void) {
         CHECK(s.died == 1);
     }
 
-    /* §22: per-stage hazard layouts for all 7 pan stages. */
+    /* §22: each pan stage supplies disc/actor contacts rather than synthetic zones. */
     {
-        const char *stages[] = {"RUNWAY", "LOGS", "ICE1", "ICE2", "MOAT", "RIDE",
+        const char *stages[] = {"LOGS", "ICE1", "ICE2", "MOAT", "RIDE",
                                 "STAING"};
         unsigned i;
         for (i = 0; i < sizeof stages / sizeof stages[0]; i++) {
             runway_hazards_init_pan_stage(&h, stages[i], 2341u);
-            CHECK(h.zone_count == 3u);
-            CHECK(h.zones[0].x1 > h.zones[0].x0);
+            CHECK(h.zone_count == 0u);
         }
-        /* LOGS zones 70–85 / 110–125 / 145–155; 50 is outside, 75 hits. */
-        runway_hazards_init_pan_stage(&h, "LOGS", 2341u);
-        runway_skel_init(&s);
-        CHECK(runway_hazards_step(&h, &s, 50u * 2341u) == 0);
-        CHECK(h.hits_applied == 0u);
-        CHECK(runway_hazards_step(&h, &s, 75u * 2341u) == 0);
-        CHECK(h.hits_applied == 1u);
     }
 
     printf("OK runway_skel/hazard\n");

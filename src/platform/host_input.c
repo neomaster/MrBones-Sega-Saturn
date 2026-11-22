@@ -8,7 +8,7 @@ uint32_t host_input_key_button(unsigned vk) {
     case 0x26: case 'W': return MB_PAD_UP;
     case 0x28: case 'S': return MB_PAD_DOWN;
     case 'Z': return MB_PAD_A;
-    case 'X': return MB_PAD_B;
+    case 'X': case 0x20: return MB_PAD_B;
     case 'C': return MB_PAD_C;
     case 0x0d: return MB_PAD_START;
     case 'V': return MB_PAD_X;
@@ -34,7 +34,7 @@ uint32_t host_input_keyboard_buttons(void) {
     if (key_down(VK_UP) || key_down('W')) buttons |= MB_PAD_UP;
     if (key_down(VK_DOWN) || key_down('S')) buttons |= MB_PAD_DOWN;
     if (key_down('Z')) buttons |= MB_PAD_A;
-    if (key_down('X')) buttons |= MB_PAD_B;
+    if (key_down('X') || key_down(VK_SPACE)) buttons |= MB_PAD_B;
     if (key_down('C')) buttons |= MB_PAD_C;
     if (key_down(VK_RETURN)) buttons |= MB_PAD_START;
     if (key_down('V')) buttons |= MB_PAD_X;

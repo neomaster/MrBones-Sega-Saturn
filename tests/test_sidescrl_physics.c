@@ -3,7 +3,6 @@
 #define CHECK(c) do {if (!(c)) {printf("FAIL %d: %s\n",__LINE__,#c);return 1;}} while (0)
 
 #define U SIDESCRL_PHYS_UNITS_PER_PIXEL
-#define MAXV SIDESCRL_PHYS_MAX_FALL_SPEED
 
 static Collider solid(int32_t x, int32_t y, int32_t w, int32_t h) {
     Collider c;
@@ -107,17 +106,17 @@ static int test_motion(void) {
     sidescrl_physics_step(&a, NULL, 0);
     CHECK(a.x == INT32_MIN);
 
-    /* terminal speed: huge vy is capped, very negative vy only gains gravity */
+    /* saturation: INT32_MAX remains representable, very negative vy only gains gravity */
     sidescrl_actor_init(&a, 0, 0);
     a.vy = INT32_MAX;
     sidescrl_physics_step(&a, NULL, 0);
-    CHECK(a.vy == MAXV);
+    CHECK(a.vy == INT32_MAX);
     sidescrl_actor_init(&a, 0, 0);
     a.vy = INT32_MIN;
     sidescrl_physics_step(&a, NULL, 0);
     CHECK(a.vy == INT32_MIN + SIDESCRL_PHYS_GRAVITY_ACCEL);
 
-    /* free fall: speed grows, never exceeds the cap, reaches it, y keeps growing */
+    /* free fall: speed grows by the authored impulse each tick */
     sidescrl_actor_init(&a, 0, 0);
     a.facing_left = true;
     a.jumping = true;
@@ -126,11 +125,11 @@ static int test_motion(void) {
         int32_t prev_vy = a.vy;
         sidescrl_physics_step(&a, NULL, 0);
         CHECK(!a.on_ground);
-        CHECK(a.vy <= MAXV && a.vy >= prev_vy);
+        CHECK(a.vy == prev_vy + SIDESCRL_PHYS_GRAVITY_ACCEL);
         CHECK(a.y >= prev_y);
         prev_y = a.y;
     }
-    CHECK(a.vy == MAXV);
+    CHECK(a.vy == 200 * SIDESCRL_PHYS_GRAVITY_ACCEL);
     CHECK(a.facing_left && a.jumping); /* the step does not own these flags */
     CHECK(a.y > 1000);
     return 0;
@@ -149,13 +148,13 @@ static int test_landing(void) {
         int landed = 0;
         for (int i = 0; i < 2000 && !landed; i++) {
             sidescrl_physics_step(&a, &floor, 1);
-            CHECK(a.vy <= MAXV);
+            CHECK(a.vy == 0 || a.vy == (i + 1) * SIDESCRL_PHYS_GRAVITY_ACCEL);
             if (a.vy > vmax) vmax = a.vy;
             landed = a.on_ground;
             if (!landed) CHECK(feet(&a) <= 600); /* never sinks into the floor */
         }
         CHECK(landed);
-        CHECK(vmax == MAXV); /* it fell long enough to reach terminal speed */
+        CHECK(vmax > 8 * U); /* exceeds the former cap */
     }
     CHECK(a.y == 600 - SIDESCRL_STAND_HEIGHT && feet(&a) == 600);
     CHECK(a.vy == 0 && a.rem_y == 0 && a.on_ground && !a.jumping);
@@ -184,7 +183,7 @@ static int test_landing(void) {
     /* random starts: always lands flush, then stays put */
     for (int n = 0; n < 300; n++) {
         sidescrl_actor_init(&a, (int32_t)(rnd(&seed) % 381u), (int32_t)(rnd(&seed) % 501u));
-        a.vy = (int32_t)(rnd(&seed) % (uint32_t)(MAXV + 1));
+        a.vy = (int32_t)(rnd(&seed) % (uint32_t)(50 * U));
         a.rem_y = (int32_t)(rnd(&seed) % (uint32_t)U);
         a.pose = (SidescrlPose)(rnd(&seed) % 3u);
         CHECK(fall_until_landed(&a, &floor, 1, 600) > 0);
@@ -411,7 +410,6 @@ static int test_misc(void) {
         sidescrl_physics_step(&b, plats, 3);
         CHECK(same(&a, &b));
         CHECK(a.rem_x >= 0 && a.rem_x < U && a.rem_y >= 0 && a.rem_y < U);
-        CHECK(a.vy <= MAXV);
         CHECK(!a.on_ground || (a.vy == 0 && !a.jumping));
     }
     return 0;

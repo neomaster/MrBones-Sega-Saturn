@@ -21,11 +21,13 @@
 #include "core/saturn_pad.h"
 #include "core/special_phase.h"
 #include "core/stage_catalog.h"
+#include "core/stage_enemy.h"
 #include "core/stage_progress.h"
 #include "core/stage_runner.h"
 #include "platform/config.h"
 #include "platform/host_audio.h"
 #include "platform/host_input.h"
+#include <errno.h>
 #include <windows.h>
 #include <mmsystem.h>
 #include <stdio.h>
@@ -47,6 +49,10 @@ typedef enum {
 static app_mode g_mode = APP_MENU;
 /* --check / --full-campaign: FINALE keeps movie_ok from load (hashes). */
 static int g_headless_finale_movie;
+static int g_mute_audio;
+static int g_autoplay_mode;
+static char g_capture_dir[MB_PATH_MAX];
+static unsigned g_capture_seq;
 static menu_phase *g_menu;
 static stage_runner *g_stage;
 static stage_progress g_prog;
@@ -82,6 +88,9 @@ static unsigned g_menu_volume = 15;
 static ULONGLONG g_menu_music_after;
 static host_audio *g_movie_audio;
 static int g_movie_audio_failed;
+/* Set only around the --check corrupt-movie negative tests: silences the
+ * expected movie failure lines; status/control flow are unchanged. */
+static int g_expect_movie_error;
 static ULONGLONG g_movie_last_tick;
 static unsigned g_movie_audio_position_ms;
 static char g_movie_next_stage[STAGE_ISO_MAX];
@@ -98,8 +107,54 @@ static uint32_t g_pending_keys;
 static char g_title[192];
 static char g_save_dir[MB_PATH_MAX];
 static char g_disc2_path[MB_PATH_MAX];
+static mb_upscale_mode g_upscale_mode = MB_UPSCALE_NEAREST;
+static unsigned g_upscale_factor = 3u;
+static int g_hd_bones = 0;
+static int g_fullscreen = 0;
+static WINDOWPLACEMENT g_wp_prev;
+static char g_hd_bones_dir[MB_PATH_MAX];
 
-static int find_bundled_file(char *out, size_t size, const char *relative) {
+static void toggle_fullscreen(HWND window) {
+    LONG_PTR style = GetWindowLongPtrA(window, GWL_STYLE);
+    if (!g_fullscreen) {
+        MONITORINFO mi;
+        memset(&mi, 0, sizeof mi);
+        mi.cbSize = sizeof(mi);
+        g_wp_prev.length = sizeof(g_wp_prev);
+        if (GetWindowPlacement(window, &g_wp_prev) &&
+            GetMonitorInfoA(MonitorFromWindow(window, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+            SetWindowLongPtrA(window, GWL_STYLE, style & ~(LONG_PTR)WS_OVERLAPPEDWINDOW);
+            SetWindowPos(window, HWND_TOP,
+                         mi.rcMonitor.left, mi.rcMonitor.top,
+                         mi.rcMonitor.right - mi.rcMonitor.left,
+                         mi.rcMonitor.bottom - mi.rcMonitor.top,
+                         SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+            g_fullscreen = 1;
+        }
+    } else {
+        SetWindowLongPtrA(window, GWL_STYLE, style | (LONG_PTR)WS_OVERLAPPEDWINDOW);
+        SetWindowPlacement(window, &g_wp_prev);
+        SetWindowPos(window, NULL, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        g_fullscreen = 0;
+    }
+}
+
+static unsigned effective_upscale_scale(void) {
+    if (g_upscale_mode == MB_UPSCALE_NEAREST) {
+        return (g_upscale_factor >= 1u && g_upscale_factor <= 4u)
+                   ? g_upscale_factor : 3u;
+    }
+    if ((g_upscale_mode == MB_UPSCALE_SCALE2X ||
+         g_upscale_mode == MB_UPSCALE_XBR2X) && g_upscale_factor == 4u) {
+        return 4u;
+    }
+    return mb_upscale_mode_factor(g_upscale_mode);
+}
+
+static int find_bundled_entry(char *out, size_t size, const char *relative,
+                              int want_dir) {
     char dir[MB_PATH_MAX], *slash;
     DWORD len = GetModuleFileNameA(NULL, dir, (DWORD)sizeof dir);
     if (!len || len >= sizeof dir) return -1;
@@ -111,12 +166,22 @@ static int find_bundled_file(char *out, size_t size, const char *relative) {
         DWORD attrs;
         if (n < 0 || (size_t)n >= size) return -1;
         attrs = GetFileAttributesA(out);
-        if (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+        if (attrs != INVALID_FILE_ATTRIBUTES &&
+            (((attrs & FILE_ATTRIBUTE_DIRECTORY) != 0) == (want_dir != 0)))
+            return 0;
         slash = strrchr(dir, '\\');
         if (!slash) break;
         *slash = 0;
     }
     return -1;
+}
+
+static int find_bundled_file(char *out, size_t size, const char *relative) {
+    return find_bundled_entry(out, size, relative, 0);
+}
+
+static int find_bundled_dir(char *out, size_t size, const char *relative) {
+    return find_bundled_entry(out, size, relative, 1);
 }
 static int g_mounted_disc = 1;
 static stage_catalog g_catalog;
@@ -162,6 +227,12 @@ static void maybe_start_movie_audio(void) {
         g_menu->movie_pcm_pending = 0;
     }
     if (g_mode != APP_STAGE || !g_stage) return;
+    if (g_audio && g_stage->special_live && g_stage->special.finale_movie_preroll) {
+        /* The CD drive leaves the arena track to read 19DUCK at the request.
+         * The AVI's PCM is armed independently when duckAudioStart is reached. */
+        host_audio_stop(g_audio);
+        g_audio = NULL;
+    }
     if (g_stage->special_live && g_stage->special.movie_pcm_pending &&
         g_stage->special.movie.pcm && g_stage->special.movie.pcm_samples > 0) {
         /* Arena→PlayDuckMovie(3): stop FINALE CD-DA before ending-movie PCM. */
@@ -173,7 +244,8 @@ static void maybe_start_movie_audio(void) {
             g_stage->special.movie.pcm_channels);
         g_movie_audio_failed = !g_movie_audio;
         if (g_movie_audio) { g_movie_last_tick = GetTickCount64(); g_movie_audio_position_ms = 0; }
-        else fprintf(stderr, "movie audio unavailable (%s)\n", g_stage->iso_dir);
+        else if (!g_expect_movie_error)
+            fprintf(stderr, "movie audio unavailable (%s)\n", g_stage->iso_dir);
         g_stage->special.movie_pcm_pending = 0;
     }
 }
@@ -385,8 +457,9 @@ static int advance_after_stage(void) {
     int finale_to_menu = 0;
     if (!g_stage) return 0;
     if (g_stage->special_live && g_stage->special.movie.decode_error) {
-        fprintf(stderr, "movie decode failed (%s): %s\n", g_stage->iso_dir,
-                g_stage->special.movie.status);
+        if (!g_expect_movie_error)
+            fprintf(stderr, "movie decode failed (%s): %s\n", g_stage->iso_dir,
+                    g_stage->special.movie.status);
         g_movie_next_stage[0] = 0;
         g_mode = APP_DONE;
         return 0;
@@ -475,33 +548,22 @@ static int advance_after_stage(void) {
     return 0;
 }
 
-static void paint(HWND window) {
-    PAINTSTRUCT ps;
-    HDC dc = BeginPaint(window, &ps);
-    RECT rect;
+static int current_host_frame(int *out_movie, const char **out_help,
+                              const char **out_status, const uint8_t **out_frame) {
     int movie = (g_mode == APP_MENU && g_menu &&
                  (g_menu->screen == MENU_SCR_TITLE || g_menu->screen == MENU_SCR_STORY)) ||
                 (g_mode == APP_STAGE && g_stage && g_stage->special_live &&
                  g_stage->special.mode == SPECIAL_MODE_PRESENT && g_stage->special.movie_ok);
-    GetClientRect(window, &rect);
-    int cw = rect.right - rect.left;
-    int ch = rect.bottom - rect.top;
-    if (cw <= 0 || ch <= 0) { EndPaint(window, &ps); return; }
-
-    HDC mem_dc = CreateCompatibleDC(dc);
-    HBITMAP mem_bmp = CreateCompatibleBitmap(dc, cw, ch);
-    HGDIOBJ old_bmp = SelectObject(mem_dc, mem_bmp);
-
-    FillRect(mem_dc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    SetBkMode(mem_dc, TRANSPARENT);
-    SetTextColor(mem_dc, RGB(220, 220, 220));
     const char *help =
         g_mode == APP_MENU
             ? "MENU: Arrows | Enter select | Esc quit"
             : (g_mode == APP_CREDITS
                    ? "CREDITS: Esc quit"
-                   : "STAGE: Arrows | X=jump | Down=tall | Enter=pause | Esc abort");
-    if (!movie) TextOutA(mem_dc, 12, 8, help, (int)strlen(help));
+                   : "STAGE: Arrows/WASD | Space/X=Jump | Down=Duck | C=Blues | Z=Pulse | Enter=Pause");
+    if (g_mode == APP_STAGE && g_stage && g_stage->sidescrl_live && g_stage->sidescrl.body_config)
+        help = "BATWOOD: C=Jump/Hold ledge | Up=Climb | X/Space=Blues | Z=Attract bones | Enter=Pause";
+    if (g_mode == APP_STAGE && g_stage && g_stage->kind == STAGE_KIND_FINALE && !movie)
+        help = "FINALE: Arrows/WASD=Face bolt | X/Space=Fire stored charge";
     const char *status = NULL;
     const uint8_t *frame = NULL;
     if (g_mode == APP_MENU && g_menu) {
@@ -514,42 +576,257 @@ static void paint(HWND window) {
         status = g_credits_status;
         frame = g_credits_rgba;
     }
-    if (!movie && status) TextOutA(mem_dc, 12, 28, status, (int)strlen(status));
-    if (!movie && g_prog.status[0])
-        TextOutA(mem_dc, 12, 48, g_prog.status, (int)strlen(g_prog.status));
+    *out_movie = movie;
+    *out_help = help;
+    *out_status = status;
+    *out_frame = frame;
+    return 0;
+}
+
+static void render_host_surface(HDC mem_dc, int cw, int ch) {
+    RECT rect = {0, 0, cw, ch};
+    int movie = 0;
+    const char *help = NULL;
+    const char *status = NULL;
+    const uint8_t *frame = NULL;
+    int show_bar;
+    HBRUSH bg_br;
+    current_host_frame(&movie, &help, &status, &frame);
+    show_bar = (!movie && !g_fullscreen);
+    bg_br = CreateSolidBrush(show_bar ? RGB(10, 13, 20) : RGB(0, 0, 0));
+    FillRect(mem_dc, &rect, bg_br);
+    DeleteObject(bg_br);
+    SetBkMode(mem_dc, TRANSPARENT);
+    SetTextColor(mem_dc, RGB(220, 220, 220));
+    if (show_bar && help) TextOutA(mem_dc, 12, 4, help, (int)strlen(help));
+    if (show_bar && status) TextOutA(mem_dc, 12, 20, status, (int)strlen(status));
+    if (show_bar && g_prog.status[0])
+        TextOutA(mem_dc, 12, 36, g_prog.status, (int)strlen(g_prog.status));
+    if (show_bar && cw >= 780) {
+        char gfx_hud[112];
+        unsigned sc = effective_upscale_scale();
+        snprintf(gfx_hud, sizeof gfx_hud,
+                 "[F5] %s %ux  [F6] HD: %s  [F11] Full",
+                 mb_upscale_mode_name(g_upscale_mode), sc,
+                 (g_hd_bones && sc >= 2u) ? "ON" : "OFF");
+        SetTextColor(mem_dc, RGB(170, 215, 255));
+        TextOutA(mem_dc, cw - 320, 4, gfx_hud, (int)strlen(gfx_hud));
+        SetTextColor(mem_dc, RGB(220, 220, 220));
+    }
     if (frame) {
-        static uint8_t bgra[320 * 224 * 4];
-        size_t i;
-        for (i = 0; i < 320u * 224u * 4u; i += 4u) {
-            bgra[i + 0] = frame[i + 2];
-            bgra[i + 1] = frame[i + 1];
-            bgra[i + 2] = frame[i + 0];
-            bgra[i + 3] = 255u;
-        }
+        static uint8_t up_rgba[1280 * 896 * 4];
+        static uint8_t bgra[1280 * 896 * 4];
         BITMAPINFO info = {0};
+        unsigned sc = effective_upscale_scale();
+        unsigned src_w = 320u, src_h = 224u;
+        const uint8_t *src_rgba = frame;
+        int top_margin = show_bar ? 54 : 0;
+        int avail_w = (show_bar && cw > 24) ? (cw - 24) : cw;
+        int avail_h = (show_bar && ch > top_margin + 10) ? (ch - top_margin - 10) : ch;
+        int width = avail_w;
+        int height = (int)((int64_t)width * 224 / 320);
+        int left, top;
+        if (height > avail_h) {
+            height = avail_h;
+            width = (int)((int64_t)height * 320 / 224);
+        }
+        left = (cw - width) / 2;
+        top = (!show_bar) ? ((ch - height) / 2) : (top_margin + (avail_h - height) / 2);
+
+        if (!movie && (g_hd_bones || g_upscale_mode != MB_UPSCALE_NEAREST) &&
+            sc >= 2u && sc <= 4u &&
+            mb_upscale_rgba(frame, 320u, 224u, g_upscale_mode, sc, up_rgba,
+                            sizeof up_rgba) == 0) {
+            src_w = 320u * sc;
+            src_h = 224u * sc;
+            if (g_hd_bones && stage_is_native_live(g_stage))
+                (void)stage_enemies_draw_bones_hd(up_rgba, src_w, src_h, sc);
+            src_rgba = up_rgba;
+        }
+        {
+            size_t count = (size_t)src_w * src_h;
+            const uint32_t *s32 = (const uint32_t *)src_rgba;
+            uint32_t *d32 = (uint32_t *)bgra;
+            for (size_t i = 0; i < count; i++) {
+                uint32_t px = s32[i];
+                d32[i] = (px & 0xFF00FF00u) | ((px & 0x00FF0000u) >> 16) |
+                         ((px & 0x000000FFu) << 16) | 0xFF000000u;
+            }
+        }
         info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        info.bmiHeader.biWidth = 320;
-        info.bmiHeader.biHeight = -224;
+        info.bmiHeader.biWidth = (LONG)src_w;
+        info.bmiHeader.biHeight = -(LONG)src_h;
         info.bmiHeader.biPlanes = 1;
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB;
-        int width = 640, height = 448, left = 20, top = 72;
-        if (movie) {
-            width = cw;
-            height = (int)((int64_t)cw * 224 / 320);
-            if (height > ch) { height = ch; width = (int)((int64_t)ch * 320 / 224); }
-            left = (cw - width) / 2;
-            top = (ch - height) / 2;
-        }
         SetStretchBltMode(mem_dc, COLORONCOLOR);
-        StretchDIBits(mem_dc, left, top, width, height, 0, 0, 320, 224,
-                      bgra, &info, DIB_RGB_COLORS, SRCCOPY);
+        if (show_bar && left > 1 && top > 1) {
+            RECT frame_r = {left - 1, top - 1, left + width + 1, top + height + 1};
+            HBRUSH fr_br = CreateSolidBrush(RGB(34, 46, 66));
+            FrameRect(mem_dc, &frame_r, fr_br);
+            DeleteObject(fr_br);
+        }
+        StretchDIBits(mem_dc, left, top, width, height, 0, 0, (int)src_w,
+                      (int)src_h, bgra, &info, DIB_RGB_COLORS, SRCCOPY);
     }
-    BitBlt(dc, 0, 0, cw, ch, mem_dc, 0, 0, SRCCOPY);
-    SelectObject(mem_dc, old_bmp);
-    DeleteObject(mem_bmp);
-    DeleteDC(mem_dc);
+}
+
+static void capture_host_ppm(const char *tag) {
+    char safe[64], path[MB_PATH_MAX + 96];
+    size_t si = 0;
+    int movie = 0;
+    const char *help = NULL, *status = NULL;
+    const uint8_t *frame = NULL;
+    unsigned seq;
+    if (!g_capture_dir[0] || !tag) return;
+    CreateDirectoryA(g_capture_dir, NULL);
+    for (const char *p = tag; *p && si + 1 < sizeof safe; p++) {
+        char ch = *p;
+        if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') || ch == '_' || ch == '-')
+            safe[si++] = ch;
+    }
+    safe[si] = 0;
+    if (!safe[0]) snprintf(safe, sizeof safe, "frame");
+    seq = g_capture_seq++;
+    current_host_frame(&movie, &help, &status, &frame);
+    if (frame) {
+        static uint8_t raw1x[320 * 224 * 4];
+        const uint8_t *out1x = frame;
+        stage_bones_pose pose;
+        FILE *fp;
+        if (!movie && g_hd_bones && effective_upscale_scale() >= 2u &&
+            stage_enemies_last_bones_pose(&pose) == 0 && pose.valid) {
+            memcpy(raw1x, frame, sizeof raw1x);
+            stage_enemies_set_hd_overlay(0);
+            /* Recover HD-capable enemies + thrown bones the overlay suppressed
+             * from the live 1x surface, then composite Mr. Bones on top. */
+            stage_enemies_redraw_suppressed_1x(raw1x, 320u, 224u);
+            stage_enemies_draw_bones_ex(raw1x, 320u, 224u, pose.foot_x, pose.foot_y,
+                                        pose.facing, pose.tall, pose.airborne,
+                                        pose.anim_frame, pose.scale_num,
+                                        pose.scale_den);
+            stage_enemies_set_hd_overlay(1);
+            out1x = raw1x;
+        }
+        snprintf(path, sizeof path, "%s\\%03u_%s.ppm", g_capture_dir, seq, safe);
+        fp = fopen(path, "wb");
+        if (fp) {
+            fprintf(fp, "P6\n320 224\n255\n");
+            for (size_t i = 0; i < 320u * 224u; i++)
+                fwrite(&out1x[i * 4u], 1, 3, fp);
+            fclose(fp);
+        }
+    }
+    {
+        unsigned sc = effective_upscale_scale();
+        const int cw = (int)(320u * sc + 24u);
+        const int ch = (int)(224u * sc + 64u);
+        BITMAPINFO bmi = {0};
+        void *bits = NULL;
+        HDC mem_dc = CreateCompatibleDC(NULL);
+        HBITMAP dib = NULL;
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = cw;
+        bmi.bmiHeader.biHeight = -ch;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        dib = CreateDIBSection(mem_dc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+        if (mem_dc && dib && bits) {
+            HGDIOBJ old = SelectObject(mem_dc, dib);
+            const uint8_t *bgra = (const uint8_t *)bits;
+            FILE *fp;
+            render_host_surface(mem_dc, cw, ch);
+            GdiFlush();
+            snprintf(path, sizeof path, "%s\\%03u_%s_win.ppm", g_capture_dir, seq, safe);
+            fp = fopen(path, "wb");
+            if (fp) {
+                fprintf(fp, "P6\n%d %d\n255\n", cw, ch);
+                for (int i = 0; i < cw * ch; i++) {
+                    uint8_t rgb[3] = {bgra[i * 4 + 2], bgra[i * 4 + 1], bgra[i * 4 + 0]};
+                    fwrite(rgb, 1, 3, fp);
+                }
+                fclose(fp);
+            }
+            SelectObject(mem_dc, old);
+        }
+        if (dib) DeleteObject(dib);
+        if (mem_dc) DeleteDC(mem_dc);
+    }
+}
+
+static HDC g_paint_dc;
+static HBITMAP g_paint_dib;
+static HGDIOBJ g_paint_old_bmp;
+static int g_paint_w;
+static int g_paint_h;
+
+static void free_paint_backbuffer(void) {
+    if (g_paint_dc) {
+        if (g_paint_old_bmp) {
+            SelectObject(g_paint_dc, g_paint_old_bmp);
+            g_paint_old_bmp = NULL;
+        }
+        DeleteDC(g_paint_dc);
+        g_paint_dc = NULL;
+    }
+    if (g_paint_dib) {
+        DeleteObject(g_paint_dib);
+        g_paint_dib = NULL;
+    }
+    g_paint_w = 0;
+    g_paint_h = 0;
+}
+
+static void paint(HWND window) {
+    PAINTSTRUCT ps;
+    HDC dc = BeginPaint(window, &ps);
+    RECT rect;
+    int cw, ch;
+    GetClientRect(window, &rect);
+    cw = rect.right - rect.left;
+    ch = rect.bottom - rect.top;
+    if (cw <= 0 || ch <= 0) { EndPaint(window, &ps); return; }
+
+    if (!g_paint_dc || !g_paint_dib || g_paint_w != cw || g_paint_h != ch) {
+        BITMAPINFO bmi = {0};
+        void *bits = NULL;
+        free_paint_backbuffer();
+        g_paint_dc = CreateCompatibleDC(dc);
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        bmi.bmiHeader.biWidth = cw;
+        bmi.bmiHeader.biHeight = -ch;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = BI_RGB;
+        if (g_paint_dc)
+            g_paint_dib = CreateDIBSection(g_paint_dc, &bmi, DIB_RGB_COLORS,
+                                           &bits, NULL, 0);
+        if (g_paint_dc && g_paint_dib) {
+            g_paint_old_bmp = SelectObject(g_paint_dc, g_paint_dib);
+            g_paint_w = cw;
+            g_paint_h = ch;
+        } else {
+            free_paint_backbuffer();
+        }
+    }
+    if (g_paint_dc && g_paint_dib) {
+        render_host_surface(g_paint_dc, cw, ch);
+        BitBlt(dc, 0, 0, cw, ch, g_paint_dc, 0, 0, SRCCOPY);
+    }
     EndPaint(window, &ps);
+}
+
+static void update_window_title(HWND window, const char *text, int force) {
+    static char s_last_title[256];
+    static unsigned s_throttle;
+    if (!window || !text) return;
+    if (!force && ++s_throttle < 10u) return;
+    s_throttle = 0;
+    if (strcmp(s_last_title, text) == 0) return;
+    snprintf(s_last_title, sizeof s_last_title, "%s", text);
+    SetWindowTextA(window, text);
 }
 
 static int step_menu_with_pad(menu_phase *menu, const saturn_pad *pad) {
@@ -610,7 +887,8 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             host_audio_set_volume(g_menu_volume);
             host_audio_set_stereo(g_menu->stereo_on);
             if (g_menu->state == MENU_ST_QUIT) {
-                fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
+                if (!g_expect_movie_error)
+                    fprintf(stderr, "movie failed (menu): %s\n", g_menu->status);
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
                 g_mode = APP_DONE;
                 return 0;
@@ -630,7 +908,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             }
             snprintf(g_title, sizeof g_title, "Mr. Bones - %s%s",
                      g_movie_audio_failed ? "[FMV audio unavailable] " : "", g_menu->status);
-            SetWindowTextA(window, g_title);
+            update_window_title(window, g_title, 0);
             if (menu_phase_done(g_menu) && g_menu->state == MENU_ST_START_LEVEL)
                 PostMessageA(window, WM_USER + 1, 0, 0);
         } else if (g_mode == APP_STAGE && g_stage && !stage_runner_done(g_stage)) {
@@ -644,7 +922,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 host_audio_movie_pause(g_movie_audio, g_stage->special.state == SPECIAL_ST_PAUSED);
             snprintf(g_title, sizeof g_title, "Mr. Bones - %s%s",
                      g_movie_audio_failed ? "[FMV audio unavailable] " : "", stage_runner_status(g_stage));
-            SetWindowTextA(window, g_title);
+            update_window_title(window, g_title, stage_runner_done(g_stage) ? 1 : 0);
             if (stage_runner_done(g_stage)) {
                 host_audio_stop(g_movie_audio);
                 g_movie_audio = NULL;
@@ -655,13 +933,15 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             credits_build_frame(g_credits_frames / (CREDITS_HOLD_FRAMES / CREDITS_PAGES));
             snprintf(g_title, sizeof g_title, "Mr. Bones - CREDITS %u/%u",
                      g_credits_frames, CREDITS_HOLD_FRAMES);
-            SetWindowTextA(window, g_title);
+            update_window_title(window, g_title, 0);
             if (g_credits_frames >= CREDITS_HOLD_FRAMES) {
                 g_mode = APP_DONE;
             }
         }
-        InvalidateRect(window, NULL, FALSE);
-        UpdateWindow(window);
+        if (lp == 0) {
+            InvalidateRect(window, NULL, FALSE);
+            UpdateWindow(window);
+        }
         return 0;
     }
     if (msg == WM_USER + 1) { return 0; }
@@ -669,8 +949,28 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
         (void)advance_after_stage();
         return 0;
     }
-    if (msg == WM_KEYDOWN && !(lp & (1L << 30)))
+    if (msg == WM_KEYDOWN && !(lp & (1L << 30))) {
         g_pending_keys |= host_input_key_button((unsigned)wp);
+        if (wp == VK_F5) {
+            g_upscale_mode = (mb_upscale_mode)(((int)g_upscale_mode + 1) % 5);
+            stage_enemies_prepare_hd_bones(g_upscale_mode,
+                                           g_hd_bones_dir[0] ? g_hd_bones_dir : NULL);
+            stage_enemies_set_hd_overlay(g_hd_bones && effective_upscale_scale() >= 2u);
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+        if (wp == VK_F6) {
+            g_hd_bones = !g_hd_bones;
+            stage_enemies_set_hd_overlay(g_hd_bones && effective_upscale_scale() >= 2u);
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+        if (wp == VK_F11) {
+            toggle_fullscreen(window);
+            InvalidateRect(window, NULL, FALSE);
+            return 0;
+        }
+    }
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE) {
         PostQuitMessage(0);
         return 0;
@@ -687,7 +987,9 @@ static void usage(void) {
             "usage: mrbones <disc1.cue|bin> <manifest>\n"
             "              [--disc2 cue] [--check] [--full-campaign]\n"
             "              [--save-dir DIR] [--skip-menu] [--level /NNNAME]\n"
-            "              [--campaign] [--version]\n",
+            "              [--campaign] [--mute] [--autoplay] [--capture-dir DIR]\n"
+            "              [--upscale MODE] [--scale N] [--benchmark-frames N] [--hd-dir DIR] [--no-hd-bones]\n"
+            "              [--finale-replay CSV [--capture-ticks N,N,... --capture-dir DIR]] [--version]\n",
             MB_HOST_VERSION);
 }
 
@@ -695,6 +997,7 @@ static void usage(void) {
 static int play_native_stage(stage_runner *stage, const char *iso, int max_frames) {
     saturn_pad pad = {0};
     int i;
+    int cap_a = 0, cap_b = 0, cap_c = 0;
     if (enter_stage(iso)) {
         fprintf(stderr, "full: begin failed %s\n", iso);
         return -1;
@@ -703,6 +1006,18 @@ static int play_native_stage(stage_runner *stage, const char *iso, int max_frame
         /* Instant skip — progress should already skip these. */
         printf("  SKIP %s [empty]\n", iso);
         return 0;
+    }
+    if (stage->runway_live && stage->runway.runway_win_record)
+        max_frames = (int)(stage->runway.runway_win_record * 4u + 1u);
+    if (stage->runway_live && (!strcmp(iso, "/11LOGS") || !strcmp(iso, "/18RIDE") || !strcmp(iso, "/24STAING"))) {
+        unsigned duration = stage->runway.pan.count * 4u + 120u;
+        if (duration > (unsigned)max_frames) max_frames = (int)duration;
+    }
+    if (stage->sidescrl_live && stage->sidescrl.scroll_w > (unsigned)max_frames)
+        max_frames = (int)stage->sidescrl.scroll_w;
+    if (stage->special_live) {
+        unsigned duration = special_phase_autoplay_frame_limit(&stage->special);
+        if (duration > (unsigned)max_frames) max_frames = (int)duration;
     }
     if (!stage_is_native_live(stage)) {
         fprintf(stderr, "full: %s is smoke/non-native (%s)\n", iso, stage->status);
@@ -717,20 +1032,74 @@ static int play_native_stage(stage_runner *stage, const char *iso, int max_frame
             max_frames = (int)stage->special.movie.frame_count + 2;
     }
     for (i = 0; i < max_frames && !stage_runner_done(stage); i++) {
-        if (stage->runway_live || stage->sidescrl_live) {
-            saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        if (stage->special_live && stage->special.mode == SPECIAL_MODE_PRESENT &&
+            stage->special.movie_ok && !stage->special.movie.tick_external) {
+            stage->special.movie.tick_external = 1;
+            stage->special.movie.tick_us = stage->special.movie.us_per_frame + 1u;
+            unsigned remaining = stage->special.movie.frame_count + stage->special.finale_movie_preroll + 16u;
+            if ((unsigned)i + remaining > (unsigned)max_frames)
+                max_frames = i + (int)remaining;
+        }
+        if (stage->runway_live) {
+            saturn_pad_update_host(
+                &pad, runway_phase_autoplay_buttons(&stage->runway, (unsigned)i));
+        } else if (stage->sidescrl_live) {
+            saturn_pad_update_host(
+                &pad, sidescrl_phase_autoplay_buttons(&stage->sidescrl, (unsigned)i));
         } else if (stage->special_live) {
             unsigned btn = MB_PAD_RIGHT;
-            if (stage->special.mode == SPECIAL_MODE_RHYTHM) {
-                int period = stage->special.beat_period
-                                 ? (int)stage->special.beat_period
-                                 : (int)SPECIAL_BEAT_PERIOD;
-                if ((i % period) <= 2) btn |= MB_PAD_A;
+            if (stage->special.mode == SPECIAL_MODE_RHYTHM ||
+                stage->special.mode == SPECIAL_MODE_ACTION ||
+                       (stage->kind == STAGE_KIND_FINALE && !stage->special.movie_ok)) {
+                btn = special_phase_autoplay_buttons(&stage->special,
+                                                     (unsigned)i);
             }
             saturn_pad_update_host(&pad, btn);
         }
         stage_runner_step(stage, &pad);
         maybe_play_sfx();
+        if (g_capture_dir[0]) {
+            int cap_a_frame = (stage->special_live &&
+                               stage->special.mode == SPECIAL_MODE_ACTION)
+                                  ? 18
+                                  : 60;
+            if (!cap_a && i == cap_a_frame) {
+                capture_host_ppm(iso);
+                cap_a = 1;
+            } else if (!cap_b && i > 120) {
+                int interesting = 0;
+                if (stage->runway_live &&
+                    (stage->runway.enemies.shots[0].active ||
+                     stage->runway.bones_x > 160u * stage->runway.enemies.units_per_pixel))
+                    interesting = 1;
+                else if (stage->sidescrl_live &&
+                         ((!strcmp(stage->sidescrl.stage_name, "LAFF") &&
+                           stage->sidescrl.camera_x > 1620u * stage->sidescrl.enemies.units_per_pixel) ||
+                          (strcmp(stage->sidescrl.stage_name, "LAFF") != 0 &&
+                           (stage->sidescrl.enemies.shots[0].active || i == 220))))
+                    interesting = 1;
+                else if (stage->special_live &&
+                         ((stage->special.mode == SPECIAL_MODE_PRESENT &&
+                           stage->kind == STAGE_KIND_FINALE &&
+                           !stage->special.movie_ok &&
+                           stage->special.ring_active_count > 0 &&
+                           stage->special.ring_active_count < 14 &&
+                           stage->special.ring_cleared == 0 && i >= 140) ||
+                          (stage->special.mode != SPECIAL_MODE_PRESENT && i == 220)))
+                    interesting = 1;
+                if (interesting || (i == 750 && !stage->sidescrl_live) || i == 900) {
+                    capture_host_ppm(iso);
+                    cap_b = 1;
+                }
+            }
+            if (!cap_c && stage->special_live &&
+                stage->special.mode == SPECIAL_MODE_PRESENT &&
+                stage->special.movie_ok &&
+                stage->special.movie.frames_drawn == 45u) {
+                capture_host_ppm("FINALE_ending_avi");
+                cap_c = 1;
+            }
+        }
     }
     if (!stage_runner_done(stage)) {
         fprintf(stderr, "full: %s did not finish (%s)\n", iso, stage->status);
@@ -741,6 +1110,119 @@ static int play_native_stage(stage_runner *stage, const char *iso, int max_frame
                               : (stage->sidescrl_live ? "sidescrl" : "special"),
            (int)stage_runner_outcome(stage), stage->status);
     return 0;
+}
+
+/* Columns after held are reference observations; only tick and the physical
+ * pad mask are inputs. All game state after the entrance seed comes from play. */
+static int replay_uint(const char *s, char **end, int base, unsigned long *value) {
+    if (*s < '0' || *s > '9') return -1;
+    errno = 0;
+    *value = strtoul(s, end, base);
+    return errno || *end == s ? -1 : 0;
+}
+
+static int replay_finale(stage_runner *stage, const char *path, const char *capture_ticks) {
+    FILE *file = fopen(path, "r");
+    char line[4096], *end;
+    unsigned long seed, expected = 1, movie_tick = 0, first_visible = 0, next_capture = 0;
+    unsigned ntsc_remainder = 0;
+    saturn_pad pad = {0};
+    int failed = 1;
+    if (!file) {
+        fprintf(stderr, "replay: cannot open %s\n", path);
+        return 1;
+    }
+    if (!fgets(line, sizeof line, file) || strncmp(line, "# seed=0x", 9) ||
+        replay_uint(line + 7, &end, 16, &seed) || *end != '\n' ||
+        !fgets(line, sizeof line, file) || strncmp(line, "tick,held", 9) ||
+        (line[9] != ',' && line[9] != '\n') || !strchr(line, '\n')) {
+        fprintf(stderr, "replay: expected # seed=0xHEX followed by tick,held\n");
+        goto close_file;
+    }
+    if (stage_progress_begin(&g_prog, "/27FINALE") || enter_stage("/27FINALE") ||
+        !stage->special_live || stage->special.movie_ok) {
+        fprintf(stderr, "replay: failed to enter FINALE arena\n");
+        goto close_file;
+    }
+    special_phase *phase = &stage->special;
+    if (seed != phase->finale_rng) {
+        fprintf(stderr, "replay: seed 0x%08lx differs from FINALE entry state 0x%08x\n",
+                seed, phase->finale_rng);
+        goto close_file;
+    }
+    if (g_capture_dir[0])
+        puts("replay_tick,tick,held,face,charge,slots,slot_mask,ring_phase,energy,shots,movie");
+    while (fgets(line, sizeof line, file)) {
+        unsigned long tick, held;
+        if ((!strchr(line, '\n') && !feof(file)) ||
+            replay_uint(line, &end, 10, &tick) || tick != expected || *end != ',' ||
+            replay_uint(end + 1, &end, 10, &held) || held > 0x1ffful ||
+            (*end && *end != ',' && *end != '\n')) {
+            fprintf(stderr, "replay: invalid row at tick %lu\n", expected);
+            goto close_file;
+        }
+        if (!next_capture && capture_ticks && *capture_ticks) {
+            if (!g_capture_dir[0] || replay_uint(capture_ticks, &end, 10, &next_capture) ||
+                next_capture < tick || (*end && (*end != ',' || !end[1]))) {
+                fprintf(stderr, "replay: --capture-ticks requires ordered ticks and --capture-dir\n");
+                goto close_file;
+            }
+            capture_ticks = *end ? end + 1 : end;
+        }
+        saturn_pad_update_host(&pad, (uint32_t)held);
+        /* One physical US Saturn retrace is 1001/60000 s = 50050/3 us. */
+        ntsc_remainder += 50050u;
+        if (phase->movie_ok) {
+            phase->movie.tick_external = 1;
+            phase->movie.tick_us = ntsc_remainder / 3u;
+        }
+        ntsc_remainder %= 3u;
+        stage_runner_step(stage, &pad);
+        maybe_play_sfx();
+        if (g_capture_dir[0]) {
+            unsigned mask = 0;
+            for (unsigned i = 0; i < FINALE_RING_SLOTS; ++i)
+                if (phase->ring_active[i]) mask |= 1u << i;
+            printf("replay_tick,%lu,%lu,%u,%u,%d,%04x,%d,%d,%u,%d\n", tick, held,
+                   phase->finale_facing, phase->finale_charged, phase->ring_active_count,
+                   mask, phase->ring_phase, phase->skel.skeletism, phase->ring_shots, phase->movie_ok);
+        }
+        if (next_capture == tick) {
+            char tag[48];
+            snprintf(tag, sizeof tag, "FINALE_tick_%06lu", tick);
+            capture_host_ppm(tag);
+            next_capture = 0;
+        }
+        if (!movie_tick && phase->ring_cleared && phase->movie_ok) {
+            movie_tick = tick;
+        }
+        if (movie_tick && !phase->finale_movie_preroll && !first_visible && !stage_runner_done(stage)) {
+            first_visible = tick;
+            if (g_capture_dir[0]) capture_host_ppm("FINALE_replay_ending");
+        }
+        if (stage_runner_done(stage) && !movie_tick) {
+            fprintf(stderr, "replay: arena ended without a win at tick %lu\n", tick);
+            goto close_file;
+        }
+        ++expected;
+    }
+    if (next_capture || (capture_ticks && *capture_ticks)) {
+        fprintf(stderr, "replay: capture tick exceeds tape length\n");
+        goto close_file;
+    }
+    if (ferror(file) || !movie_tick || phase->ring_active_count != 0 ||
+        phase->ring_shots < FINALE_RING_SLOTS) {
+        fprintf(stderr, "replay: missing victory or incomplete tape at tick %lu (%d sectors left)\n",
+                expected - 1, phase->ring_active_count);
+        goto close_file;
+    }
+    printf("FINALE replay WIN: seed=0x%08lx ticks=%lu clear_tick=%u movie_tick=%lu shots=%u hits=%u energy=%d movie_frames=%u first_visible=%lu\n",
+           seed, expected - 1, phase->finale_clear_tick, movie_tick, phase->ring_shots, phase->hazard_hits,
+           phase->skel.skeletism, phase->movie.frame_count, first_visible);
+    failed = 0;
+close_file:
+    fclose(file);
+    return failed;
 }
 
 static int nvmshadow_file_exists(void) {
@@ -777,17 +1259,44 @@ static int full_campaign_mode(menu_phase *menu, stage_runner *stage) {
             goto done;
         }
     }
-    /* Hold MENU a few frames so STXT blit is exercised. */
-    for (menu_frames = 0; menu_frames < 12; menu_frames++) {
-        saturn_pad_update_host(&pad, 0);
-        menu_phase_step(menu, &pad);
+    /* The full-campaign verifier always exercises New Game, even after a prior run. */
+    mb_nvm_set_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF, 4u);
+    /* Hold MENU so title AVI fades in before capture, then capture menu states. */
+    {
+        int title_ticks = g_capture_dir[0] ? 75 : 12;
+        for (menu_frames = 0; menu_frames < title_ticks; menu_frames++) {
+            saturn_pad_update_host(&pad, 0);
+            menu_phase_step(menu, &pad);
+        }
     }
+    capture_host_ppm("03MENU_title");
     saturn_pad_update_host(&pad, MB_PAD_START);
     menu_phase_step(menu, &pad);
+    capture_host_ppm("03MENU_start");
+    if (g_capture_dir[0]) {
+        saturn_pad_update_host(&pad, 0); menu_phase_step(menu, &pad);
+        saturn_pad_update_host(&pad, MB_PAD_DOWN); menu_phase_step(menu, &pad);
+        saturn_pad_update_host(&pad, 0); menu_phase_step(menu, &pad);
+        saturn_pad_update_host(&pad, MB_PAD_START); menu_phase_step(menu, &pad);
+        capture_host_ppm("03MENU_options");
+        saturn_pad_update_host(&pad, 0); menu_phase_step(menu, &pad);
+        saturn_pad_update_host(&pad, MB_PAD_L); menu_phase_step(menu, &pad);
+        menu_phase_show_levels(menu);
+        capture_host_ppm("03MENU_levels");
+        menu_phase_show_start(menu);
+    }
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(menu, &pad);
     saturn_pad_update_host(&pad, MB_PAD_START);
     menu_phase_step(menu, &pad);
+    if (g_capture_dir[0]) {
+        for (menu_frames = 0; menu_frames < 45 && !menu_phase_done(menu) &&
+             menu->screen == MENU_SCR_STORY; menu_frames++) {
+            saturn_pad_update_host(&pad, 0);
+            menu_phase_step(menu, &pad);
+        }
+    }
+    capture_host_ppm("03MENU_story");
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(menu, &pad);
     saturn_pad_update_host(&pad, MB_PAD_START);
@@ -812,6 +1321,12 @@ static int full_campaign_mode(menu_phase *menu, stage_runner *stage) {
     while (g_prog.route == STAGE_ROUTE_STAGE && g_prog.next_iso[0]) {
         const stage_info *info = stage_catalog_find(&g_catalog, g_prog.next_iso);
         if (play_native_stage(stage, g_prog.next_iso, STAGE_MAX_FRAMES)) {
+            error = 1;
+            goto done;
+        }
+        if (stage->kind == STAGE_KIND_FINALE && !g_headless_finale_movie &&
+            (!stage->special.ring_cleared || !stage->special.movie.playback_done)) {
+            fprintf(stderr, "full: FINALE did not clear the arena and finish the film\n");
             error = 1;
             goto done;
         }
@@ -968,16 +1483,19 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
         if (menu_phase_load(menu, g_cd, g_save_dir) ||
             menu->title_avi.cur >= menu->title_avi.frame_count) return 1;
         menu->movie_pcm_pending = 0;
+        g_expect_movie_error = 1;
         menu->title_avi.frames[menu->title_avi.cur].data = invalid;
         menu->title_avi.frames[menu->title_avi.cur].size = sizeof invalid;
         g_menu = menu;
         g_mode = APP_MENU;
         g_movie_last_tick = GetTickCount64() - 1000;
         wndproc(NULL, WM_TIMER, 1, 0);
+        g_expect_movie_error = 0;
         if (!menu->title_avi.decode_error || g_mode != APP_DONE) {
             fprintf(stderr, "check: invalid menu movie was not stopped\n");
             return 1;
         }
+        printf("check: corrupt MENU movie rejection OK\n");
         menu_phase_free(menu);
         g_menu = NULL;
     }
@@ -1072,20 +1590,28 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
             return 1;
         }
         g_headless_finale_movie = 1;
-        pad.pressed = 0x0100u;
-        stage->special.ring_phase_mode = 1;
-        for (unsigned k = 0; k < FINALE_RING_SLOTS && !stage->special.ring_cleared; k++) {
-            stage->special.ring_phase_acc = (255 - (int)(16u * k)) * 65536;
+        memset(&pad, 0, sizeof pad);
+        for (unsigned k = 0; k < STAGE_MAX_FRAMES && !stage->special.movie_ok; k++) {
+            saturn_pad_update_host(&pad, special_phase_autoplay_buttons(&stage->special, k));
             stage_runner_step(stage, &pad);
-            if (!stage->special.ring_cleared && (!g_audio || g_movie_audio)) {
+            if (!stage->special.movie_ok && (!g_audio || g_movie_audio)) {
                 fprintf(stderr, "check: FINALE arena lost its CD-DA before the clear\n");
                 return 1;
             }
         }
         if (!stage->special.ring_cleared || !stage->special.movie_ok ||
-            !stage->special.movie_pcm_pending) {
+            !stage->special.finale_movie_preroll || stage->special.movie_pcm_pending) {
             fprintf(stderr, "check: FINALE ring clear did not arm the ending\n");
             return 1;
+        }
+        maybe_start_movie_audio();
+        if (g_audio || g_movie_audio) {
+            fprintf(stderr, "check: FINALE CD seek did not silence arena audio\n");
+            return 1;
+        }
+        while (stage->special.finale_movie_preroll && !stage->special.movie_pcm_pending) {
+            saturn_pad_update_host(&pad, 0);
+            stage_runner_step(stage, &pad);
         }
         maybe_start_movie_audio();
         if (g_audio || !g_movie_audio || stage->special.movie_pcm_pending) {
@@ -1110,23 +1636,32 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
         {
             unsigned rate = stage->special.movie.pcm_rate;
             stage->special.movie.pcm_rate = 1;
+            g_expect_movie_error = 1;
             maybe_start_movie_audio();
+            g_expect_movie_error = 0;
             stage->special.movie.pcm_rate = rate;
             if (!g_movie_audio_failed || g_movie_audio || stage->special.movie_pcm_pending) {
                 fprintf(stderr, "check: movie audio failure was not reported\n");
                 return 1;
             }
         }
-        stage->special.movie.frames[stage->special.movie.cur].data = invalid;
-        stage->special.movie.frames[stage->special.movie.cur].size = sizeof invalid;
-        stage->special.movie.tick_external = 1;
-        stage->special.movie.tick_us = stage->special.movie.us_per_frame + 1u;
-        stage_runner_step(stage, &pad);
-        if (!stage->special.movie.decode_error || !stage_runner_done(stage) ||
-            advance_after_stage() || g_mode != APP_DONE) {
-            fprintf(stderr, "check: invalid LOSE movie was not stopped\n");
-            return 1;
+        {
+            int not_stopped;
+            g_expect_movie_error = 1;
+            stage->special.movie.frames[stage->special.movie.cur].data = invalid;
+            stage->special.movie.frames[stage->special.movie.cur].size = sizeof invalid;
+            stage->special.movie.tick_external = 1;
+            stage->special.movie.tick_us = stage->special.movie.us_per_frame + 1u;
+            stage_runner_step(stage, &pad);
+            not_stopped = !stage->special.movie.decode_error || !stage_runner_done(stage) ||
+                          advance_after_stage() || g_mode != APP_DONE;
+            g_expect_movie_error = 0;
+            if (not_stopped) {
+                fprintf(stderr, "check: invalid LOSE movie was not stopped\n");
+                return 1;
+            }
         }
+        printf("check: corrupt LOSE movie rejection OK\n");
         stage_runner_free(stage);
     }
 
@@ -1159,6 +1694,8 @@ static int check_mode(menu_phase *menu, stage_runner *stage) {
 }
 
 int main(int argc, char **argv) {
+    const char *finale_tape = NULL, *capture_ticks = NULL;
+    unsigned benchmark_frames = 0;
     int check_only = 0, full_campaign = 0, skip_menu = 0, campaign = 0, error = 0;
     int i;
     char err[512];
@@ -1203,11 +1740,46 @@ int main(int argc, char **argv) {
     } else {
         snprintf(g_cue1, sizeof g_cue1, "%s", argv[1]);
     }
+    int upscale_explicit = 0, hd_dir_explicit = 0;
     for (i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "--check")) check_only = 1;
         else if (!strcmp(argv[i], "--full-campaign")) full_campaign = 1;
         else if (!strcmp(argv[i], "--skip-menu")) skip_menu = 1;
         else if (!strcmp(argv[i], "--campaign")) campaign = 1;
+        else if (!strcmp(argv[i], "--mute")) { g_mute_audio = 1; host_audio_set_muted(1); }
+        else if (!strcmp(argv[i], "--benchmark-frames") && i + 1 < argc) {
+            char *end;
+            long n = strtol(argv[++i], &end, 10);
+            if (*end || n < 1 || n > 1000000) { usage(); return 2; }
+            benchmark_frames = (unsigned)n;
+        }
+        else if (!strcmp(argv[i], "--capture-ticks") && i + 1 < argc) capture_ticks = argv[++i];
+        else if (!strcmp(argv[i], "--finale-replay") && i + 1 < argc) finale_tape = argv[++i];
+        else if (!strcmp(argv[i], "--autoplay")) g_autoplay_mode = 1;
+        else if (!strcmp(argv[i], "--capture-dir") && i + 1 < argc)
+            snprintf(g_capture_dir, sizeof g_capture_dir, "%s", argv[++i]);
+        else if (!strcmp(argv[i], "--upscale") && i + 1 < argc) {
+            if (mb_upscale_mode_parse(argv[++i], &g_upscale_mode)) {
+                usage();
+                return 2;
+            }
+            upscale_explicit = 1;
+        } else if (!strcmp(argv[i], "--scale") && i + 1 < argc) {
+            long sc = strtol(argv[++i], NULL, 10);
+            if (sc < 1 || sc > 4) { usage(); return 2; }
+            g_upscale_factor = (unsigned)sc;
+            if (!upscale_explicit) {
+                if (sc == 1) g_upscale_mode = MB_UPSCALE_NEAREST;
+                else if (sc == 2 || sc == 4) g_upscale_mode = MB_UPSCALE_XBR2X;
+                else g_upscale_mode = MB_UPSCALE_XBR3X;
+            }
+            upscale_explicit = 1;
+        } else if (!strcmp(argv[i], "--hd-dir") && i + 1 < argc) {
+            snprintf(g_hd_bones_dir, sizeof g_hd_bones_dir, "%s", argv[++i]);
+            hd_dir_explicit = 1;
+        } else if (!strcmp(argv[i], "--no-hd-bones")) {
+            g_hd_bones = 0;
+        }
         else if (!strcmp(argv[i], "--version")) {
             printf("mrbones %s\n", MB_HOST_VERSION);
             return 0;
@@ -1220,6 +1792,12 @@ int main(int argc, char **argv) {
             snprintf(level_override, sizeof level_override, "%s", argv[++i]);
         else { usage(); return 2; }
     }
+    if (finale_tape && (check_only || full_campaign || g_autoplay_mode || benchmark_frames ||
+                        campaign || (level_override[0] && strcmp(level_override, "/27FINALE")))) {
+        usage();
+        return 2;
+    }
+    if (g_mute_audio) host_audio_set_muted(1);
 
     {
         const char *manifest_path = (argc >= 3) ? argv[2] : cfg.manifest;
@@ -1260,6 +1838,24 @@ int main(int argc, char **argv) {
         error = 1;
         goto shutdown;
     }
+    stage_enemies_load_disc_sprites(g_cd);
+    if (g_have_disc2)
+        stage_enemies_load_disc_sprites(&g_cd2_storage);
+    if (!hd_dir_explicit)
+        (void)find_bundled_dir(g_hd_bones_dir, sizeof g_hd_bones_dir,
+                               "assets\\sprites_bones\\hd_3x");
+    if ((!check_only && !full_campaign) || g_capture_dir[0] ||
+        upscale_explicit || hd_dir_explicit) {
+        unsigned sc = effective_upscale_scale();
+        stage_enemies_prepare_hd_bones(g_upscale_mode,
+                                       g_hd_bones_dir[0] ? g_hd_bones_dir : NULL);
+        stage_enemies_set_hd_overlay(g_hd_bones && sc >= 2u);
+        printf("upscale: %s %ux (%ux%u), hd_bones=%s (custom=%d, dir=%s)\n",
+               mb_upscale_mode_name(g_upscale_mode), sc, 320u * sc, 224u * sc,
+               (g_hd_bones && sc >= 2u) ? "ON" : "OFF",
+               stage_enemies_hd_custom_count(),
+               g_hd_bones_dir[0] ? g_hd_bones_dir : "<auto>");
+    }
     printf("catalog: %u stages, campaign=%u\n", g_catalog.count,
            g_catalog.campaign_count);
 
@@ -1271,12 +1867,30 @@ int main(int argc, char **argv) {
     g_menu = &menu;
     g_stage = &stage;
 
+    if (finale_tape) {
+        error = replay_finale(&stage, finale_tape, capture_ticks);
+        goto shutdown;
+    }
     if (check_only || full_campaign) {
-        g_headless_finale_movie = 1;
+        g_headless_finale_movie = check_only;
         if (full_campaign && !check_only)
             error = full_campaign_mode(&menu, &stage);
         else
             error = check_mode(&menu, &stage);
+        goto shutdown;
+    }
+
+    if (g_autoplay_mode && (skip_menu || level_override[0] || campaign)) {
+        const char *iso = level_override[0] ? level_override : NULL;
+        if (stage_progress_begin(&g_prog, iso) ||
+            play_native_stage(&stage, g_prog.next_iso, STAGE_MAX_FRAMES)) {
+            error = 1;
+            goto shutdown;
+        }
+        if (stage.kind == STAGE_KIND_FINALE && stage.special_live &&
+            stage.special.movie_ok && g_capture_dir[0]) {
+            capture_host_ppm("27FINALE_ending_movie");
+        }
         goto shutdown;
     }
 
@@ -1317,10 +1931,23 @@ int main(int argc, char **argv) {
         wc.hCursor = LoadCursor(NULL, IDC_ARROW);
         wc.lpszClassName = "MrBonesIntegrated";
         if (!RegisterClassA(&wc)) { error = 1; goto shutdown; }
-        window = CreateWindowA(wc.lpszClassName, "Mr. Bones",
-                               WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                               CW_USEDEFAULT, CW_USEDEFAULT, 700, 580,
-                               NULL, NULL, instance, NULL);
+        {
+            unsigned sc = effective_upscale_scale();
+            RECT wr = {0, 0, (LONG)(320u * sc + 24u), (LONG)(224u * sc + 64u)};
+            int max_w = GetSystemMetrics(SM_CXSCREEN) - 40;
+            int max_h = GetSystemMetrics(SM_CYSCREEN) - 60;
+            AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+            {
+                int win_w = wr.right - wr.left;
+                int win_h = wr.bottom - wr.top;
+                if (max_w > 360 && win_w > max_w) win_w = max_w;
+                if (max_h > 300 && win_h > max_h) win_h = max_h;
+                window = CreateWindowA(wc.lpszClassName, "Mr. Bones",
+                                       WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                       CW_USEDEFAULT, CW_USEDEFAULT, win_w, win_h,
+                                       NULL, NULL, instance, NULL);
+            }
+        }
         if (!window) { error = 1; goto shutdown; }
         timeBeginPeriod(1);
         LARGE_INTEGER qpc_freq, qpc_last, qpc_now;
@@ -1328,6 +1955,8 @@ int main(int argc, char **argv) {
         QueryPerformanceCounter(&qpc_last);
         int64_t target_ticks = qpc_freq.QuadPart / 60;
 
+        unsigned presented = 0;
+        LARGE_INTEGER previous_present = qpc_last;
         while (g_mode != APP_DONE) {
             while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
                 if (msg.message == WM_QUIT) {
@@ -1363,12 +1992,31 @@ int main(int argc, char **argv) {
             QueryPerformanceCounter(&qpc_now);
             int64_t delta = qpc_now.QuadPart - qpc_last.QuadPart;
             if (delta >= target_ticks) {
+                int steps = 0;
+                int64_t dropped = 0;
                 if (delta >= target_ticks * 4) {
-                    qpc_last = qpc_now;
-                } else {
-                    qpc_last.QuadPart += target_ticks;
+                    dropped = delta / target_ticks - 3;
+                    qpc_last.QuadPart = qpc_now.QuadPart - target_ticks * 3;
+                    delta = target_ticks * 3;
                 }
-                SendMessageA(window, WM_TIMER, 1, 0);
+                while (delta >= target_ticks && steps < 3 && g_mode != APP_DONE) {
+                    qpc_last.QuadPart += target_ticks;
+                    delta -= target_ticks;
+                    steps++;
+                    int more = (delta >= target_ticks && steps < 3) ? 1 : 0;
+                    SendMessageA(window, WM_TIMER, 1, (LPARAM)more);
+                }
+                if (benchmark_frames) {
+                    LARGE_INTEGER end;
+                    GdiFlush();
+                    QueryPerformanceCounter(&end);
+                    printf("frame_time,%u,%.4f,%.4f,%d,%lld\n", ++presented,
+                           1000.0 * (double)(end.QuadPart - qpc_now.QuadPart) / (double)qpc_freq.QuadPart,
+                           1000.0 * (double)(end.QuadPart - previous_present.QuadPart) / (double)qpc_freq.QuadPart,
+                           steps, (long long)dropped);
+                    previous_present = end;
+                    if (presented == benchmark_frames) break;
+                }
             } else {
                 int64_t remaining_ms = ((target_ticks - delta) * 1000) / qpc_freq.QuadPart;
                 if (remaining_ms > 2) {
@@ -1378,10 +2026,12 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        if (benchmark_frames && presented != benchmark_frames) error = 1;
         timeEndPeriod(1);
     }
 
 shutdown:
+    free_paint_backbuffer();
     host_audio_stop(g_movie_audio);
     g_movie_audio = NULL;
     host_audio_stop(g_audio);

@@ -30,5 +30,74 @@ int main(void) {
     CHECK(table.count == 2);
 
     CHECK(snd1_pcm_open(&table, NULL) != 0);
+
+    /* Voice layers: 8-byte records, SA (BE32) at +2..5, load base 0xB000. Unsorted
+     * starts; a sample runs to the next higher start, the last one to the blob end. */
+    {
+        static uint8_t blob[0xB000u + 32u];
+        uint8_t layers[32] = {0};
+        snd1_span lspan = { layers, 24 }; /* three full records; byte 24.. ignored */
+        snd1_voice_table v;
+        layers[2] = 0x00; layers[3] = 0x00; layers[4] = 0xB0; layers[5] = 0x04;  /* +4 */
+        layers[10] = 0x00; layers[11] = 0x00; layers[12] = 0xB0; layers[13] = 0x10; /* +16 */
+        layers[18] = 0x00; layers[19] = 0x00; layers[20] = 0xB0; layers[21] = 0x0C; /* +12 */
+        CHECK(snd1_voice_open(&v, &lspan, 8, blob, sizeof blob) == 0);
+        CHECK(v.count == 3);
+        CHECK(v.start[0] == 4 && v.start[1] == 16 && v.start[2] == 12);
+        CHECK(snd1_voice_sample(&v, 0, &pcm, &len) == 0);
+        CHECK(pcm == (const int8_t *)blob + 4 && len == 8);   /* 4 .. 12 */
+        CHECK(snd1_voice_sample(&v, 2, &pcm, &len) == 0);
+        CHECK(pcm == (const int8_t *)blob + 12 && len == 4);  /* 12 .. 16 */
+        CHECK(snd1_voice_sample(&v, 1, &pcm, &len) == 0);
+        CHECK(pcm == (const int8_t *)blob + 16 && len == sizeof blob - 16u); /* 16 .. blob end */
+        CHECK(snd1_voice_sample(&v, 3, &pcm, &len) != 0);
+
+        /* An SA below the base, or past the blob, ends the table at that record. */
+        layers[12] = 0x00; layers[13] = 0x10; /* record 1 SA = 0x0010 < 0xB000 */
+        CHECK(snd1_voice_open(&v, &lspan, 8, blob, sizeof blob) == 0);
+        CHECK(v.count == 1);
+        layers[11] = 0x01; layers[12] = 0x60; layers[13] = 0x20; /* SA = 0xB000 + sizeof blob */
+        CHECK(snd1_voice_open(&v, &lspan, 8, blob, sizeof blob) == 0);
+        CHECK(v.count == 1);
+        layers[11] = 0x00; layers[12] = 0xB0; layers[13] = 0x10;
+
+        /* rec_size 16 reads records 0 and 1 only (span holds 24 bytes). */
+        CHECK(snd1_voice_open(&v, &lspan, 16, blob, sizeof blob) == 0);
+        CHECK(v.count == 1 && v.start[0] == 4);
+        CHECK(snd1_voice_open(&v, &lspan, 5, blob, sizeof blob) != 0);
+        CHECK(snd1_voice_open(&v, NULL, 8, blob, sizeof blob) != 0);
+        CHECK(snd1_voice_open(&v, &lspan, 8, NULL, 0) != 0);
+    }
+
+    /* SCSP Tone Bank (.ton) layer lookup: ptr[0]=10 (5 entries: 4 tables + 1 voice),
+     * voice 0 at 10 (4-byte header + two 32-byte layers). */
+    {
+        uint8_t ton[96];
+        snd1_span tspan = { ton, sizeof ton };
+        const uint8_t *raw = NULL;
+        size_t rbytes = 0, scount = 0;
+        int is8 = 0;
+        memset(ton, 0, sizeof ton);
+        ton[0] = 0x00; ton[1] = 0x0A; /* ptr[0] = 10 -> 1 voice */
+        ton[8] = 0x00; ton[9] = 0x0A; /* voice 0 @ 10 */
+        ton[12] = 1;                  /* 2 layers */
+        /* Layer 0: note 0x51..0x52, 16-bit BE (pcm8b=0), SA=78, LEA=2 (3 samples = 6 bytes). */
+        ton[14] = 0x51; ton[15] = 0x52;
+        ton[17] = 0x20; ton[19] = 78;
+        ton[22] = 0x00; ton[23] = 2;
+        /* Layer 1: note 0x4D..0x4F, 8-bit (pcm8b=1), SA=84, LEA=3 (4 bytes). */
+        ton[46] = 0x4D; ton[47] = 0x4F;
+        ton[49] = 0x30; ton[51] = 84;
+        ton[54] = 0x00; ton[55] = 3;
+        ton[78] = 0x7f; ton[80] = 0x40; ton[82] = 0x10;
+        ton[84] = 0x11; ton[85] = 0x22; ton[86] = 0x33; ton[87] = 0x44;
+
+        CHECK(snd1_ton_note_sample(&tspan, 0, 0x4Eu, 1, &raw, &rbytes, &scount, &is8) == 0);
+        CHECK(is8 == 1 && scount == 4u && rbytes == 4u && raw[0] == 0x11 && raw[3] == 0x44);
+        CHECK(snd1_ton_note_sample(&tspan, 0, 0x52u, 1, &raw, &rbytes, &scount, &is8) == 0);
+        CHECK(is8 == 0 && scount == 3u && rbytes == 6u && raw[0] == 0x7f && raw[2] == 0x40);
+        CHECK(snd1_ton_note_sample(&tspan, 0, 0x60u, 1, &raw, &rbytes, &scount, &is8) != 0);
+        CHECK(snd1_ton_note_sample(&tspan, 1, 0x4Eu, 1, &raw, &rbytes, &scount, &is8) != 0);
+    }
     return 0;
 }

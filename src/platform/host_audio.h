@@ -16,6 +16,7 @@ void host_audio_movie_pause(host_audio *audio, int paused);
 void host_audio_stop(host_audio *audio);
 void host_audio_fade_stop(host_audio *audio, unsigned duration_ms);
 void host_audio_set_volume(unsigned level);
+void host_audio_set_muted(int muted);
 unsigned host_audio_volume_word(unsigned level);
 /* STEREO option affects CD-DA; AVI PCM retains its recorded channels. */
 void host_audio_set_stereo(int on);

@@ -3,7 +3,6 @@
 #define CHECK(c) do {if (!(c)) {printf("FAIL %d: %s\n",__LINE__,#c);return 1;}} while (0)
 
 #define U SIDESCRL_PHYS_UNITS_PER_PIXEL
-#define MAXV SIDESCRL_PHYS_MAX_FALL_SPEED
 #define GRAV SIDESCRL_PHYS_GRAVITY_ACCEL
 #define WALK SIDESCRL_MOTION_WALK_MAX
 #define ACCEL SIDESCRL_MOTION_WALK_ACCEL
@@ -297,11 +296,11 @@ static int test_jump(void) {
     step(&a, &w, 0, false);
     CHECK(a.on_ground);
     for (int f = 1; f <= 140; f++) {
-        step(&a, &w, 1, f == 5);
-        if (f == 5)
+        step(&a, &w, 1, f == 10);
+        if (f == 10)
             CHECK(a.vy == SIDESCRL_MOTION_JUMP_IMPULSE + GRAV && a.jumping && !a.on_ground);
-        if (f >= 5 && landed_at < 0) {
-            if (f > 5 && a.on_ground) {
+        if (f >= 10 && landed_at < 0) {
+            if (f > 10 && a.on_ground) {
                 landed_at = f;
             } else {
                 int32_t alt = 158 - a.y;
@@ -315,8 +314,8 @@ static int test_jump(void) {
             CHECK(a.x >= 190 && a.vx == WALK);
         }
     }
-    CHECK(landed_at > 5 && landed_at < 140);
-    CHECK(max_alt > 60);
+    CHECK(landed_at > 10 && landed_at < 140);
+    CHECK(max_alt == 45); /* tap arc: -15728 + 1101 per tick, 2341 units/px */
 
     /* never jumped: the block is a wall */
     sidescrl_actor_init(&a, 100, 158);
@@ -509,7 +508,6 @@ static int test_fuzz(void) {
         step(&b, &w, dir, jump);
         CHECK(same(&a, &b));
         CHECK(a.rem_x >= 0 && a.rem_x < U && a.rem_y >= 0 && a.rem_y < U);
-        CHECK(a.vy <= MAXV);
         CHECK(iabs(a.x - prev_x) <= WALK / U + 1);
         CHECK(iabs(a.vx) <= WALK);
         if (a.on_ground) {

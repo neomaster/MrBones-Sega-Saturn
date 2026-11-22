@@ -37,6 +37,14 @@ int main(void) {
     CHECK(pan_collision_map_ground_ty(&map, 5, 0) == 17);
     CHECK(pan_collision_map_ground_ty(&map, 10, 0) == 12); /* wall column top */
     CHECK(pan_collision_map_ground_ty(&map, 5, 18) == 18);
+    CHECK(pan_collision_floor(&map, 40, 80) == 134);
+    CHECK(pan_collision_floor(&map, 40, 150) == 134);
+    CHECK(pan_collision_floor(&map, -1, 100) == -1);
+    map.cells[54 * 40 + 5] = 1u;
+    CHECK(pan_collision_floor(&map, 40, 88) == 106);
+    map.cells[54 * 40 + 5] = 2u;
+    CHECK(pan_collision_floor(&map, 40, 88) == 134);
+    map.cells[54 * 40 + 5] = 0;
     CHECK(pan_collision_map_load(&map, cells, 100) == -1);
 
     /* §12k GetHixel: pixel (40,136) → grid (40-0xA0, 136-0x70) → hixel 3. */

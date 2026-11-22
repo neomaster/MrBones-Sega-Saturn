@@ -7,6 +7,11 @@
 *.sav
 data/
 saves/
+disco1/
+disco2/
+# Temporary test save/audio output
+test_audio_reference/
+test_save_*/
 # Build output (build/, build-static/, build-mt-validation/, ...) and loose compiler objects
 build/
 build-*/

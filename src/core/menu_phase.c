@@ -115,6 +115,7 @@ static int screen_rows(const menu_phase *menu) {
     case MENU_SCR_START: return start_rows(menu);
     case MENU_SCR_OPTIONS: return options_rows(menu);
     case MENU_SCR_LEVELS: return level_rows(menu);
+    case MENU_SCR_STORY: return 1;
     }
     return 0;
 }
@@ -175,6 +176,22 @@ static void blit_menu_gfx(menu_phase *menu) {
     }
 }
 
+static void fill_dim_menu_sky(menu_phase *menu, uint8_t r, uint8_t g, uint8_t b) {
+    size_t i, n;
+    if (menu->sky_ok &&
+        scrl_map_draw(&menu->sky_map, menu->sky_pal, menu->frame_rgba,
+                      MENU_W, MENU_H, 0) == 0) {
+        n = (size_t)MENU_W * MENU_H * 4u;
+        for (i = 0; i < n; i += 4u) {
+            menu->frame_rgba[i + 0u] = (uint8_t)((menu->frame_rgba[i + 0u] * 3u) / 8u);
+            menu->frame_rgba[i + 1u] = (uint8_t)((menu->frame_rgba[i + 1u] * 3u) / 8u);
+            menu->frame_rgba[i + 2u] = (uint8_t)((menu->frame_rgba[i + 2u] * 3u) / 8u);
+        }
+        return;
+    }
+    fill_frame(menu, r, g, b);
+}
+
 static void render_frame(menu_phase *menu) {
     int rows, i, y;
     char line[96];
@@ -210,6 +227,18 @@ static void render_frame(menu_phase *menu) {
             "OPTIONS",
             "LEVEL SELECT"
         };
+        if (menu->sky_ok) {
+            scrl_map_draw(&menu->sky_map, menu->sky_pal, menu->frame_rgba,
+                          MENU_W, MENU_H, 0);
+            runway_compose_blit_sprite(menu->frame_rgba, MENU_W, MENU_H,
+                                       menu->original_items[menu->cursor == 0 ? 1 : 0],
+                                       64, 14, 128, 153);
+            runway_compose_blit_sprite(menu->frame_rgba, MENU_W, MENU_H,
+                                       menu->original_items[menu->cursor == 1 ? 3 : 2],
+                                       96, 13, 112, 174);
+            render_status(menu);
+            return;
+        }
         if (menu->original_menu_rgba) {
             memcpy(menu->frame_rgba, menu->original_menu_rgba, MENU_W * MENU_H * 4u);
             runway_compose_blit_sprite(menu->frame_rgba, MENU_W, MENU_H,
@@ -240,8 +269,7 @@ static void render_frame(menu_phase *menu) {
                                    "UP/DOWN: MOVE   START/A: SELECT",
                                    150, 170, 200, 10, 10, 20, 1);
     } else if (menu->screen == MENU_SCR_OPTIONS) {
-        fill_frame(menu, 16, 24, 16);
-        blit_menu_gfx(menu);
+        fill_dim_menu_sky(menu, 16, 24, 16);
         mb_font_draw_text_centered(menu->frame_rgba, MENU_W, MENU_H, 16,
                                    "OPTIONS",
                                    180, 240, 160, 12, 24, 12, 2);
@@ -269,8 +297,7 @@ static void render_frame(menu_phase *menu) {
     } else if (menu->screen == MENU_SCR_LEVELS) {
         int win_start = 0;
         int visible = 9;
-        fill_frame(menu, 24, 16, 8);
-        blit_menu_gfx(menu);
+        fill_dim_menu_sky(menu, 24, 16, 8);
         mb_font_draw_text_centered(menu->frame_rgba, MENU_W, MENU_H, 10,
                                    "LEVEL SELECT",
                                    255, 210, 110, 24, 12, 4, 1);
@@ -358,12 +385,32 @@ static void activate(menu_phase *menu) {
         break;
     case MENU_SCR_START:
         if (menu->cursor == 0) {
-            /* Start Game → first unlocked (RUNWAY). SelectMenuEntry case 1. */
-            for (i = 0; i < (int)menu->level_count; i++) {
-                if (menu->levels[i].unlocked) {
-                    start_story(menu, i);
-                    return;
+            /* Start Game → resume the saved stage (nvmshadow.bin
+             * MB_NVM_DEFAULT_LEVEL_OFF holds its directory ID) when it is still
+             * in the unlocked list; otherwise first unlocked (RUNWAY). Safe
+             * fallback keeps SelectMenuEntry case 1 behaviour. */
+            int target = -1;
+            uint32_t saved = mb_nvm_get_u32(&menu->nvm, MB_NVM_DEFAULT_LEVEL_OFF);
+            if (saved >= MB_NVM_LEVEL_TABLE_OFF) {
+                for (i = 0; i < (int)menu->level_count; i++) {
+                    if ((uint32_t)menu->levels[i].dir_id == saved &&
+                        menu->levels[i].unlocked) {
+                        target = i;
+                        break;
+                    }
                 }
+            }
+            if (target < 0) {
+                for (i = 0; i < (int)menu->level_count; i++) {
+                    if (menu->levels[i].unlocked) {
+                        target = i;
+                        break;
+                    }
+                }
+            }
+            if (target >= 0) {
+                start_story(menu, target);
+                return;
             }
         } else if (menu->cursor == 1) {
             menu->screen = MENU_SCR_OPTIONS; /* case 2 */
@@ -455,9 +502,9 @@ static void build_menu_palette(const uint8_t *code, size_t code_size, uint8_t *p
     }
     for (i = 0; i < 1024; i++) {
         palette[4 * i + 0] = 0;
-        palette[4 * i + 1] = (uint8_t)(words[i] >> 16);
+        palette[4 * i + 1] = (uint8_t)words[i];
         palette[4 * i + 2] = (uint8_t)(words[i] >> 8);
-        palette[4 * i + 3] = (uint8_t)words[i];
+        palette[4 * i + 3] = (uint8_t)(words[i] >> 16);
     }
 }
 
@@ -585,17 +632,17 @@ static void load_original_menu(menu_phase *menu, cdimage *cd) {
         size_t y = i / MENU_W;
         unsigned index = y + 19 < MENU_H ? planes[MENU_W * MENU_H + i + 19 * MENU_W] : 0;
         uint32_t rgb = index ? colors[512 + index] : colors[256 + planes[i]];
-        background[4 * i] = (uint8_t)(rgb >> 16);
+        background[4 * i] = (uint8_t)rgb;
         background[4 * i + 1] = (uint8_t)(rgb >> 8);
-        background[4 * i + 2] = (uint8_t)rgb;
+        background[4 * i + 2] = (uint8_t)(rgb >> 16);
         background[4 * i + 3] = 255;
     }
     for (i = 0; i < 256; i++) {
         uint32_t rgb = colors[768 + i];
         palette[4 * i] = 0;
-        palette[4 * i + 1] = (uint8_t)(rgb >> 16);
+        palette[4 * i + 1] = (uint8_t)rgb;
         palette[4 * i + 2] = (uint8_t)(rgb >> 8);
-        palette[4 * i + 3] = (uint8_t)rgb;
+        palette[4 * i + 3] = (uint8_t)(rgb >> 16);
     }
     for (i = 0; i < 4; i++) {
         size_t off = offsets[i];
@@ -606,6 +653,55 @@ static void load_original_menu(menu_phase *menu, cdimage *cd) {
     menu->original_menu_rgba = background;
     background = NULL;
     for (i = 0; i < 4; i++) { menu->original_items[i] = items[i]; items[i] = NULL; }
+    /*
+     * The same screen as a scrl_map, so the C and D planes (absent from the two-plane
+     * composite above) can be drawn when the disc has them. Measured parallax: B one to
+     * one, 20 rows down; C 0x3000 (3/16 of a camera), 60 rows up; D one to one, 100 rows
+     * up. The back screen stays CRAM entry 0; no synthetic gradient is applied.
+     */
+    {
+        static const char *const k_cd_names[4] = {
+            "/03MENU/11CCDB", "/03MENU/12CTIL", "/03MENU/13DCDB", "/03MENU/14DTIL"
+        };
+        void *cd_blob[4] = {0};
+        size_t cd_sizes[4] = {0};
+        unsigned k;
+        for (k = 0; k < 4; k++)
+            (void)resource_load(cd, k_cd_names[k], &cd_blob[k], &cd_sizes[k]);
+        if (scrl_map_init(&menu->sky_map, blob[0], sizes[0], blob[1], sizes[1],
+                          blob[2], sizes[2], blob[3], sizes[3],
+                          cd_blob[0], cd_sizes[0], cd_blob[1], cd_sizes[1],
+                          cd_blob[2], cd_sizes[2], cd_blob[3], cd_sizes[3],
+                          NULL, 0) == 0) {
+            for (k = 0; k < 1024; k++) {
+                uint32_t rgb = colors[k];
+                menu->sky_pal[4 * k + 0] = 0;
+                menu->sky_pal[4 * k + 1] = (uint8_t)rgb;
+                menu->sky_pal[4 * k + 2] = (uint8_t)(rgb >> 8);
+                menu->sky_pal[4 * k + 3] = (uint8_t)(rgb >> 16);
+            }
+            for (k = 0; k < menu->sky_map.plane_count; k++) {
+                const scrl_plane *pl = &menu->sky_map.planes[k];
+                if (strcmp(pl->cdb_name, "09BCDB") == 0)
+                    (void)scrl_map_set_plane_parallax(&menu->sky_map, k,
+                                                      SCRL_PARALLAX_ONE, 20);
+                else if (strcmp(pl->cdb_name, "11CCDB") == 0)
+                    (void)scrl_map_set_plane_parallax(&menu->sky_map, k, 0x3000, -60);
+                else if (strcmp(pl->cdb_name, "13DCDB") == 0)
+                    (void)scrl_map_set_plane_parallax(&menu->sky_map, k,
+                                                      SCRL_PARALLAX_ONE, -100);
+                if ((strcmp(pl->cdb_name, "11CCDB") == 0 ||
+                     strcmp(pl->cdb_name, "13DCDB") == 0) &&
+                    pl->tiles.status == SCRL_TC_OK)
+                    menu->sky_ok = 1;
+            }
+            /* The planes reference these blobs; keep them for the phase's lifetime. */
+            for (k = 0; k < 4; k++) { menu->sky_blobs[k] = blob[k]; blob[k] = NULL; }
+            for (k = 0; k < 4; k++) { menu->sky_blobs[4 + k] = cd_blob[k]; cd_blob[k] = NULL; }
+        } else {
+            for (k = 0; k < 4; k++) free(cd_blob[k]);
+        }
+    }
 done:
     for (i = 0; i < 4; i++) { free(blob[i]); free(items[i]); }
     free(planes);
@@ -734,6 +830,8 @@ void menu_phase_free(menu_phase *menu) {
     if (!menu) return;
     if (menu->nvm.dirty)
         mb_nvm_save(&menu->nvm, menu->save_dir);
+    scrl_map_free(&menu->sky_map);
+    for (i = 0; i < 8; i++) free(menu->sky_blobs[i]);
     for (i = 0; i < menu->gfx_count && i < 8; i++)
         free(menu->gfx_rgba[i]);
     free(menu->copyright_rgba);
@@ -752,6 +850,14 @@ void menu_phase_free(menu_phase *menu) {
 void menu_phase_show_start(menu_phase *menu) {
     if (!menu) return;
     menu->screen = MENU_SCR_START;
+    menu->cursor = 0;
+    menu->movie_pcm_pending = 0;
+    render_frame(menu);
+}
+
+void menu_phase_show_levels(menu_phase *menu) {
+    if (!menu) return;
+    menu->screen = MENU_SCR_LEVELS;
     menu->cursor = 0;
     menu->movie_pcm_pending = 0;
     render_frame(menu);
@@ -788,13 +894,8 @@ int menu_phase_step(menu_phase *menu, const saturn_pad *pad) {
         }
     }
 
-    if (pad->pressed & 0x0800u) { /* Start */
-        if (menu->screen == MENU_SCR_TITLE)
-            activate(menu);
-        else if (menu->screen == MENU_SCR_START && menu->cursor == 0)
-            activate(menu);
-        else
-            activate(menu);
+    if (pad->pressed & 0x0800u) { /* Start → SelectMenuEntry / advance */
+        activate(menu);
         return 1;
     }
     /* D-pad: Brain MoveSelectorH/V stand-in. */

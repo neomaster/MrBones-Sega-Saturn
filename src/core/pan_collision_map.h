@@ -46,6 +46,8 @@ int pan_collision_get_hixel(const pan_collision_map *map, int grid_x, int grid_y
 /* Same probe with pixel coordinates (applies inverse bias). */
 int pan_collision_hixel_pixel(const pan_collision_map *map, int pixel_x, int pixel_y);
 
+int pan_collision_floor(const pan_collision_map *map, int pixel_x, int pixel_y);
+
 /* Coarse helpers on the fine map. Solid = any hixel == 3 in the 8×8 tile. */
 int pan_collision_map_solid_tile(const pan_collision_map *map, int tx, int ty);
 int pan_collision_map_solid_pixel(const pan_collision_map *map, int pixel_x, int pixel_y);

@@ -110,8 +110,8 @@ int main(void) {
     CHECK(stage_runner_begin(&runner, &disc1, 1, &cat, "/04RUNWAY") == 0);
     CHECK(runner.state == STAGE_RS_PLAYING);
     CHECK(runner.runway_live == 1);
-    for (i = 0; i < 5000 && !stage_runner_done(&runner); i++) {
-        saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+    for (i = 0; (unsigned)i <= runner.runway.runway_win_record * 4u && !stage_runner_done(&runner); i++) {
+        saturn_pad_update_host(&pad, runway_phase_autoplay_buttons(&runner.runway, (unsigned)i));
         stage_runner_step(&runner, &pad);
     }
     CHECK(runner.state == STAGE_RS_FINISHED);
@@ -125,7 +125,7 @@ int main(void) {
     CHECK(runner.sidescrl_live == 1);
     CHECK(runner.playable == 1);
     for (i = 0; i < 5000 && !stage_runner_done(&runner); i++) {
-        saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        saturn_pad_update_host(&pad, sidescrl_phase_autoplay_buttons(&runner.sidescrl, (unsigned)i));
         stage_runner_step(&runner, &pad);
     }
     CHECK(runner.state == STAGE_RS_FINISHED);
@@ -137,12 +137,13 @@ int main(void) {
     CHECK(runner.state == STAGE_RS_PLAYING);
     CHECK(runner.runway_live == 1);
     CHECK(runner.playable == 1);
-    for (i = 0; i < 5000 && !stage_runner_done(&runner); i++) {
-        saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+    for (i = 0; (unsigned)i < runner.runway.pan.count * 4u + 120u && !stage_runner_done(&runner); i++) {
+        saturn_pad_update_host(&pad, runway_phase_autoplay_buttons(&runner.runway, (unsigned)i));
         stage_runner_step(&runner, &pad);
     }
     CHECK(runner.state == STAGE_RS_FINISHED);
     printf("runner LOGS: frames=%u status=%s\n", runner.frames, runner.status);
+    CHECK(runner.outcome == STAGE_OUTCOME_WIN);
     stage_runner_free(&runner);
 
     if (opened2) {
@@ -157,11 +158,12 @@ int main(void) {
         CHECK(stage_runner_resume(&runner, &disc2, 2) == 0);
         CHECK(runner.state == STAGE_RS_PLAYING);
         CHECK(runner.runway_live == 1); /* §16: pan playable after swap */
-        for (i = 0; i < 5000 && !stage_runner_done(&runner); i++) {
-            saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        for (i = 0; (unsigned)i < runner.runway.pan.count * 4u + 120u && !stage_runner_done(&runner); i++) {
+            saturn_pad_update_host(&pad, runway_phase_autoplay_buttons(&runner.runway, (unsigned)i));
             stage_runner_step(&runner, &pad);
         }
         CHECK(runner.state == STAGE_RS_FINISHED);
+        CHECK(runner.outcome == STAGE_OUTCOME_WIN);
         printf("runner RIDE after swap: frames=%u %s\n", runner.frames, runner.status);
         stage_runner_free(&runner);
 
@@ -170,7 +172,7 @@ int main(void) {
         CHECK(runner.state == STAGE_RS_PLAYING);
         CHECK(runner.sidescrl_live == 1);
         for (i = 0; i < 5000 && !stage_runner_done(&runner); i++) {
-            saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+            saturn_pad_update_host(&pad, sidescrl_phase_autoplay_buttons(&runner.sidescrl, (unsigned)i));
             stage_runner_step(&runner, &pad);
         }
         CHECK(runner.state == STAGE_RS_FINISHED);

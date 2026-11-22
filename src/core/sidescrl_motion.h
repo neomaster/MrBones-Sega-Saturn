@@ -14,7 +14,7 @@
  *
  *   a) Walk. walk_dir is reduced to -1 / 0 / +1. A non-zero direction sets
  *      facing_left. Only while on_ground, vx moves toward walk_dir *
- *      SIDESCRL_MOTION_WALK_MAX by SIDESCRL_MOTION_WALK_ACCEL per frame, or toward
+ *      the projected actor walk speed by SIDESCRL_MOTION_WALK_ACCEL per frame, or toward
  *      0 by SIDESCRL_MOTION_FRICTION per frame when walk_dir is 0. In the air vx
  *      is kept: there is no air control and no air friction.
  *   b) Horizontal move. The whole pixels of (rem_x + vx) are the desired dx; the
@@ -82,9 +82,6 @@
 #include "core/sidescrl_slope.h"
 #include "core/sidescrl_wall.h"
 
-#ifndef SIDESCRL_MOTION_WALK_MAX
-#define SIDESCRL_MOTION_WALK_MAX (3 * SIDESCRL_PHYS_UNITS_PER_PIXEL)
-#endif
 #ifndef SIDESCRL_MOTION_WALK_ACCEL
 #define SIDESCRL_MOTION_WALK_ACCEL SIDESCRL_PHYS_UNITS_PER_PIXEL
 #endif
@@ -93,7 +90,7 @@
 #endif
 /* Negative is up. About 6 px/frame: a jump of roughly 90 px with the default gravity. */
 #ifndef SIDESCRL_MOTION_JUMP_IMPULSE
-#define SIDESCRL_MOTION_JUMP_IMPULSE (-6 * SIDESCRL_PHYS_UNITS_PER_PIXEL)
+#define SIDESCRL_MOTION_JUMP_IMPULSE BONES_SPRING_IMPULSE
 #endif
 
 /*

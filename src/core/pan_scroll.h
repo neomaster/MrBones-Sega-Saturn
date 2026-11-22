@@ -12,6 +12,8 @@
  * decodes forward (or restarts) to keep planes + collision current (§22 live).
  */
 
+#define PAN_KEYFRAME_STRIDE 32u
+
 typedef struct {
     const uint8_t *blob;
     size_t blob_size;
@@ -24,6 +26,12 @@ typedef struct {
     pan_collision_map collision0; /* record-0 snapshot (init / soft fallback) */
     int scroll_x;            /* CPanScroll short stand-in */
     int scroll_y;
+    size_t *frame_offs;      /* O(1) record offsets [count] */
+    size_t *frame_sizes;     /* O(1) record byte sizes [count] */
+    unsigned kf_count;       /* ceil(count / PAN_KEYFRAME_STRIDE) */
+    uint8_t **kf_planes;     /* cached PAN_BUFFER_SIZE snapshots at keyframes */
+    pan_collision_map *kf_coll;
+    uint8_t *kf_valid;
 } pan_scroll;
 
 int pan_scroll_init(pan_scroll *ps, const uint8_t *blob, size_t blob_size,
@@ -40,5 +48,9 @@ int pan_scroll_seek(pan_scroll *ps, unsigned target);
 /* CPanScroll-style: scroll_x = pixel_x + bias; seek from camera. */
 int pan_scroll_update(pan_scroll *ps, unsigned camera_px, unsigned bones_px,
                       unsigned start_px, unsigned finish_px);
+
+/* Direct 1:1 ratio scroll: target = (camera_px * px_num) / px_den. */
+int pan_scroll_update_ratio(pan_scroll *ps, unsigned camera_px, unsigned bones_px,
+                            unsigned px_num, unsigned px_den);
 
 #endif

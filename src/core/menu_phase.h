@@ -1,6 +1,7 @@
 #ifndef MB_MENU_PHASE_H
 #define MB_MENU_PHASE_H
 #include "core/cdimage.h"
+#include "core/scrl_map.h"
 #include "core/duck_avi.h"
 #include "core/nvm_shadow.h"
 #include "core/saturn_pad.h"
@@ -66,6 +67,15 @@ typedef struct {
     uint8_t *frame_rgba; /* 320×224 diagnostic title/menu frame */
     uint8_t *original_menu_rgba;
     uint8_t *original_items[4];
+    /*
+     * VDP2 plane map of the same START screen (07ACDB..14DTIL when on disc), with the
+     * measured per-plane parallax applied. sky_ok only when a C or D plane decoded: with
+     * A and B alone the composite in original_menu_rgba is already the validated picture.
+     */
+    scrl_map sky_map;
+    uint8_t sky_pal[4096];
+    void *sky_blobs[8];
+    int sky_ok;
     /* §16: /03MENU/04STXT decoded plates + optional CODE palette. */
     uint8_t *stxt_blob;
     size_t stxt_size;
@@ -93,6 +103,7 @@ int menu_phase_load(menu_phase *menu, cdimage *cd, const char *save_dir);
 void menu_phase_free(menu_phase *menu);
 int menu_phase_step(menu_phase *menu, const saturn_pad *pad);
 void menu_phase_show_start(menu_phase *menu);
+void menu_phase_show_levels(menu_phase *menu);
 int menu_phase_done(const menu_phase *menu);
 const char *menu_phase_selected_iso(const menu_phase *menu);
 

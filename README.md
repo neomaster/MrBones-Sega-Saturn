@@ -3,22 +3,28 @@
 Native Windows port of *Mr. Bones* (Sega Saturn, USA, MK-81016 V1.000).
 No game data is included: provide your own Disc 1 and Disc 2 images.
 
-**Status:** experimental native Windows port; the campaign is not yet verified as fully playable. The boot movie uses `/29INTRO/20AVI` and the main menu uses original disc graphics. TrueMotion and DK3 decoding are linked statically. See `LOG-DESENVOLVIMENTO.md` for evidence and remaining differences.
+**Status:** playable native Windows port covering the full 24-entry campaign (22 native playable stages across Disc 1 & Disc 2 plus `TROLL1`/`TROLL2` empty skips), FMV transitions, `27FINALE` ring arena and ending movie, `/28LOSE`, `nvmshadow.bin` progress save/resume, and `mrbones.ini` options — verified via `mrbones --check --autoplay` (`custom=63` HD sprites). Default video output uses `xbr3x` (`3x`, `960x672`) with auto-loaded 3x HD sprite overrides. TrueMotion and DK3 decoding are linked statically. See `LOG-DESENVOLVIMENTO.md` and `docs/coverage.md` for verification details and remaining SH-2 differences.
 
 The commands below assume the project root is the current directory.
 
 ## Quick start
 
+Double-click `Jogar_MrBones.bat` in the project root to launch `build-static\mrbones.exe` directly with bundled paths (`disco1\...`, `disco2\...`, `manifest\versions.txt`), default `xbr3x` 3x (`960x672`) upscaling, and auto-detected HD sprites, or run from the CLI:
+
 ```
 build-static\mrbones.exe --version
 build-static\mrbones.exe "disco1\Mr. Bones (USA) (Disc 1).cue" "manifest\versions.txt" --disc2 "disco2\Mr. Bones (USA) (Disc 2).cue"
 build\mrbones.exe "...disc1.cue" "manifest\versions.txt" --disc2 "...disc2.cue" --full-campaign --save-dir build\full_campaign_save
-build\mrbones.exe "...disc1.cue" "manifest\versions.txt" --disc2 "...disc2.cue" --check --save-dir build\check_save
+build-static\mrbones.exe "disco1\Mr. Bones (USA) (Disc 1).cue" "manifest\versions.txt" --disc2 "disco2\Mr. Bones (USA) (Disc 2).cue" --check --autoplay --mute
 build\mbrunway.exe "disco1\....cue" "manifest\versions.txt" --check
 ```
 
-Controls (RUNWAY): arrows/WASD move, X=jump, Down=tall, Enter=pause, Esc=abort.
-MENU: arrows + Enter/A to select Start Game / Options / Level Select.
+- **HD Sprite Pack (`assets/sprites_bones/hd_3x/`):** 63 custom 3x RGBA sprites loaded automatically (`28` Mr. Bones poses, `6` thrown bones, `8` `gang_00..07`, `8` `lord_00..07`, `13` `valley_00..12`), depth-sorted with night-grade shading in HD mode.
+- **Hotkeys (windowed):** `F5` cycle upscale filter (`nearest`/`scale2x`/`scale3x`/`xbr2x`/`xbr3x`), `F6` toggle HD sprite overlay (`ON`/`OFF`), `F11` fullscreen, `Esc` quit.
+- **Useful CLI flags:** `--upscale <mode>`, `--scale <1..4>`, `--hd-dir <dir>`, `--no-hd-bones`, `--autoplay`, `--mute`, `--capture-dir <dir>`.
+
+Controls (gameplay): arrows/WASD move, X=jump, Down/S=tall, C=Blues, Z=Pulse, Enter=pause, Esc=abort.
+MENU: arrows/WASD + Enter/Z to select Start Game / Options / Level Select (resumes last unlocked stage from `nvmshadow.bin`).
 
 ## Build (Windows x64, MSVC + Ninja)
 

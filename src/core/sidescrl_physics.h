@@ -26,7 +26,7 @@
  * same feet-anchoring rule.
  *
  * What one step does, in order:
- *   1. vy += GRAVITY_ACCEL, capped at MAX_FALL_SPEED.
+ *   1. vy += GRAVITY_ACCEL (saturating at the integer limit).
  *   2. x += vx, y += vy (fixed point, remainder carried, saturating).
  *   3. Floor contact: hitchk_ground_clamp against the platforms.
  *        lift < 0   -> y += lift, vy = 0, on_ground = true, jumping = false.
@@ -46,8 +46,6 @@
  *     climbed. Use a separate horizontal resolver for walls.
  *   - A rising actor (vy < 0) that ends the step within FLOOR_SNAP_PX inside a
  *     platform's top edge is landed like a falling one (step-up).
- *   - Gravity and terminal speed are placeholders, not values recovered from
- *     the original binary. Override them at compile time if needed.
  */
 
 #include <stdbool.h>
@@ -57,20 +55,17 @@
 #include "core/aabb_hitchk.h"
 
 #define SIDESCRL_PHYS_UNITS_PER_PIXEL 2341
-
-#ifndef SIDESCRL_PHYS_GRAVITY_ACCEL
-#define SIDESCRL_PHYS_GRAVITY_ACCEL 450 /* units per frame^2 (~0.19 px) */
-#endif
-#ifndef SIDESCRL_PHYS_MAX_FALL_SPEED
-#define SIDESCRL_PHYS_MAX_FALL_SPEED (8 * SIDESCRL_PHYS_UNITS_PER_PIXEL)
+#ifndef SIDESCRL_MOTION_WALK_MAX
+#define SIDESCRL_MOTION_WALK_MAX (3 * SIDESCRL_PHYS_UNITS_PER_PIXEL)
 #endif
 
-/* Largest correction treated as a floor contact. Derived from the terminal
- * speed (whole pixels moved per frame, rounded up) plus one pixel of margin,
- * so a fast fall can never skip over a platform. */
-#define SIDESCRL_PHYS_FLOOR_SNAP_PX                                          \
-    ((SIDESCRL_PHYS_MAX_FALL_SPEED + SIDESCRL_PHYS_UNITS_PER_PIXEL - 1) /    \
-         SIDESCRL_PHYS_UNITS_PER_PIXEL + 1)
+/* USA _GravityWorks, _IncreaseJumpHieght and SSRHAALL_Spring[5..6].
+ * Saturn +Y is up. The port integrates downwards. */
+#define SIDESCRL_PHYS_GRAVITY_ACCEL 1101
+#define BONES_SPRING_IMPULSE (-15728)
+#define BONES_SPRING_BOOST 550
+#define BONES_SPRING_TICKS 30
+#define SIDESCRL_PHYS_FLOOR_SNAP_PX 9
 
 #define SIDESCRL_ACTOR_WIDTH 20
 #define SIDESCRL_STAND_HEIGHT 42
@@ -90,6 +85,12 @@ typedef enum {
 } SidescrlPose;
 
 typedef struct {
+    bool spring_held;
+    unsigned spring_ticks, boost_duration;
+    int32_t jump_impulse;
+    int32_t walk_speed; /* horizontal target in 16.16 world units per tick */
+    unsigned projection_px; /* RWorldSprite screen pixels per 16.16 world unit */
+    int32_t hit_width, hit_height; /* Full-body BonesSetConfig box, anchored at feet. */
     int32_t x, y;        /* top-left of the STANDING box, pixels */
     int32_t vx, vy;      /* fixed-point units per frame */
     int32_t rem_x, rem_y; /* sub-pixel remainders, 0..UNITS_PER_PIXEL-1 */
@@ -102,6 +103,7 @@ typedef struct {
 
 /* Zero velocity, STAND pose, layers ACTOR|SOLID, airborne until the first step
  * proves otherwise. NULL is ignored. */
+int32_t sidescrl_project_impulse(const SidescrlActor *actor, int32_t world_impulse);
 void sidescrl_actor_init(SidescrlActor *actor, int32_t x, int32_t y);
 
 /* Collision box for the actor's current pose. An invalid pose counts as STAND.

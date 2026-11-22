@@ -231,9 +231,9 @@ int main(int argc, char **argv) {
                               &palette_consumed);
     if (!error) {
         for (size_t i = 0; i < 1024; i++) {
-            palette[4 * i + 1] = (uint8_t)(palette_words[i] >> 16);
+            palette[4 * i + 1] = (uint8_t)palette_words[i];
             palette[4 * i + 2] = (uint8_t)(palette_words[i] >> 8);
-            palette[4 * i + 3] = (uint8_t)palette_words[i];
+            palette[4 * i + 3] = (uint8_t)(palette_words[i] >> 16);
         }
         error = decode_image(&assets, palette + 1 * 1024, 0x0023204c, &pictures[PIC_TEX0]) ||
                 decode_image(&assets, palette + 2 * 1024, 0x0024fd98, &pictures[PIC_TEX1]) ||

@@ -82,6 +82,7 @@ int runway_sfx_load(runway_sfx *sfx, cdimage *cd) {
 void runway_sfx_free(runway_sfx *sfx) {
     if (!sfx) return;
     free(sfx->blob);
+    free(sfx->event_pcm_scratch);
     memset(sfx, 0, sizeof *sfx);
 }
 
@@ -96,29 +97,93 @@ int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
     mb_sound_event_record rec;
     snd1_span spans[SND1_SPAN_COUNT];
     snd1_pcm_table table;
-    unsigned sample = 0;
-    int got_sample = 0, rc;
+    uint8_t ch_prog[16];
+    unsigned sample = 0, ch = 0;
+    uint8_t note = 0;
+    int got_sample = 0, got_note = 0;
+
     if (!sfx || !pcm || !length || !sfx->blob || !sfx->blob_size) return -1;
     *pcm = NULL;
     *length = 0;
-    rc = mb_sound_event_open(&ev, sfx->blob, sfx->blob_size, event_id);
-    if (rc != 1) return -1;
-    while (mb_sound_event_next(&ev, &rec) == 1) {
-        /* Type 3 oneshot: word[4] holds the span-4 sample index. */
-        if (rec.words[1] == 3u) {
-            sample = rec.words[4];
-            got_sample = 1;
-            break;
+    if (snd1_parse(sfx->blob, sfx->blob_size, spans) ||
+        !spans[0].data || !spans[0].size || !spans[4].data || !spans[4].size)
+        return -1;
+
+    for (unsigned i = 0; i < 16u; i++) ch_prog[i] = (uint8_t)i;
+    if (mb_sound_event_open(&ev, spans[0].data, spans[0].size, 0u) == 1) {
+        while (mb_sound_event_next(&ev, &rec) == 1) {
+            if (rec.words[1] == 1u && rec.words[4] == 4u)
+                ch_prog[rec.words[5] & 0x0Fu] = (uint8_t)(rec.words[6] & 0x7Fu);
         }
     }
-    if (!got_sample) return -1;
-    if (snd1_parse(sfx->blob, sfx->blob_size, spans) || !spans[4].size)
+
+    if (mb_sound_event_open(&ev, spans[0].data, spans[0].size, event_id) != 1)
         return -1;
+    while (mb_sound_event_next(&ev, &rec) == 1) {
+        if (!got_note && rec.words[1] == 1u && rec.words[4] == 1u && rec.words[7] > 0u) {
+            ch = rec.words[5] & 0x0Fu;
+            note = (uint8_t)(rec.words[6] & 0x7Fu);
+            got_note = 1;
+            break;
+        }
+        if (!got_sample && rec.words[1] == 3u) {
+            sample = rec.words[4];
+            got_sample = 1;
+        }
+    }
+
+    if (got_note) {
+        const uint8_t *raw = NULL;
+        size_t raw_bytes = 0, sample_count = 0;
+        int is_pcm8b = 0;
+        if (snd1_ton_note_sample(&spans[4], ch_prog[ch], note, 1,
+                                 &raw, &raw_bytes, &sample_count, &is_pcm8b) == 0 &&
+            raw && sample_count > 0u) {
+            if (is_pcm8b) {
+                *pcm = (const int8_t *)raw;
+                *length = sample_count;
+                return 0;
+            }
+            if (sample_count > sfx->event_pcm_cap) {
+                int8_t *buf = realloc(sfx->event_pcm_scratch, sample_count);
+                if (!buf) return -1;
+                sfx->event_pcm_scratch = buf;
+                sfx->event_pcm_cap = sample_count;
+            }
+            for (size_t i = 0; i < sample_count && i * 2u < raw_bytes; i++)
+                sfx->event_pcm_scratch[i] = (int8_t)raw[i * 2u];
+            *pcm = sfx->event_pcm_scratch;
+            *length = sample_count;
+            return 0;
+        }
+    }
+
+    if (!got_sample) return -1;
     memset(&table, 0, sizeof table);
     if (snd1_pcm_open(&table, &spans[4])) return -1;
     if (snd1_pcm_sample(&table, sample, pcm, length) == 0 && *pcm && *length)
         return 0;
-    /* FINALE activate IDs cite 0x13..0x15 past span4 count — use s15 body. */
+    if (sample >= table.count) {
+        const size_t span4_off = (size_t)(spans[4].data - (const uint8_t *)sfx->blob);
+        static const size_t k_rec_sizes[2] = {8, 16};
+        for (unsigned si = 5; si < SND1_SPAN_COUNT; si++) {
+            for (unsigned ri = 0; ri < 2; ri++) {
+                snd1_voice_table voices;
+                unsigned k;
+                int ok = 1;
+                if (!spans[si].size) continue;
+                if (snd1_voice_open(&voices, &spans[si], k_rec_sizes[ri], sfx->blob,
+                                    sfx->blob_size))
+                    continue;
+                if (voices.count <= sample) continue;
+                for (k = 11; k <= 13 && ok; k++)
+                    ok = k < table.count && voices.start[k] == span4_off + table.offsets[k];
+                if (!ok) continue;
+                if (snd1_voice_sample(&voices, sample, pcm, length) == 0 && *pcm && *length)
+                    return 0;
+            }
+        }
+    }
     if (sample >= table.count &&
         snd1_pcm_sample(&table, 15u, pcm, length) == 0 && *pcm && *length)
         return 0;

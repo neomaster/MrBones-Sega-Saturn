@@ -55,22 +55,28 @@ void sidescrl_slope_step(SidescrlActor *actor, SidescrlGroundFn ground,
                          const void *ctx, int32_t max_step_up,
                          int32_t max_step_down) {
     bool was_grounded;
+    int32_t old_y;
     BoundingBox box;
     int32_t target, up, down, dy = 0;
 
     if (actor == NULL)
         return;
+    old_y = actor->y;
     was_grounded = actor->on_ground;
 
-    /* Gravity, terminal speed and x/y integration; leaves on_ground false. */
+    /* Query from the old feet before integration can cross a thin floor. */
+    box = sidescrl_actor_box(actor);
+    target = ground ? ground(ctx, sidescrl_slope_column(&box)) : SIDESCRL_SLOPE_NO_GROUND;
+    /* Gravity and x/y integration; leaves on_ground false. */
     sidescrl_physics_step(actor, NULL, 0);
     if (ground == NULL || actor->vy < 0) {
         actor->on_ground = false;
         return;
     }
 
-    box = sidescrl_actor_box(actor);
-    target = ground(ctx, sidescrl_slope_column(&box));
+    BoundingBox moved = sidescrl_actor_box(actor);
+    if (moved.x != box.x) target = ground(ctx, sidescrl_slope_column(&moved));
+    box = moved;
 
     if (was_grounded) {
         up = max_step_up;
@@ -79,6 +85,7 @@ void sidescrl_slope_step(SidescrlActor *actor, SidescrlGroundFn ground,
         up = max_step_up > SIDESCRL_PHYS_FLOOR_SNAP_PX
                  ? max_step_up
                  : (int32_t)SIDESCRL_PHYS_FLOOR_SNAP_PX;
+        if ((int64_t)actor->y - old_y > up) up = clamp_i32((int64_t)actor->y - old_y);
         down = 0;
     }
 

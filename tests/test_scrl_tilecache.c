@@ -439,9 +439,46 @@ static int test_size0_sentinel(void) {
     return 0;
 }
 
+/*
+ * Multi-chunk TIL (real 08ATIL of a tall plane): chunk 0 ends with a size==0 record, chunk 1
+ * resumes at the next 2048-byte sector after zero padding. Blocks from BOTH chunks decode.
+ */
+static int test_multi_chunk(void) {
+    uint8_t cdb[SCRL_CDB_HEADER_BYTES + 64], til[6000];
+    const size_t cdb_size = make_cdb(cdb, 1);
+    const unsigned tags_a[2] = {40, 41};
+    const unsigned tags_b[2] = {42, 43};
+    uint32_t d[16];
+    size_t pos, end;
+    scrl_tile_cache c;
+
+    memset(til, 0, sizeof til);
+    all_cells(d, OWN(0));
+    d[1] = OWN(1);
+    pos = add_record(til, 0, 0, 2, tags_a, d); /* chunk 0: col-0 block 0 */
+    CHECK(pos < 2048u);                          /* its size==0 sentinel sits below the sector */
+    /* til[pos..] is already zero: size==0 ends chunk 0, the sector at 2048 begins chunk 1. */
+    end = add_record(til, 2048u, 1, 2, tags_b, d); /* chunk 1: col-1 block 1 */
+
+    CHECK(scrl_tilecache_build(&c, 64, 32, cdb, cdb_size, til, end) == SCRL_TC_OK);
+    CHECK(c.present_blocks == 2u && c.compressed_blocks == 2u && c.lz_failed_blocks == 0u);
+    CHECK(cell_matches(&c, 0, 0, 0, 40) && cell_matches(&c, 0, 0, 1, 41)); /* chunk 0 (col 0) */
+    CHECK(cell_matches(&c, 1, 0, 0, 42) && cell_matches(&c, 1, 0, 1, 43)); /* chunk 1 (col 1) */
+    scrl_tilecache_free(&c);
+
+    /* No valid sector-aligned chunk before til_size: size==0 ends the TIL, exactly as the
+     * size0 sentinel — only chunk 0 survives, block 1 is never decoded. */
+    CHECK(scrl_tilecache_build(&c, 64, 32, cdb, cdb_size, til, pos + 100u) == SCRL_TC_OK);
+    CHECK(c.present_blocks == 1u && cell_matches(&c, 0, 0, 0, 40));
+    CHECK(scrl_tilecache_pixel(&c, 32, 0) == -1);
+    scrl_tilecache_free(&c);
+    return 0;
+}
+
 int main(void) {
     if (test_layout() || test_full_record() || test_rejects() || test_fail_diag() || test_fuzz() ||
-        test_names() || test_flip_palette() || test_heap_mode() || test_size0_sentinel())
+        test_names() || test_flip_palette() || test_heap_mode() || test_size0_sentinel() ||
+        test_multi_chunk())
         return 1;
     printf("OK scrl_tilecache\n");
     return 0;

@@ -49,6 +49,23 @@ int main(void) {
     CHECK(menu.frame_rgba != NULL);
     CHECK(menu.original_menu_rgba != NULL);
     for (i = 0; i < 4; i++) CHECK(menu.original_items[i] != NULL);
+    /* START-screen plane map: measured parallax on B/C/D; the sky path only turns on
+     * when a C or D plane exists on the disc. */
+    {
+        unsigned pi;
+        for (pi = 0; pi < menu.sky_map.plane_count; pi++) {
+            const scrl_plane *pl = &menu.sky_map.planes[pi];
+            if (strcmp(pl->cdb_name, "09BCDB") == 0)
+                CHECK(pl->parallax_coeff == SCRL_PARALLAX_ONE && pl->base_y == 20);
+            if (strcmp(pl->cdb_name, "11CCDB") == 0)
+                CHECK(pl->parallax_coeff == 0x3000 && pl->base_y == -60);
+            if (strcmp(pl->cdb_name, "13DCDB") == 0)
+                CHECK(pl->parallax_coeff == SCRL_PARALLAX_ONE && pl->base_y == -100);
+        }
+        CHECK(menu.sky_ok == 0 || menu.sky_map.plane_count > 2);
+        printf("MENU sky: planes=%u cached=%u sky_ok=%d\n", menu.sky_map.plane_count,
+               scrl_map_cached_planes(&menu.sky_map), menu.sky_ok);
+    }
     CHECK(menu.frame_rgba);
     CHECK(menu.screen == MENU_SCR_TITLE);
     CHECK(menu.level_count > 0);

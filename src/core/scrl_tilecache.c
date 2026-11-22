@@ -27,6 +27,7 @@ void scrl_tilecache_free(scrl_tile_cache *c) {
     free(c->pixels);
     free(c->present);
     free(c->cell_bank);
+    free(c->hixels);
     memset(c, 0, sizeof *c);
 }
 
@@ -108,15 +109,46 @@ static int decomp_clean(const uint8_t *rec, size_t size, unsigned count, unsigne
 }
 
 /*
+ * A size==0 record ends the current chunk. The real 08ATIL of a tall plane (VALLEY: 43 records
+ * per sector-chunk, 494 chunks; BAT1: 42 records, 99 chunks) stores one chunk per column and
+ * resumes at the next 2048-byte disc sector after zero padding. From the sentinel at `pos`, find
+ * where the next chunk starts: align up to the sector boundary (always stepping past the current
+ * sector), skip fully-zeroed sector headers (more padding), and accept the sector only when a
+ * real record header sits there, passing the SAME strict checks the walk uses. `seen` is the
+ * pass's present[] so an already-decoded block cannot start a chunk. Returns the resume offset,
+ * or (size_t)-1 to end the TIL — which is what a short synthetic size==0 sentinel buffer with no
+ * valid >=2048 sector before til_size hits, so that case ends exactly as it did before.
+ */
+static size_t scrl_til_next_chunk(const uint8_t *til, size_t til_size, size_t pos, size_t blocks,
+                                  const uint8_t *seen) {
+    size_t next = (pos + 2047u) & ~(size_t)2047u;
+    size_t sz;
+    unsigned count, bid;
+    if (next == pos) next += 2048u; /* already aligned: step to the following sector */
+    while (next + SCRL_TILE_RECORD_HDR <= til_size && rd16(til + next) == 0u &&
+           rd16(til + next + 2) == 0u && rd16(til + next + 4) == 0u)
+        next += 2048u; /* skip zero-padding sectors */
+    if (next + SCRL_TILE_RECORD_HDR > til_size) return (size_t)-1;
+    sz = rd16(til + next);
+    count = rd16(til + next + 2);
+    bid = rd16(til + next + 4);
+    if (sz >= SCRL_TILE_RECORD_HDR && sz <= til_size - next && count <= SCRL_TILE_CHARS_MAX &&
+        bid < blocks && !seen[bid])
+        return next;
+    return (size_t)-1;
+}
+
+/*
  * Walk the TIL once for structure / voting, then decode with the winning payload offset.
  * Packed (+0x48) wins ties and the empty-vote case; heap (+0x88) wins when it has more
- * clean decodes (MAUSO plane A). size==0 after a prior record ends the walk (VALLEY A).
+ * clean decodes (MAUSO plane A). size==0 after a prior record ends a chunk; the TIL may resume
+ * at the next sector (scrl_til_next_chunk) or end there (VALLEY A).
  */
 scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsigned height_px,
                                     const uint8_t *cdb, size_t cdb_size, const uint8_t *til,
                                     size_t til_size) {
     uint8_t chars[SCRL_TILE_CHARS_MAX * SCRL_TILE_CHAR_BYTES];
-    size_t pos = 0, blocks, limit = til_size;
+    size_t pos = 0, blocks;
     unsigned cols, rows, index, votes48 = 0u, votes88 = 0u, payload_off;
     if (!c) return SCRL_TC_ARG;
     memset(c, 0, sizeof *c);
@@ -151,8 +183,10 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
         count = rd16(rec + 2);
         id = rd16(rec + 4);
         if (size == 0u && index > 0u) {
-            limit = pos; /* end sentinel: keep prior records, ignore the rest */
-            break;
+            size_t next = scrl_til_next_chunk(til, til_size, pos, blocks, c->present);
+            if (next == (size_t)-1) break; /* no resumable chunk: end, keep prior records */
+            pos = next; /* multi-chunk 08ATIL: resume at the next sector (VALLEY/BAT1) */
+            continue;
         }
         if (size < SCRL_TILE_RECORD_HDR || size > til_size - pos || count > SCRL_TILE_CHARS_MAX ||
             id >= blocks) {
@@ -176,15 +210,29 @@ scrl_tc_status scrl_tilecache_build(scrl_tile_cache *c, unsigned width_px, unsig
     }
     payload_off = (votes88 > votes48) ? SCRL_TILE_HEAP_PAYLOAD : SCRL_TILE_RECORD_HDR;
     c->heap_mode = (payload_off == SCRL_TILE_HEAP_PAYLOAD) ? 1u : 0u;
+    if (c->heap_mode) {
+        c->hixels = calloc(blocks, sizeof *c->hixels);
+        if (!c->hixels) return fail(c, SCRL_TC_NOMEM);
+    }
     memset(c->present, 0, blocks); /* clear the pass-1 reservations */
 
-    /* Pass 2: decode with the winning offset up to `limit`. */
-    for (index = 0, pos = 0; pos < limit; index++) {
+    /* Pass 2: decode with the winning offset, following the same chunk walk as pass 1. */
+    for (index = 0, pos = 0; pos < til_size; index++) {
         const uint8_t *rec = til + pos;
         size_t size = rd16(rec);
         unsigned count = rd16(rec + 2);
         unsigned id = rd16(rec + 4);
         uint8_t *block;
+        if (size == 0u && index > 0u) {
+            size_t next = scrl_til_next_chunk(til, til_size, pos, blocks, c->present);
+            if (next == (size_t)-1) break;
+            pos = next;
+            continue;
+        }
+        if (c->hixels && size >= SCRL_TILE_HEAP_PAYLOAD) {
+            memcpy(c->hixels[id].bits, rec + SCRL_TILE_RECORD_HDR, sizeof c->hixels[id].bits);
+            c->hixels[id].valid = 1;
+        }
         if (count > 0u) {
             scrl_decomp_info info;
             const size_t want = (size_t)count * SCRL_TILE_CHAR_BYTES;
@@ -229,6 +277,31 @@ int scrl_tilecache_pixel(const scrl_tile_cache *c, unsigned x, unsigned y) {
     if (c->present[block] != BLOCK_USABLE) return -1;
     return c->pixels[block * SCRL_TILE_BLOCK_BYTES + (y % SCRL_TILE_PX) * SCRL_TILE_PX +
                      (x % SCRL_TILE_PX)];
+}
+
+/* VALLEY _MAPGetHixel at 0x2c43ee. Four 2x2 cells share one byte. */
+int scrl_tilecache_hixel(const scrl_tile_cache *c, unsigned x, unsigned y) {
+    if (!c || !c->hixels || x >= c->width_px || y >= c->height_px) return -1;
+    const scrl_hixel_block *b = &c->hixels[(y / 32u) * c->cols + x / 32u];
+    if (!b->valid) return -1;
+    unsigned byte = ((y & 31u) >> 1) * 4u + ((x & 31u) >> 3);
+    return (b->bits[byte] >> (x & 6u)) & 3;
+}
+
+int scrl_tilecache_floor_offset(const scrl_tile_cache *cache, int x, int y) {
+    if (!cache || x < 0 || y < 0 || (unsigned)x >= cache->width_px ||
+        (unsigned)y >= cache->height_px) return 0;
+    int offset = 0;
+    if (scrl_tilecache_hixel(cache, (unsigned)x, (unsigned)y) > 0) {
+        do {
+            offset -= 2;
+        } while (scrl_tilecache_hixel(cache, (unsigned)x, (unsigned)(y + offset)) > 0);
+    } else {
+        /* SH-2 stops on solid or an absent tile and returns the preceding offset. */
+        while (scrl_tilecache_hixel(cache, (unsigned)x, (unsigned)(y + offset + 2)) == 0)
+            offset += 2;
+    }
+    return offset;
 }
 
 int scrl_tilecache_cram(const scrl_tile_cache *c, unsigned x, unsigned y) {

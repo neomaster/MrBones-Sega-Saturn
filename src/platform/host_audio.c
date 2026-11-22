@@ -1,6 +1,7 @@
 #include "host_audio.h"
 #include "core/cdda.h"
 #include "core/menu_options.h"
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,6 +24,30 @@ void host_audio_mono_downmix(int16_t *pcm, size_t frames) {
 #pragma comment(lib, "winmm.lib")
 static volatile LONG g_volume_level = MENU_VOLUME_MAX;
 static volatile LONG g_stereo;
+static volatile LONG g_muted = -1;
+
+static int ieq(const char *a, const char *b) {
+    for (; *a && *b; a++, b++)
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) return 0;
+    return *a == *b;
+}
+
+static int is_muted(void) {
+    LONG m = InterlockedCompareExchange(&g_muted, 0, 0);
+    if (m < 0) {
+        const char *env = getenv("MB_MUTE");
+        int val = (env && (env[0] == '1' || env[0] == 'y' || env[0] == 'Y' ||
+                           env[0] == 't' || env[0] == 'T' ||
+                           ieq(env, "on") || ieq(env, "true") || ieq(env, "yes"))) ? 1 : 0;
+        InterlockedCompareExchange(&g_muted, val ? 1 : 0, -1);
+        return val;
+    }
+    return m != 0;
+}
+
+void host_audio_set_muted(int muted) {
+    InterlockedExchange(&g_muted, muted ? 1 : 0);
+}
 
 void host_audio_set_stereo(int on) {
     InterlockedExchange(&g_stereo, on != 0);
@@ -68,6 +93,10 @@ struct host_audio {
 
 static DWORD WINAPI audio_thread(void *param) {
     host_audio *a = (host_audio *)param;
+    if (is_muted()) {
+        while (!a->stop) Sleep(5);
+        return 0;
+    }
     LONG applied_volume = -1;
     WAVEFORMATEX fmt = {0};
     fmt.wFormatTag = WAVE_FORMAT_PCM;
@@ -144,6 +173,27 @@ static DWORD WINAPI audio_thread(void *param) {
 
 static DWORD WINAPI movie_thread(void *param) {
     host_audio *a = param;
+    if (is_muted()) {
+        uint64_t total_ms = (uint64_t)a->movie_samples * 1000u / a->movie_channels / a->movie_rate;
+        ULONGLONG last = GetTickCount64();
+        uint64_t pos_ms = 0;
+        InterlockedExchange(&a->movie_state, 1);
+        while (!a->stop && pos_ms < total_ms) {
+            ULONGLONG now = GetTickCount64();
+            if (InterlockedCompareExchange(&a->movie_paused, 0, 0) == 0 && now > last) {
+                pos_ms += (uint64_t)(now - last);
+                if (pos_ms > total_ms) pos_ms = total_ms;
+                InterlockedExchange(&a->movie_position_ms, (LONG)pos_ms);
+            }
+            last = now;
+            Sleep(5);
+        }
+        if (!a->stop) {
+            InterlockedExchange(&a->movie_position_ms, (LONG)total_ms);
+            InterlockedExchange(&a->movie_state, 2);
+        }
+        return 0;
+    }
     LONG applied_volume = -1;
     WAVEFORMATEX fmt = {0};
     WAVEHDR hdr = {0};
@@ -290,6 +340,11 @@ typedef struct {
 
 static DWORD WINAPI pcm8_thread(void *param) {
     pcm8_job *job = (pcm8_job *)param;
+    if (is_muted()) {
+        free(job->stereo);
+        free(job);
+        return 0;
+    }
     WAVEFORMATEX fmt = {0};
     HWAVEOUT wave = NULL;
     WAVEHDR hdr = {0};
@@ -322,6 +377,7 @@ static DWORD WINAPI pcm8_thread(void *param) {
 
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     if (!pcm || !length || rate < 4000 || rate > 48000) return -1;
+    if (is_muted()) return 0;
     /* Cap one-shot length (~2 s at 22 kHz) to avoid huge buffers. */
     if (length > 48000u) length = 48000u;
     pcm8_job *job = (pcm8_job *)calloc(1, sizeof *job);
@@ -356,6 +412,7 @@ void host_audio_movie_pause(host_audio *audio, int paused) { (void)audio; (void)
 void host_audio_stop(host_audio *audio) { free(audio); }
 void host_audio_fade_stop(host_audio *audio, unsigned duration_ms) { (void)duration_ms; host_audio_stop(audio); }
 void host_audio_set_volume(unsigned level) { (void)level; }
+void host_audio_set_muted(int muted) { (void)muted; }
 void host_audio_set_stereo(int on) { (void)on; }
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     (void)pcm; (void)length; (void)rate; return -1;

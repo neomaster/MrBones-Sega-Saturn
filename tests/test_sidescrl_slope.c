@@ -3,7 +3,6 @@
 #define CHECK(c) do {if (!(c)) {printf("FAIL %d: %s\n",__LINE__,#c);return 1;}} while (0)
 
 #define U SIDESCRL_PHYS_UNITS_PER_PIXEL
-#define MAXV SIDESCRL_PHYS_MAX_FALL_SPEED
 #define GRAV SIDESCRL_PHYS_GRAVITY_ACCEL
 #define UP 4
 #define DOWN 6
@@ -217,14 +216,14 @@ static int test_abyss(void) {
     expect_vy = a.vy;
     for (int k = 0; k < 120; k++) {
         sidescrl_slope_step(&a, terrain_y, &t, UP, DOWN);
-        expect_vy = expect_vy + GRAV > MAXV ? MAXV : expect_vy + GRAV;
+        expect_vy += GRAV;
         CHECK(!a.on_ground);
         CHECK(a.vy == expect_vy);
         CHECK(a.y >= prev_y);
         CHECK(a.x == 90 + 3 * (k + 1)); /* horizontal motion is untouched */
         prev_y = a.y;
     }
-    CHECK(a.vy == MAXV);
+    CHECK(a.vy == expect_vy);
     CHECK(a.y > 158 + 500);
 
     /* missing terrain function: always airborne */
@@ -287,7 +286,7 @@ static int test_fall_and_jump(void) {
         if (!landed) CHECK(feet(&a) <= 600); /* never sinks in */
     }
     CHECK(landed);
-    CHECK(vmax == MAXV); /* landed from terminal speed without tunnelling */
+    CHECK(vmax > 8 * U); /* landed from a high-speed fall without tunnelling */
     CHECK(a.y == 600 - SIDESCRL_STAND_HEIGHT && a.vy == 0);
     for (int i = 0; i < 100; i++) {
         sidescrl_slope_step(&a, terrain_y, &t, UP, DOWN);
@@ -359,7 +358,6 @@ static int test_fuzz(void) {
         CHECK(a.x == b.x && a.y == b.y && a.vy == b.vy && a.rem_y == b.rem_y);
         CHECK(a.on_ground == b.on_ground && a.jumping == b.jumping);
         CHECK(a.rem_x >= 0 && a.rem_x < U && a.rem_y >= 0 && a.rem_y < U);
-        CHECK(a.vy <= MAXV);
         if (a.on_ground) {
             CHECK(a.vy == 0 && !a.jumping);
             CHECK(under(&a, &t) != SIDESCRL_SLOPE_NO_GROUND);
