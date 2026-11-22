@@ -337,11 +337,11 @@ function Get-Tier1Tests {
         return [PSCustomObject]@{ Passed = ($p.Valid -and $p.NonBlackCount -gt 0); Detail = "nonBlack=$($p.NonBlackCount) ($($p.Reason))" }
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F5-05' -Tier 1 -Feature 'F5' -Title '08BAT1 Segment A verify_batwood, 11 CAnyBone, and CEndBatwood verification' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F5-05' -Tier 1 -Feature 'F5' -Title '08BAT1 Segment A test_bat1_mechanics, 11 CAnyBone, and exit checks' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'BAT1:.*BAT1 finished \(EndLevel win\)' `
-            -RequiredSourceRegex 'verify_batwood\s*\([^;]*"/08BAT1"' `
+            -RequiredSourceRegex '(?s)test_bat1_mechanics.*?"/08BAT1".*?body_piece_count == 11u.*?batwood_exit_contact' `
             -StageLabel '08BAT1'
     }))
 
@@ -383,11 +383,11 @@ function Get-Tier1Tests {
         return [PSCustomObject]@{ Passed = ($p.Valid -and $p.NonBlackCount -gt 0); Detail = "nonBlack=$($p.NonBlackCount) ($($p.Reason))" }
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F6-05' -Tier 1 -Feature 'F6' -Title '05MAUSO Segment A CMaestro 4-wave CPartition and CButFly exit verification' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F6-05' -Tier 1 -Feature 'F6' -Title '05MAUSO Segment A boss phase lock and barrier exit verification' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'MAUSO:.*MAUSO finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CMaestro|maestro).*?(CButFly|butfly|butterfly)' `
+            -RequiredSourceRegex '(?s)test_mauso_mechanics.*?"/05MAUSO".*?mauso\.phase == 1.*?sidescrl_phase_boss_remaining' `
             -StageLabel '05MAUSO'
     }))
 
@@ -429,11 +429,11 @@ function Get-Tier1Tests {
         return [PSCustomObject]@{ Passed = ($p.Valid -and $p.NonBlackCount -gt 0); Detail = "nonBlack=$($p.NonBlackCount) ($($p.Reason))" }
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F7-05' -Tier 1 -Feature 'F7' -Title '19VILLAGE Segment B CSpider thread, GrabLittleGuy, and DropLittleGuy verification' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F7-05' -Tier 1 -Feature 'F7' -Title '19VILLAGE Segment B CSpider thread cut and Little Guys saved verification' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'VILLAGE:.*VILLAGE finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CheckThreadHit|spider_thread|CSpider).*?(GrabLittleGuy|DropLittleGuy|LittleGuysSaved|little_guy)' `
+            -RequiredSourceRegex '(?s)sidescrl_village_cut_thread.*?little_guys_saved' `
             -StageLabel '19VILLAGE'
     }))
 
@@ -495,7 +495,7 @@ function Get-Tier1Tests {
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F9-02' -Tier 1 -Feature 'F9' -Title '15GLASS CTest w=1280 win' -Body {
         param($BuildDir)
-        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'GLASS: frames=\d+ w=1280 GLASS finished \(EndLevel win\)' -RequiredSourceRegex '' -StageLabel '15GLASS'
+        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'GLASS: frames=\d+ w=1280.*GLASS finished \(EndLevel win\)' -RequiredSourceRegex '' -StageLabel '15GLASS'
     }))
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F9-03' -Tier 1 -Feature 'F9' -Title '15GLASS 60-frame silent QPC benchmark' -Body {
@@ -524,11 +524,11 @@ function Get-Tier1Tests {
         return [PSCustomObject]@{ Passed = $true; Detail = "15GLASS nonBlack=$($p.NonBlackCount) colors>=$($p.UniqueSample)" }
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F9-05' -Tier 1 -Feature 'F9' -Title '15GLASS Segment C 176-object shards and CKeyHole exit verification' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F9-05' -Tier 1 -Feature 'F9' -Title '15GLASS Segment C 176-object shards, subpalette, and CKeyHole exit verification' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'GLASS:.*GLASS finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CKeyHole|keyhole).*?(176|CTurnSha|CShootSha|CTrapSha|merge_glass_subpalette)' `
+            -RequiredSourceRegex '(?s)"/15GLASS".*?total_records == 176u.*?CKeyHole.*?keyhole_unlocked' `
             -StageLabel '15GLASS'
     }))
 
@@ -544,7 +544,7 @@ function Get-Tier1Tests {
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F10-02' -Tier 1 -Feature 'F10' -Title '17VORTEX CTest w=640 and blend_mode==1 win' -Body {
         param($BuildDir)
-        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'VORTEX: frames=\d+ w=640 VORTEX finished \(EndLevel win\)' -RequiredSourceRegex 'blend_mode == 1' -StageLabel '17VORTEX'
+        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'VORTEX: frames=\d+ w=640.*VORTEX finished \(EndLevel win\)' -RequiredSourceRegex 'blend_mode == 1' -StageLabel '17VORTEX'
     }))
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F10-03' -Tier 1 -Feature 'F10' -Title '17VORTEX 60-frame silent QPC benchmark' -Body {
@@ -570,11 +570,11 @@ function Get-Tier1Tests {
         return [PSCustomObject]@{ Passed = ($p.Valid -and $p.NonBlackCount -gt 0); Detail = "nonBlack=$($p.NonBlackCount) ($($p.Reason))" }
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F10-05' -Tier 1 -Feature 'F10' -Title '17VORTEX Segment C CRotScroller, 17 CGlass, and _TryEndingVortexLevel verification' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T1-F10-05' -Tier 1 -Feature 'F10' -Title '17VORTEX Segment C 17 CGlass wave rings and exit unlock verification' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'VORTEX:.*VORTEX finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CRotScroller|rot_scroller).*?(CGlass|glass_ring|17).*?(TryEndingVortex|vortex_end)' `
+            -RequiredSourceRegex '(?s)"/17VORTEX".*?ring_count == 17u.*?rings_done == 17u.*?exit_unlocked == 1' `
             -StageLabel '17VORTEX'
     }))
 
@@ -590,7 +590,7 @@ function Get-Tier1Tests {
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F11-02' -Tier 1 -Feature 'F11' -Title '22SHADOW CTest w=640 win' -Body {
         param($BuildDir)
-        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'SHADOW: frames=\d+ w=640 SHADOW finished \(EndLevel win\)' -RequiredSourceRegex '' -StageLabel '22SHADOW'
+        return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir -RequiredOutputRegex 'SHADOW: frames=\d+ w=640.*SHADOW finished \(EndLevel win\)' -RequiredSourceRegex '' -StageLabel '22SHADOW'
     }))
 
     [void]$tests.Add((New-E2ETestSpec -Id 'T1-F11-03' -Tier 1 -Feature 'F11' -Title '22SHADOW 60-frame silent QPC benchmark with --disc2' -Body {

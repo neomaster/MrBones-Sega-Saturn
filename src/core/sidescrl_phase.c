@@ -1507,11 +1507,9 @@ int sidescrl_glass_unlock_keyhole(sidescrl_phase *phase) {
     return 0;
 }
 
-static void glass_controller_step(sidescrl_phase *phase) {
-    int cx;
+static void glass_check_shots(sidescrl_phase *phase) {
     unsigned s, si;
     if (!phase || !phase->glass.enabled) return;
-    cx = phase->actor.x + ACTOR_HALF_W;
     for (s = 0; s < STAGE_SHOT_MAX; s++) {
         int sx;
         if (!phase->enemies.shots[s].active) continue;
@@ -1525,6 +1523,13 @@ static void glass_controller_step(sidescrl_phase *phase) {
             }
         }
     }
+}
+
+static void glass_controller_step(sidescrl_phase *phase) {
+    int cx;
+    if (!phase || !phase->glass.enabled) return;
+    cx = phase->actor.x + ACTOR_HALF_W;
+    glass_check_shots(phase);
     if (!phase->glass.keyhole_unlocked && abs(cx - phase->glass.keyhole_x) <= 48)
         (void)sidescrl_glass_unlock_keyhole(phase);
 }
@@ -1886,6 +1891,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
                                  phase->bones_y, phase->facing, 1);
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
     }
+    glass_check_shots(phase);
     village_controller_step(phase, !phase->body_config && (pad->pressed & PAD_A) != 0);
 
     {

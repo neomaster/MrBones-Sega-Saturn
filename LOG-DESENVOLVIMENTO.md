@@ -1660,7 +1660,7 @@ Frente de integração final coordenada sobre o repositório `F:\MrBonesPort` pa
 ### Áudio 100% inaudível em todos os testes (`MB_MUTE=1` / `--mute`)
 
 - O caminho de saída sonora em `src/platform/host_audio.c` (incluindo `winmm` e relógio PCM8/FMV sob `MB_MUTE=1`) e os testes em `CMakeLists.txt` (`ENVIRONMENT "MB_MUTE=1"`) mantiveram o relógio temporal ativo sem emitir áudio pelos alto-falantes.
-- `test_movie_audio` executou integralmente nas duas suítes CTest sem exclusão e sob `MB_MUTE=1`, passando em `69,25 s` no Debug e `69,01 s` no Release estático.
+- `test_movie_audio` executou integralmente nas duas suítes CTest sem exclusão e sob `MB_MUTE=1`, passando em `69,21 s` no Debug e `69,13 s` no Release estático.
 
 ### Consolidação de Especial, Runway e FINALE (entrega do Codex)
 
@@ -1670,23 +1670,23 @@ Frente de integração final coordenada sobre o repositório `F:\MrBonesPort` pa
 
 - **Segmento A (`05MAUSO`, `06VALLEY`, `08BAT1`, preservação de `09BAT2`/`10BAT3`):** pareamento completo de chaves e portões e tombstones `CBlueTomb` de cura única em `06VALLEY`, desprendimento condicional `0x2D66C4` -> `0x2D69AC` ao sofrer impacto em `08BAT1` (preservando as rotas nativas gravadas de `BAT2` e `BAT3`), barreira e fases do chefe em `05MAUSO`, com testes positivos e negativos dedicados.
 - **Segmento B (`19VILLAGE`, `26LAFF`):** corte de fio de aranha `CSpider::CheckThreadHit` (`0x29B3AC`), resgate vs retração sem corte (`EatLittleGuy`), condição de vitória `_LittleGuysSaved > 20` (`0x2BFA8C`), `5 CMushroom` e `1 CBlueHead`; em `26LAFF`, diferenciação `CJunior::ToldGoodJoke` (`0x294780` -> `CringeBrain`) vs `CJunior::ToldBadJoke` (`0x2947A8` -> `LaffBrain`), `80 CLaffSkel`, `CLaffMeter` e trava de saída até a derrota de Da Laff.
-- **Segmento C (`15GLASS`, `17VORTEX`, `22SHADOW`):** leitura dos `176` registros de layout `0x2DD18C` em `15GLASS`, verificação de `126` entradas iluminadas da subpaleta `513..638` (`merge_glass_subpalette`) e trava `CKeyHole` (`0x2D0024`); controlador de `17` ondas `CGlass` (`0x283314`) e `CRotScroller` (`0x261620`) bloqueando `_TryEndingVortexLevel` até concluir todas as ondas em `17VORTEX`; `CSpirit` (`0x2BE684`) e `_IsEndOfLevel__7CSpirit` (`0x2BE8BC`, exigindo `_SSRHAALL_config` e `trials > 6`), penalidade por movimento durante olhar escarlate vs esquiva agachado (`MB_PAD_DOWN`) e cura `CBlueHead` em `(265, 129)` em `22SHADOW`.
+- **Segmento C (`15GLASS`, `17VORTEX`, `22SHADOW`):** leitura dos `176` registros de layout `0x2DD18C` em `15GLASS`, verificação de `126` entradas iluminadas da subpaleta `513..638` (`merge_glass_subpalette`), estilhaçamento de cristais por disparo Blues e trava `CKeyHole` (`0x2D0024`); controlador de `17` ondas `CGlass` (`0x283314`) e `CRotScroller` (`0x261620`) bloqueando `_TryEndingVortexLevel` até concluir todas as ondas em `17VORTEX`; `CSpirit` (`0x2BE684`) e `_IsEndOfLevel__7CSpirit` (`0x2BE8BC`, exigindo `_SSRHAALL_config` e `trials > 6`), penalidade por movimento durante olhar escarlate vs esquiva agachado (`MB_PAD_DOWN`) e cura `CBlueHead` em `(265, 129)` em `22SHADOW`.
 
 ### Builds duplas (0 avisos), suítes CTest completas e binário Release `/MT`
 
-- **Clang 22.1.8 Debug (`build/`, Ninja):** recompilação limpa `[183/183]` com **0 avisos**. `ctest --test-dir build --parallel 3 --output-on-failure` (com `MB_MUTE=1`, sem excluir `test_movie_audio`) -> **59/59 aprovados (100%)** em `214,84 s` (inclui `test_movie_audio` `69,25 s`, `test_sidescrl_phase` `70,53 s`, `test_full_campaign` `119,07 s` e `test_fmv_transition` `128,45 s`).
-- **MSVC 19.44 x64 Release `/MT` (`build-static/`, Ninja):** recompilação limpa `[183/183]` com **0 avisos**. `ctest --test-dir build-static --parallel 3 --output-on-failure` (com `MB_MUTE=1`, sem excluir `test_movie_audio`) -> **61/61 aprovados (100%)** em `94,08 s` (inclui `test_movie_audio` `69,01 s`, `test_sidescrl_phase` `22,93 s`, `test_static_imports` `0,12 s`, `test_msvc_dependencies` `0,35 s`, `test_full_campaign` `41,58 s` e `test_fmv_transition` `48,57 s`).
-- **Binário estático homologado (`build-static/mrbones.exe`):** `1.527.296` bytes, SHA-256 `6d564248848a98ad4d0c00749910c25ee8e1b38e714d6f802e0406a3cb0f6a58`, cinco DLLs diretas confirmadas por `dumpbin /dependents`: `KERNEL32.dll`, `USER32.dll`, `GDI32.dll`, `WINMM.dll`, `bcrypt.dll`.
+- **Clang 22.1.8 Debug (`build/`, Ninja):** recompilação com **0 avisos**. `ctest --test-dir build --parallel 3 --output-on-failure` (com `MB_MUTE=1`, sem excluir `test_movie_audio`) -> **59/59 aprovados (100%)** em `205,42 s` (inclui `test_movie_audio` `69,21 s`, `test_sidescrl_phase` `68,99 s`, `test_full_campaign` `120,35 s` e `test_fmv_transition` `130,90 s`).
+- **MSVC 19.44 x64 Release `/MT` (`build-static/`, Ninja):** recompilação com **0 avisos**. `ctest --test-dir build-static --parallel 3 --output-on-failure` (com `MB_MUTE=1`, sem excluir `test_movie_audio`) -> **61/61 aprovados (100%)** em `93,69 s` (inclui `test_movie_audio` `69,13 s`, `test_sidescrl_phase` `23,06 s`, `test_static_imports` `0,06 s`, `test_msvc_dependencies` `0,17 s`, `test_full_campaign` `39,21 s` e `test_fmv_transition` `52,04 s`).
+- **Binário estático homologado (`build-static/mrbones.exe`):** `1.527.296` bytes, SHA-256 `90b24ef961f6882f13b4c085661c761c02df2094c773b673d58dd7db640edb74`, cinco DLLs diretas confirmadas por `dumpbin /dependents`: `KERNEL32.dll`, `USER32.dll`, `GDI32.dll`, `WINMM.dll`, `bcrypt.dll`.
 
 ### Benchmark Release (300 quadros por fase, `--mute --no-hd-bones`)
 
 | Fase | Quadros | Mediana trabalho (ms) | P95 (ms) | Máx. (ms) | ≥ 16,6 ms | Apresentação média (ms) | Máx. entre apresentações (ms) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `/05MAUSO` | 300 | 2,639 | 3,287 | 5,035 | 0 | 16,676 | 19,317 |
-| `/06VALLEY` | 300 | 2,797 | 4,006 | 4,994 | 0 | 16,676 | 19,764 |
-| `/08BAT1` | 300 | 2,727 | 4,380 | 8,763 | 0 | 16,675 | 22,987 |
-| `/15GLASS` | 300 | 2,337 | 3,447 | 4,729 | 0 | 16,679 | 19,174 |
-| `/17VORTEX` | 300 | 3,146 | 4,379 | 6,412 | 0 | 16,682 | 19,946 |
-| `/19VILLAGE` | 300 | 2,574 | 3,825 | 6,302 | 0 | 16,674 | 20,393 |
-| `/22SHADOW` | 300 | 2,540 | 4,073 | 6,055 | 0 | 16,675 | 20,102 |
-| `/26LAFF` | 300 | 2,287 | 3,846 | 6,083 | 0 | 16,675 | 20,480 |
+| `/05MAUSO` | 300 | 2,568 | 3,818 | 4,879 | 0 | 16,675 | 19,242 |
+| `/06VALLEY` | 300 | 2,761 | 3,985 | 5,800 | 0 | 16,677 | 19,797 |
+| `/08BAT1` | 300 | 2,681 | 4,559 | 7,656 | 0 | 16,675 | 21,599 |
+| `/15GLASS` | 300 | 2,272 | 3,210 | 4,970 | 0 | 16,677 | 19,289 |
+| `/17VORTEX` | 300 | 3,142 | 4,645 | 8,243 | 0 | 16,682 | 21,877 |
+| `/19VILLAGE` | 300 | 2,654 | 4,267 | 6,574 | 0 | 16,675 | 20,661 |
+| `/22SHADOW` | 300 | 2,522 | 3,773 | 5,783 | 0 | 16,680 | 18,983 |
+| `/26LAFF` | 300 | 2,342 | 3,877 | 6,287 | 0 | 16,680 | 20,718 |

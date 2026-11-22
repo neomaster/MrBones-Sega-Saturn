@@ -231,7 +231,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'BAT1:.*BAT1 finished \(EndLevel win\)' `
-            -RequiredSourceRegex 'verify_batwood\s*\([^;]*"/08BAT1"' `
+            -RequiredSourceRegex '(?s)test_bat1_mechanics.*?"/08BAT1".*?batwood_exit_contact\(&phase\) == 0' `
             -StageLabel '08BAT1 exit config negative'
     }))
 
@@ -239,7 +239,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'BAT1:.*BAT1 finished \(EndLevel win\)' `
-            -RequiredSourceRegex 'verify_batwood\s*\([^;]*"/08BAT1".*?!batwood_exit_contact' `
+            -RequiredSourceRegex '(?s)test_bat1_mechanics.*?"/08BAT1".*?saved_y \+ 150.*?batwood_exit_contact\(&phase\) == 0' `
             -StageLabel '08BAT1 exit Y boundary'
     }))
 
@@ -271,11 +271,11 @@ function Get-Tier2Tests {
     }))
 
     # --- F6: 05MAUSO boundary/negative (5 tests) ---
-    [void]$tests.Add((New-E2ETestSpec -Id 'T2-F6-01' -Tier 2 -Feature 'F6' -Title 'Negative: 05MAUSO incomplete CMaestro waves block stage completion' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T2-F6-01' -Tier 2 -Feature 'F6' -Title 'Negative: 05MAUSO locked arena blocks stage completion until waves clear' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'MAUSO:.*MAUSO finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(?s)(CMaestro|maestro).*?(SIDESCRL_ST_FINISHED|wave|CButFly)' `
+            -RequiredSourceRegex '(?s)test_mauso_mechanics.*?mauso\.phase == 1.*?sidescrl_phase_boss_remaining\(&phase\) == 1u.*?SIDESCRL_ST_FINISHED' `
             -StageLabel '05MAUSO CMaestro negative'
     }))
 
@@ -330,7 +330,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'VILLAGE:.*VILLAGE finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(EatLittleGuy|eat_little_guy).*?(saved|LittleGuysSaved|CMeterSpider)' `
+            -RequiredSourceRegex '(?s)EatLittleGuy.*?little_guys_eaten >= 1u && phase\.village\.little_guys_saved == 0u' `
             -StageLabel '19VILLAGE EatLittleGuy negative'
     }))
 
@@ -375,7 +375,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'LAFF:.*LAFF finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(ToldGoodJoke|good_joke).*?(CringeBrain|cringe)' `
+            -RequiredSourceRegex '(?s)GoodJoke.*?CringeBrain.*?sidescrl_laff_tell_joke\(&phase, 0\).*?laff_meter == 0' `
             -StageLabel '26LAFF ToldGoodJoke negative'
     }))
 
@@ -415,11 +415,11 @@ function Get-Tier2Tests {
             -StageLabel '15GLASS CKeyHole lock'
     }))
 
-    [void]$tests.Add((New-E2ETestSpec -Id 'T2-F9-02' -Tier 2 -Feature 'F9' -Title 'Negative: 15GLASS CTrapSha / cracking crystal collapses and drops actor' -Body {
+    [void]$tests.Add((New-E2ETestSpec -Id 'T2-F9-02' -Tier 2 -Feature 'F9' -Title 'Negative: 15GLASS CTrapSha / cracking crystal shatters on Blues shot' -Body {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'GLASS:.*GLASS finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CTrapSha|trap_sha|crack|shatter).*?(GLASS|15GLASS)' `
+            -RequiredSourceRegex '(?s)"/15GLASS".*?shards\[trap_idx\]\.broken == 1' `
             -StageLabel '15GLASS CTrapSha'
     }))
 
@@ -455,7 +455,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'VORTEX:.*VORTEX finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(CGlass|TryEndingVortex|vortex_wave).*?(!= SIDESCRL_ST_FINISHED|blocked|incomplete)' `
+            -RequiredSourceRegex '(?s)"/17VORTEX".*?ring_count == 17u.*?sidescrl_phase_boss_remaining\(&phase\) == 1u.*?phase\.state != SIDESCRL_ST_FINISHED' `
             -StageLabel '17VORTEX negative wave'
     }))
 
@@ -508,7 +508,7 @@ function Get-Tier2Tests {
         param($BuildDir)
         return Assert-TestSidescrlLiveAndPattern -BuildDir $BuildDir `
             -RequiredOutputRegex 'SHADOW:.*SHADOW finished \(EndLevel win\)' `
-            -RequiredSourceRegex '(SSRHAALL|shadow_config).*?(!=|wrong|!= SIDESCRL_ST_FINISHED)' `
+            -RequiredSourceRegex '(?s)_IsEndOfLevel__7CSpirit.*?phase\.shadow\.config_ok = 0.*?sidescrl_phase_boss_remaining\(&phase\) == 1u.*?phase\.state != SIDESCRL_ST_FINISHED' `
             -StageLabel '22SHADOW wrong config'
     }))
 

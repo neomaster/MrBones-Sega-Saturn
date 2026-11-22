@@ -140,9 +140,11 @@ function Get-Tier4Tests {
         if ($loose -gt 0 -or $tempDirs -gt 0) {
             return [PSCustomObject]@{ Passed = $false; Detail = "Root not clean: loose=$loose tempOrObsolete=$tempDirs" }
         }
-        $ig = Invoke-GitReadOnly -ArgList @('check-ignore', '-q', 'disco1/', 'disco2/', 'test_audio_reference/', 'test_save_x/')
-        if ($ig.ExitCode -ne 0) {
-            return [PSCustomObject]@{ Passed = $false; Detail = '.gitignore directory shielding incomplete' }
+        foreach ($igPath in @('disco1/', 'disco2/', 'test_audio_reference/', 'test_save_x/')) {
+            $ig = Invoke-GitReadOnly -ArgList @('check-ignore', '-q', $igPath)
+            if ($ig.ExitCode -ne 0) {
+                return [PSCustomObject]@{ Passed = $false; Detail = ".gitignore directory shielding incomplete ($igPath)" }
+            }
         }
         $bytes = [System.IO.File]::ReadAllBytes($script:LogPath)
         if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {

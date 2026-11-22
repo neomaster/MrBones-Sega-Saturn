@@ -712,6 +712,23 @@ int main(void) {
     {
         unsigned u = phase.enemies.units_per_pixel ? phase.enemies.units_per_pixel : UPP;
         saturn_pad tp = {0};
+        unsigned si, trap_idx = phase.glass.shard_count;
+        for (si = 0; si < phase.glass.shard_count; si++) {
+            if ((phase.glass.shards[si].kind == 2u || phase.glass.shards[si].kind == 3u) &&
+                phase.glass.shards[si].x0 + 4u < phase.map.strip_w &&
+                phase.map.floor_py[phase.glass.shards[si].x0 + 4u] < 224u) {
+                trap_idx = si;
+                break;
+            }
+        }
+        CHECK(trap_idx < phase.glass.shard_count && phase.glass.shards[trap_idx].broken == 0);
+        sidescrl_phase_spawn(&phase, (int)phase.glass.shards[trap_idx].x0 + 4);
+        saturn_pad_update_host(&tp, MB_PAD_C);
+        for (si = 0; si < 6u && !phase.glass.shards[trap_idx].broken; si++) {
+            sidescrl_phase_step(&phase, &tp);
+            saturn_pad_update_host(&tp, 0u);
+        }
+        CHECK(phase.glass.shards[trap_idx].broken == 1);
         /* Negative: exit blocked at finish_x while CKeyHole remains locked. */
         sidescrl_phase_spawn(&phase, (int)(phase.finish_x / u) - 2);
         CHECK(sidescrl_phase_boss_remaining(&phase) == 1u);
