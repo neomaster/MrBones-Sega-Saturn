@@ -27,6 +27,23 @@
 #define RUNWAY_SFX_FLAG_LAND (1u << RUNWAY_SFX_LAND)
 
 #define RUNWAY_SFX_RATE 22050u
+#define RUNWAY_SFX_FRAME_LIMIT 64u
+
+typedef struct {
+    uint8_t kind, bank, program, note, velocity;
+} runway_sfx_command;
+
+typedef struct {
+    runway_sfx_command commands[RUNWAY_SFX_FRAME_LIMIT];
+    unsigned count;
+} runway_sfx_frame;
+
+/* Collect commands only while stepping one phase on this thread. */
+void runway_sfx_begin_frame(runway_sfx_frame *frame);
+void runway_sfx_end_frame(void);
+void runway_sfx_emit(unsigned id);
+void runway_sfx_emit_note(unsigned channel, unsigned note, unsigned velocity);
+void runway_sfx_emit_tone(unsigned bank, unsigned program, unsigned note, unsigned velocity);
 
 typedef struct {
     const int8_t *pcm;
@@ -41,8 +58,9 @@ typedef struct {
     int8_t *live_scratch[RUNWAY_SFX_COUNT];
     uint32_t seq_counters[2]; /* SoundStartSequence groups */
     unsigned event_hits[64];  /* SoundEvent(index) host tally */
-    int8_t *event_pcm_scratch; /* 16->8-bit converted buffer for type-1 SCSP tones */
-    size_t event_pcm_cap;
+    uint8_t channel_banks[16], channel_programs[16];
+    int8_t *event_pcm_scratch;
+    int32_t *event_mix;
 } runway_sfx;
 
 int runway_sfx_load(runway_sfx *sfx, cdimage *cd);
@@ -55,9 +73,8 @@ void runway_sfx_sound_event(runway_sfx *sfx, unsigned event_index);
 
 /*
  * Resolve Saturn SoundEvent(id) from 05SND1 span 0 to 8-bit signed PCM.
- * Type-1 note-on events (e.g. FINALE ring hit 0x29..0x2B and activate
- * 0x31..0x33) select the channel's SCSP voice/layer in span 4; type-3
- * records use word[4] as a span-4 table index. Returns 0 on success.
+ * MIDI records select a tone from the stage bank. Sequence records select a
+ * song by bank and ordinal. The returned buffer is valid until the next render.
  */
 int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
                          const int8_t **pcm, size_t *length);
@@ -72,6 +89,8 @@ int runway_sfx_select(runway_sfx *sfx, unsigned id,
 /* Fire every set bit in flags; invokes play(pcm,len,rate,user) per sample. */
 typedef void (*runway_sfx_play_fn)(void *user, const int8_t *pcm, size_t length,
                                    unsigned rate);
+unsigned runway_sfx_dispatch_events(runway_sfx *sfx, const runway_sfx_frame *frame,
+                                    runway_sfx_play_fn play, void *user);
 void runway_sfx_dispatch(runway_sfx *sfx, unsigned flags,
                          runway_sfx_play_fn play, void *user);
 

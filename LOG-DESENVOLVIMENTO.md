@@ -1724,3 +1724,16 @@ Frente de integração final coordenada sobre o repositório `F:\MrBonesPort` pa
   - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, CTest **60/60 aprovados (100%)** em `194,91 s` (inclui `test_static_imports`), binário `1.532.928` bytes, SHA-256 `6ed41db99219bda51ea6974aee9b7412bba56c3e488ad0c03a9cb79acdb5f57b`.
   - **MSVC Release `/MT` (`build-chatgpt/release-static/`):** **0 avisos**, CTest **60/60 aprovados (100%)** em `210,56 s` (inclui `test_static_imports` e `test_msvc_dependencies`), binário `1.532.928` bytes, SHA-256 `d71a0c28c632421efe9b48d8e2f0b1b47e1fbb89dad86847e8bbe3b1c9906d7f`, imports `bcrypt.dll`, `gdi32.dll`, `kernel32.dll`, `user32.dll`, `winmm.dll`.
   - **Pacote limpo atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `713.275` bytes, SHA-256 `d37c35069e811b41f835863fbb25ecbd8014a304d249d0da45084fb7cc5ed4ee`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` com `MB_MUTE=1`.
+
+### Integração SFX SCSP (SEQ + TON), menu e mixer 32 vozes (`03MENU` e campanha)
+
+- **Sintetizador `SEQ`/`TON` por evento e menu (`src/core/snd1_pcm.{h,c}`, `src/core/runway_sfx.{h,c}`, `src/core/menu_phase.c`, `src/core/{runway,sidescrl,special}_phase.c`, `src/tools/mrbones.c`, [handoff-chatgpt-special-runway.md](docs/handoff-chatgpt-special-runway.md)):**
+  - Entrega do Codex integrada sobre `31f2189` com leitura de bancos `SEQ` (`spans[8..11]`), múltiplas camadas `.TON` (`snd1_ton_layer`, afinação/oitava/loop e alias em `spans[2]`), enfileiramento por quadro (`runway_sfx_begin_frame`/`emit`/`dispatch_events`), disparo em `03MENU` (cursor e opções) e cobertura ampliada nas fases da campanha (pendências restantes documentadas no handoff).
+- **Mixer WinMM contínuo e reparo E2E (`src/platform/host_audio.c`):**
+  - Fluxo contínuo de 32 vozes misturadas em blocos de 128 quadros (`44100 Hz`), preservando a guarda `is_muted() || current_volume_level() == 0u` na entrada e restaurando o identificador `pcm8_thread` (exigido por `Get-HostAudioAnalysis` nos testes `T1-F3-04` e `T3-P11`) mais zeragem em software dentro de `fill_sfx_block`.
+- **Revalidação completa nas 4 builds (`MB_MUTE=1`, exclusão `^test_movie_audio$`):**
+  - **Clang Debug (`build/`):** **0 avisos**, **58/58 aprovados (100%)** em `177,79 s`.
+  - **Clang Debug (`build-chatgpt/debug/`):** **0 avisos**, **58/58 aprovados (100%)** em `166,58 s`.
+  - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `74,42 s`, binário `1.539.072` bytes, SHA-256 `ce7b99b88c974085d680134e7444679095afb1b2b9d50413334d5d6a4fcf8ee5`.
+  - **MSVC Release `/MT` (`build-chatgpt/release-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `65,02 s` (+ `test_static_imports` **1/1** em `0,04 s`), binário `1.539.072` bytes, SHA-256 `4b6011eff226cbf8cd353b6477dcae44f350ec45febc43736a7d876b60b28d20`, imports diretos `bcrypt.dll`, `gdi32.dll`, `kernel32.dll`, `user32.dll`, `winmm.dll`.
+  - **Pacote limpo atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `717.054` bytes, SHA-256 `19b1547e2ac351fc51092ff01b6cb5eb4f66640fa3caaec6943506f379f0a7a5`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` com `MB_MUTE=1`.

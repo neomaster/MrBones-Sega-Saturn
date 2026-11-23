@@ -49,6 +49,8 @@ static const int k_finale_dir[4] = {0, 128, 192, 64};
 #define FINALE_SFX_ACTIVATE (RUNWAY_SFX_FLAG_C)
 static const unsigned k_finale_sfx_hit[4] = {0x2Au, 0x2Au, 0x2Bu, 0x29u};
 static const unsigned k_finale_sfx_act[4] = {0x32u, 0x32u, 0x33u, 0x31u};
+/* FireBolt / MPlay SoundEvent, the directional launch cues at 0x206CB8. */
+static const unsigned k_finale_sfx_red[4] = {0x2Du, 0x2Du, 0x2Eu, 0x2Cu};
 static void finale_ring_init(special_phase *phase) {
     unsigned i;
     for (i = 0; i < FINALE_RING_SLOTS; i++)
@@ -191,6 +193,7 @@ static int apply_finale_shot(special_phase *phase, finale_ring_contact contact, 
         if (!phase->movie_ok) {
             phase->sfx_flags |= FINALE_SFX_ACTIVATE;
             phase->ring_sfx_event = k_finale_sfx_act[d];
+            runway_sfx_emit(phase->ring_sfx_event);
         }
         return 0;
     }
@@ -202,6 +205,7 @@ static int apply_finale_shot(special_phase *phase, finale_ring_contact contact, 
     if (!phase->movie_ok) {
         phase->sfx_flags |= FINALE_SFX_HIT;
         phase->ring_sfx_event = k_finale_sfx_hit[d];
+        runway_sfx_emit(phase->ring_sfx_event);
     }
     if (phase->ring_active_count < 0)
         phase->ring_active_count = 0;
@@ -215,10 +219,6 @@ static int apply_finale_shot(special_phase *phase, finale_ring_contact contact, 
 
 int special_phase_finale_shoot(special_phase *phase, unsigned dir) {
     return apply_finale_shot(phase, (finale_ring_contact){(uint8_t)dir, 0}, phase ? phase->frames : 0u);
-}
-
-static void publish_finale_shot(special_phase *p, finale_ring_contact contact, unsigned actor_tick) {
-    if (apply_finale_shot(p, contact, actor_tick)) p->finale_end_tick = actor_tick;
 }
 
 
@@ -266,7 +266,30 @@ struct finale_lights {
     size_t count;
     uint32_t sequences[4];
     unsigned first_tick, fade_cycles;
+    unsigned pending_red_sfx, pending_end_sfx;
 };
+
+enum { FINALE_CYCLES_PER_SCANLINE = 1708 };
+
+static int finale_actor_overran(const special_phase *phase) {
+    return phase->finale_lights->fade_cycles >= 8u * FINALE_CYCLES_PER_SCANLINE;
+}
+
+static void publish_finale_shot(special_phase *p, finale_ring_contact contact, unsigned actor_tick) {
+    if (!apply_finale_shot(p, contact, actor_tick)) return;
+    p->finale_end_tick = actor_tick;
+    /* CEndLevel::Brain stops eight SCSP sequences before SoundEvent(0x18).
+     * Reserve three scanlines for this path, calibrated against the Ymir traces. */
+    if (actor_tick == p->frames &&
+        p->finale_lights->fade_cycles >= 5u * FINALE_CYCLES_PER_SCANLINE)
+        p->finale_lights->pending_end_sfx = 1;
+    else runway_sfx_emit(0x18u);
+}
+
+static void finale_red_sound(special_phase *phase, unsigned event) {
+    if (finale_actor_overran(phase)) phase->finale_lights->pending_red_sfx = event;
+    else runway_sfx_emit(event);
+}
 
 static int finale_light_list(special_phase *p, uint32_t address, int fade, int discover) {
     if (!address) return 0;
@@ -1074,7 +1097,14 @@ static void big_actor_tick(special_phase *p, const saturn_pad *pad,int catchup) 
          * message 0a020000 restarts the 15Hz movie, wait for frame >121,
          * then yield eight ticks before applying the wave's health. */
         unsigned age=p->big_transition++;
-        if (age==2 && p->big_wave==5) { p->state=SPECIAL_ST_FINISHED; return; }
+        if (age == 2) {
+            if (p->big_wave == 5) {
+                runway_sfx_emit(0x18u); /* CEndLevel */
+                p->state = SPECIAL_ST_FINISHED;
+                return;
+            }
+            runway_sfx_emit(0x2fu); /* NextWaveBrain 25E978 */
+        }
         if (age==3) ++p->big_wave;
         /* EndBrain (25eef4) stops one publication after BonesPos.y
          * crosses camera.y - 234057. Its first pair of yields overlaps
@@ -1097,14 +1127,18 @@ static void big_actor_tick(special_phase *p, const saturn_pad *pad,int catchup) 
         p->big_transition=0;
         p->big_resume_tick=p->frames;
         p->pose_ticks+=2;
+        runway_sfx_emit(0x31u); /* NextWaveBrain 25EA24 */
     }
     if (p->big_drop) {
         /* EndWave schedules EndBrain concurrently with the paddle's
          * PrevWaveBrain. Its 4/8/8 yields keep RunWave suspended. */
         unsigned age=p->big_drop++;
-        if (age==1 && runway_skel_loose(&p->skel,0x9999)) {
-            p->state=SPECIAL_ST_LOST;
-            return;
+        if (age == 1) {
+            if (runway_skel_loose(&p->skel, 0x9999)) {
+                p->state = SPECIAL_ST_LOST;
+                return;
+            }
+            if (p->big_wave) runway_sfx_emit(0x30u); /* PrevWaveBrain 25EAD6 */
         }
         if(age<=4) {
             p->big_x+=bounded(p->big_vx,-6553,6553);
@@ -1124,6 +1158,7 @@ static void big_actor_tick(special_phase *p, const saturn_pad *pad,int catchup) 
         p->paddle_vx=old_vx;
         p->big_preroll=1;
         p->big_drop=0;
+        runway_sfx_emit(0x31u); /* PrevWaveBrain 25EB7C */
     }
     if (p->big_pad & 0x8000) p->paddle_vx -= 0x2d0;
     else if (p->big_pad & 0x4000) p->paddle_vx += 0x2d0;
@@ -1146,6 +1181,7 @@ static void big_actor_tick(special_phase *p, const saturn_pad *pad,int catchup) 
             p->big_vx = (int32_t)big_word(p,at+4);
             p->big_vy = (int32_t)big_word(p,at+8) + (p->boost_left ? 0xa3d : 0);
             bounced=1;
+            runway_sfx_emit(0x2au); /* CBouncyBones::GoDown 25F0A2 */
         }
     } else if (p->big_vy<=0 && p->big_y < (int32_t)big_word(p,0x270a8cu)) {
         p->big_drop=1;
@@ -1181,6 +1217,8 @@ static void big_actor_tick(special_phase *p, const saturn_pad *pad,int catchup) 
             uint32_t anim=big_word(p,0x2716c0);
             e->touch=300+36;
             for(unsigned k=0;k<10;++k) e->touch+=(int)(big_word(p,anim+12*k+4)&0xffff);
+            /* CBumper::FadeHit 25F560 selects by GameFrame parity. */
+            runway_sfx_emit((p->frames & 1u) ? 0x2eu : 0x2du);
         }
         ++p->bumper_bounces;
         ++p->wave_bounces;
@@ -1517,12 +1555,10 @@ static void score_note(special_phase *p, int good, int amount) {
         if (++p->combo > p->max_combo) p->max_combo = p->combo;
         runway_skel_add(&p->skel, amount);
         ++p->rhythm_heals;
-        p->sfx_flags |= RUNWAY_SFX_FLAG_C;
     } else {
         ++p->misses;
         p->combo = 0;
         runway_skel_loose(&p->skel, amount);
-        p->sfx_flags |= RUNWAY_SFX_FLAG_TALL;
     }
 }
 
@@ -1536,6 +1572,28 @@ static unsigned guitar_beat(unsigned tick) {
     return (unsigned)((sectors * 0x85cd8u) >> 24);
 }
 
+/* CCableSpark (248E68) plays every raw record at the grouped judgement
+ * time, using the fourth word as the MIDI key on channel 1. */
+static void drum_sound(special_phase *p, unsigned time) {
+    const uint8_t *code = p->code;
+    if (!code || p->code_size < 16u) return;
+    for (size_t at = 0x26b58cu - 0x232000u; at <= p->code_size - 16u; at += 16u) {
+        const uint8_t *record = code + at;
+        unsigned note_time = finale_word(record);
+        if (note_time > time) break;
+        if (note_time == time) runway_sfx_emit_note(1u, record[15], 127u);
+    }
+}
+
+/* StartLick (26127C): CC32=0 and program 0 were set at Initialize.
+ * The key is LickStruct+4, not the grading result. */
+static void guitar_sound(special_phase *p, unsigned lick) {
+    size_t at = 0x283bc0u - 0x232000u + 16u * lick;
+    const uint8_t *code = p->code;
+    if (code && at < p->code_size && p->code_size - at >= 8u)
+        runway_sfx_emit_tone(0u, 0u, code[at + 7u], 127u);
+}
+
 static void step_rhythm(special_phase *p, const saturn_pad *pad) {
     ++p->music_tick;
     if (p->grade_timer) --p->grade_timer;
@@ -1545,6 +1603,7 @@ static void step_rhythm(special_phase *p, const saturn_pad *pad) {
         if (p->music_ending <= 181 && p->music_ending > 1) runway_skel_add(&p->skel,0x51e);
         if (!--p->music_ending) {
             p->state = SPECIAL_ST_FINISHED;
+            runway_sfx_emit(0x18u); /* GUITAR CEndLevel, return PC 0x261f4c. */
             snprintf(p->status,sizeof p->status,"%s rhythm end hits=%u misses=%u skel=%d",
                      p->stage_name,p->hits,p->misses,p->skel.skeletism);
         }
@@ -1555,7 +1614,9 @@ static void step_rhythm(special_phase *p, const saturn_pad *pad) {
         unsigned t = p->music_tick;
         if (p->note_cursor < s->count &&
             rhythm_note_host_frame(s, p->note_cursor) == t) {
-            unsigned group = s->notes[p->note_cursor++].kind;
+            const rhythm_note *note = &s->notes[p->note_cursor++];
+            unsigned group = note->kind;
+            drum_sound(p, note->time);
             p->drum_judged_mask = p->music_masks[group];
             score_note(p, p->music_latch != 0, p->music_latch ? 0x83 : 0x7ae);
             ++p->beat_index;
@@ -1608,6 +1669,7 @@ static void step_rhythm(special_phase *p, const saturn_pad *pad) {
                 p->lick_valid = good;
                 p->music_wait = 0xc80;
                 if (good) p->music_latch = 0;
+                guitar_sound(p, i);
                 score_note(p, good, good ? 0x147 + (changed ? 0x28f : 0) : 0x7ae);
                 break;
             }
@@ -1735,6 +1797,9 @@ static void step_generator_plasma(special_phase *p) {
                 if (!p->zap_ttl[j] || abs(zx-p->plasma[i].x)>0x4ccc ||
                     abs(zy-p->plasma[i].y)>0x4ccc) continue;
                 p->zap_ttl[j] = 0;
+                /* CheckForZap 23D494 advances the six-entry table at 2673B0. */
+                p->zap_cursor = (p->zap_cursor + 1u) % 6u;
+                runway_sfx_emit(big_word(p, 0x2673b0u + 4u * p->zap_cursor));
                 p->plasma[i].shrink=0;
                 /* End-of-animation dispatch creates CBlue on the next yield. */
                 p->plasma[i].change=p->change_frames+1;
@@ -1771,15 +1836,18 @@ static void step_generator_plasma(special_phase *p) {
                 p->gen_rot_vel=160*p->gen_rot_acc;
                 p->gen_rot_limit=0;
                 p->hurt_timer = 30;
+                runway_sfx_emit(0x1au); /* CRedPoof::Brain 251590 */
             }
             p->plasma[i].shrink=77;
         } else if (ent->kind == STAGE_ENEMY_BLUE && hit) {
             if (p->blue_head == i + 1) {
                 p->state = SPECIAL_ST_FINISHED; /* CBluMov::Brain -> EndLevel(0) */
                 p->blue_head = 0;
+                runway_sfx_emit(0x18u);
             } else {
                 runway_skel_add(&p->skel, 0x0f00);
                 ++p->plasma_collected;
+                runway_sfx_emit(0x17u); /* CBluePoof::Brain 251438 */
             }
             ent->active = 0;
         }
@@ -1922,7 +1990,7 @@ static void generator_fire(special_phase *p) {
     p->zap_ttl[j]=61;
     p->zap_birth[j]=p->frames;
     ++p->enemies.zaps_fired;
-    p->sfx_flags|=RUNWAY_SFX_FLAG_C;
+    runway_sfx_emit(0x2bu); /* CZap::Brain 23DED8 */
 }
 
 static void step_action(special_phase *p,const saturn_pad *pad) {
@@ -1975,6 +2043,14 @@ static void step_finale_arena(special_phase *p, const saturn_pad *physical) {
     const saturn_pad *pad = &p->finale_pad;
     if (p->frames & 1u) p->finale_pad_pending = physical->held;
     if (p->hurt_timer) --p->hurt_timer;
+    if (p->finale_lights->pending_red_sfx) {
+        runway_sfx_emit(p->finale_lights->pending_red_sfx);
+        p->finale_lights->pending_red_sfx = 0;
+    }
+    if (p->finale_lights->pending_end_sfx) {
+        runway_sfx_emit(0x18u);
+        p->finale_lights->pending_end_sfx = 0;
+    }
     /* Two VBlanks from command submission to scanout. The renderer holds
      * the final leaf until the actor's deletion reaches the next list. */
     for (unsigned i = 0; i < 3; ++i) {
@@ -2039,7 +2115,7 @@ static void step_finale_arena(special_phase *p, const saturn_pad *physical) {
             finale_ring_contact contact = {(uint8_t)bolt->dir, (uint8_t)i};
             /* After ObjProcess starts on line 222 and runs its prologue, the
              * actors have about eight NTSC lines until the line-232 boundary. */
-            if (p->finale_lights->fade_cycles >= 8u * 1708u)
+            if (finale_actor_overran(p))
                 p->finale_pending_shots[p->finale_pending_count++] = contact;
             else
                 publish_finale_shot(p, contact, p->frames);
@@ -2065,6 +2141,7 @@ static void step_finale_arena(special_phase *p, const saturn_pad *physical) {
     if (p->frames == p->finale_spawn_tick) {
         *red = (finale_bolt){p->finale_next_dir, 1};
         ++p->enemies.bolts_fired;
+        finale_red_sound(p, k_finale_sfx_red[red->dir]);
     } else if (red->age) {
         const finale_bolt_anim *anim = &p->finale_red[red->dir];
         if (++red->age == anim->impact + 2u) {
@@ -2075,9 +2152,11 @@ static void step_finale_arena(special_phase *p, const saturn_pad *physical) {
                 finale_body_command(p->finale_body_mesh, 5);
                 p->finale_charged = 1;
                 p->ring_sfx_event = 0x2fu;
+                finale_red_sound(p, p->ring_sfx_event);
             } else {
                 p->finale_charged = 0;
                 p->ring_sfx_event = 0x30u;
+                finale_red_sound(p, p->ring_sfx_event);
                 ++p->hazard_hits;
                 p->finale_body_hit_tick = p->frames;
                 p->finale_health_before_hit = (unsigned)p->skel.segments;

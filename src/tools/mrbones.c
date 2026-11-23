@@ -58,6 +58,7 @@ static stage_runner *g_stage;
 static stage_progress g_prog;
 static mb_nvm_shadow g_nvm;
 static runway_sfx g_sfx;
+static runway_sfx_frame g_sfx_frame;
 static int g_sfx_ok;
 static host_audio *g_audio;
 /* Host menu options. They persist in mrbones.ini, never in nvmshadow.bin: the
@@ -252,33 +253,23 @@ static void maybe_start_movie_audio(void) {
 }
 
 static void maybe_play_sfx(void) {
-    unsigned flags = 0;
     maybe_start_movie_audio();
-    if (!g_stage || !g_sfx_ok) return;
-    if (g_stage->runway_live) {
-        if (g_stage->runway.sound_event_id)
-            runway_sfx_sound_event(&g_sfx, g_stage->runway.sound_event_id);
-        flags = g_stage->runway.sfx_flags;
-    } else if (g_stage->sidescrl_live) {
-        flags = g_stage->sidescrl.sfx_flags;
-    } else if (g_stage->special_live) {
-        /* FINALE ShootRing: prefer Saturn SoundEvent id → span4 PCM. */
-        if (g_stage->special.ring_sfx_event) {
-            const int8_t *pcm = NULL;
-            size_t len = 0;
-            unsigned id = g_stage->special.ring_sfx_event;
-            g_stage->special.ring_sfx_event = 0;
-            runway_sfx_sound_event(&g_sfx, id);
-            if (runway_sfx_event_pcm(&g_sfx, id, &pcm, &len) == 0)
-                host_play_pcm(NULL, pcm, len, RUNWAY_SFX_RATE);
-            else
-                flags = g_stage->special.sfx_flags;
-        } else {
-            flags = g_stage->special.sfx_flags;
-        }
-    }
-    if (flags)
-        runway_sfx_dispatch_pcm(&g_sfx, flags, host_play_pcm, NULL);
+    if (g_sfx_ok)
+        (void)runway_sfx_dispatch_events(&g_sfx, &g_sfx_frame, host_play_pcm, NULL);
+    g_sfx_frame.count = 0;
+}
+
+static void step_stage_with_audio(stage_runner *stage, const saturn_pad *pad) {
+    runway_sfx_begin_frame(&g_sfx_frame);
+    stage_runner_step(stage, pad);
+    runway_sfx_end_frame();
+    maybe_play_sfx();
+}
+
+static void load_sfx_bank(const char *iso_dir) {
+    runway_sfx_free(&g_sfx);
+    g_sfx_frame.count = 0;
+    g_sfx_ok = iso_dir && runway_sfx_load_dir(&g_sfx, g_cd, iso_dir) == 0;
 }
 
 static void restart_stage_audio(void) {
@@ -348,10 +339,7 @@ static int enter_stage(const char *iso_dir) {
     if (!g_headless_finale_movie && g_stage->special_live &&
         g_stage->kind == STAGE_KIND_FINALE)
         (void)special_phase_finale_defer_ending(&g_stage->special);
-    g_sfx_ok = 0;
-    runway_sfx_free(&g_sfx);
-    if (stage_is_native_live(g_stage))
-        g_sfx_ok = runway_sfx_load_dir(&g_sfx, g_cd, iso_dir) == 0;
+    load_sfx_bank(stage_is_native_live(g_stage) ? iso_dir : NULL);
     restart_stage_audio();
     g_mode = APP_STAGE;
     g_reset_qpc = 1;
@@ -365,8 +353,7 @@ static int enter_transition_movie(const char *iso_dir, const char *next_iso) {
     g_movie_audio = NULL;
     host_audio_stop(g_audio);
     g_audio = NULL;
-    runway_sfx_free(&g_sfx);
-    g_sfx_ok = 0;
+    load_sfx_bank(NULL);
     stage_runner_free(g_stage);
     if (stage_runner_begin_movie(g_stage, g_cd, g_mounted_disc, iso_dir)) return -1;
     snprintf(g_movie_next_stage, sizeof g_movie_next_stage, "%s", next_iso);
@@ -540,6 +527,7 @@ static int advance_after_stage(void) {
             g_menu->volume = g_menu_volume;
             menu_phase_show_start(g_menu);
             g_mode = APP_MENU;
+            load_sfx_bank("/03MENU");
             g_movie_last_tick = 0;
             g_reset_qpc = 1;
             /* Match the Ymir-observed pause after the FINALE soundtrack. */
@@ -885,7 +873,9 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_mode == APP_MENU && g_menu && !menu_phase_done(g_menu)) {
             g_menu->title_avi.tick_us = elapsed_us;
             g_menu->title_avi.tick_external = 1;
+            runway_sfx_begin_frame(&g_sfx_frame);
             step_menu_with_pad(g_menu, &pad);
+            runway_sfx_end_frame();
             g_menu_volume = g_menu->volume;
             store_host_options(g_menu, g_menu_volume);
             host_audio_set_volume(g_menu_volume);
@@ -899,7 +889,6 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (g_menu->screen == MENU_SCR_TITLE || g_menu->screen == MENU_SCR_STORY) {
                 if (g_audio) { host_audio_stop(g_audio); g_audio = NULL; }
-                maybe_play_sfx();
             } else {
                 if (g_movie_audio) { host_audio_stop(g_movie_audio); g_movie_audio = NULL; }
                 g_movie_audio_failed = 0;
@@ -910,6 +899,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                     g_audio = NULL;
                 }
             }
+            maybe_play_sfx();
             snprintf(g_title, sizeof g_title, "Mr. Bones - %s%s",
                      g_movie_audio_failed ? "[FMV audio unavailable] " : "", g_menu->status);
             update_window_title(window, g_title, 0);
@@ -920,8 +910,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
                 g_stage->special.movie.tick_us = elapsed_us;
                 g_stage->special.movie.tick_external = 1;
             }
-            stage_runner_step(g_stage, &pad);
-            maybe_play_sfx();
+            step_stage_with_audio(g_stage, &pad);
             if (g_movie_audio && g_stage->special_live)
                 host_audio_movie_pause(g_movie_audio, g_stage->special.state == SPECIAL_ST_PAUSED);
             snprintf(g_title, sizeof g_title, "Mr. Bones - %s%s",
@@ -1060,8 +1049,7 @@ static int play_native_stage(stage_runner *stage, const char *iso, int max_frame
             }
             saturn_pad_update_host(&pad, btn);
         }
-        stage_runner_step(stage, &pad);
-        maybe_play_sfx();
+        step_stage_with_audio(stage, &pad);
         if (g_capture_dir[0]) {
             int cap_a_frame = (stage->special_live &&
                                stage->special.mode == SPECIAL_MODE_ACTION)
@@ -1181,8 +1169,7 @@ static int replay_finale(stage_runner *stage, const char *path, const char *capt
             phase->movie.tick_us = ntsc_remainder / 3u;
         }
         ntsc_remainder %= 3u;
-        stage_runner_step(stage, &pad);
-        maybe_play_sfx();
+        step_stage_with_audio(stage, &pad);
         if (g_capture_dir[0]) {
             unsigned mask = 0;
             for (unsigned i = 0; i < FINALE_RING_SLOTS; ++i)
@@ -1924,6 +1911,7 @@ int main(int argc, char **argv) {
         g_nvm = menu.nvm;
         stage_progress_init(&g_prog, &g_catalog, &g_nvm, g_save_dir);
         g_mode = APP_MENU;
+        load_sfx_bank("/03MENU");
     }
 
     {

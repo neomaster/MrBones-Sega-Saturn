@@ -1,6 +1,7 @@
 #include "core/cdimage.h"
 #include "core/identity.h"
 #include "core/menu_phase.h"
+#include "core/runway_sfx.h"
 #include "core/saturn_pad.h"
 #include "core/sha256.h"
 #include <stdio.h>
@@ -145,9 +146,18 @@ int main(void) {
     menu_phase_step(&menu, &pad);
 
     /* Cursor down to Options, activate. */
+    runway_sfx_frame effects;
+    runway_sfx_begin_frame(&effects);
     saturn_pad_update_host(&pad, MB_PAD_DOWN);
     menu_phase_step(&menu, &pad);
+    runway_sfx_end_frame();
+    CHECK(effects.count == 1u && effects.commands[0].bank == 2u);
     CHECK(menu.cursor == 1);
+    runway_sfx_begin_frame(&effects);
+    saturn_pad_update_host(&pad, MB_PAD_DOWN);
+    menu_phase_step(&menu, &pad);
+    runway_sfx_end_frame();
+    CHECK(effects.count == 0u);
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(&menu, &pad);
     saturn_pad_update_host(&pad, MB_PAD_A);
@@ -157,8 +167,11 @@ int main(void) {
     menu_phase_step(&menu, &pad);
 
     /* Toggle music, back. */
+    runway_sfx_begin_frame(&effects);
     saturn_pad_update_host(&pad, MB_PAD_A);
     menu_phase_step(&menu, &pad);
+    runway_sfx_end_frame();
+    CHECK(effects.count == 1u && effects.commands[0].bank == 2u);
     CHECK(menu.music_on == 0);
     saturn_pad_update_host(&pad, 0);
     menu_phase_step(&menu, &pad);

@@ -4,6 +4,7 @@
 #include "snd1_pcm.h"
 #include "sound_event.h"
 #include "sound_sequence.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,6 +19,13 @@ static const struct {
     {5u, 6u},  /* JUMP  — span5 s06 612 B */
     {4u, 4u},  /* LAND  — span4 s04 36 B tick */
 };
+
+static void set_midi_channel(runway_sfx *sfx, const uint32_t *word) {
+    unsigned ch = word[5] & 15u;
+    if (word[4] == 4u) sfx->channel_programs[ch] = (uint8_t)(word[6] & 127u);
+    if (word[4] == 3u && word[6] == 32u)
+        sfx->channel_banks[ch] = (uint8_t)(word[7] & 15u);
+}
 
 int runway_sfx_load_dir(runway_sfx *sfx, cdimage *cd, const char *iso_dir) {
     char path[96];
@@ -37,39 +45,17 @@ int runway_sfx_load_dir(runway_sfx *sfx, cdimage *cd, const char *iso_dir) {
     for (i = 0; i < SND1_SPAN_COUNT; i++)
         (void)snd1_pcm_open(&tables[i], &spans[i]);
 
-    {
-        unsigned got = 0;
-        for (i = 0; i < RUNWAY_SFX_COUNT; i++) {
-            unsigned sp = k_map[i].span;
-            unsigned ix = k_map[i].index;
-            const int8_t *pcm = NULL;
-            size_t len = 0;
-            if (sp >= SND1_SPAN_COUNT ||
-                snd1_pcm_sample(&tables[sp], ix, &pcm, &len)) {
-                /* §16: other stages vary span layout — leave slot empty. */
-                continue;
-            }
-            sfx->samples[i].pcm = pcm;
-            sfx->samples[i].length = len;
-            got++;
-        }
-        if (got == 0) {
-            /* Fallback: first available PCM in any span. */
-            for (i = 0; i < SND1_SPAN_COUNT && got == 0; i++) {
-                const int8_t *pcm = NULL;
-                size_t len = 0;
-                if (snd1_pcm_sample(&tables[i], 0, &pcm, &len) == 0 && pcm && len) {
-                    sfx->samples[RUNWAY_SFX_WALK].pcm = pcm;
-                    sfx->samples[RUNWAY_SFX_WALK].length = len;
-                    got = 1;
-                }
-            }
-        }
-        if (got == 0) {
-            runway_sfx_free(sfx);
-            return -1;
-        }
+    for (i = 0; i < RUNWAY_SFX_COUNT; i++) {
+        runway_sfx_sample *sample = &sfx->samples[i];
+        (void)snd1_pcm_sample(&tables[k_map[i].span], k_map[i].index,
+                             &sample->pcm, &sample->length);
     }
+
+    mb_sound_event startup;
+    mb_sound_event_record record;
+    if (mb_sound_event_open(&startup, spans[0].data, spans[0].size, 0u) == 1)
+        while (mb_sound_event_next(&startup, &record) == 1)
+            if (record.words[1] == 1u) set_midi_channel(sfx, record.words);
 
     /* Decode genuine SCSP .TON waveforms for live playback (never header metadata). */
     for (i = 0; i < RUNWAY_SFX_COUNT; i++) {
@@ -125,6 +111,7 @@ void runway_sfx_free(runway_sfx *sfx) {
     if (!sfx) return;
     free(sfx->blob);
     free(sfx->event_pcm_scratch);
+    free(sfx->event_mix);
     for (unsigned i = 0; i < RUNWAY_SFX_COUNT; i++)
         free(sfx->live_scratch[i]);
     memset(sfx, 0, sizeof *sfx);
@@ -135,135 +122,284 @@ void runway_sfx_sound_event(runway_sfx *sfx, unsigned event_index) {
     sfx->event_hits[event_index]++;
 }
 
-int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
-                         const int8_t **pcm, size_t *length) {
-    mb_sound_event ev;
-    mb_sound_event_record rec;
-    snd1_span spans[SND1_SPAN_COUNT];
-    snd1_pcm_table table;
-    uint8_t ch_prog[16];
-    unsigned sample = 0, ch = 0;
-    uint8_t note = 0;
-    int got_sample = 0, got_note = 0;
+#ifdef _MSC_VER
+static __declspec(thread) runway_sfx_frame *active_sfx_frame;
+#else
+static _Thread_local runway_sfx_frame *active_sfx_frame;
+#endif
 
-    if (!sfx || !pcm || !length || !sfx->blob || !sfx->blob_size) return -1;
+void runway_sfx_begin_frame(runway_sfx_frame *frame) {
+    if (frame) frame->count = 0;
+    active_sfx_frame = frame;
+}
+
+void runway_sfx_end_frame(void) {
+    active_sfx_frame = NULL;
+}
+
+static void emit_command(runway_sfx_command command) {
+    if (active_sfx_frame && active_sfx_frame->count < RUNWAY_SFX_FRAME_LIMIT)
+        active_sfx_frame->commands[active_sfx_frame->count++] = command;
+}
+
+enum { SFX_EVENT, SFX_CHANNEL_NOTE, SFX_BANK_NOTE };
+
+void runway_sfx_emit(unsigned id) {
+    if (id < 256u)
+        emit_command((runway_sfx_command){SFX_EVENT, (uint8_t)id, 0, 0, 0});
+}
+
+void runway_sfx_emit_note(unsigned channel, unsigned note, unsigned velocity) {
+    if (channel < 16u && note < 128u && velocity && velocity < 128u)
+        emit_command((runway_sfx_command){SFX_CHANNEL_NOTE, (uint8_t)channel, 0,
+                                         (uint8_t)note, (uint8_t)velocity});
+}
+
+void runway_sfx_emit_tone(unsigned bank, unsigned program, unsigned note, unsigned velocity) {
+    if (bank < 4u && program < 128u && note < 128u && velocity && velocity < 128u)
+        emit_command((runway_sfx_command){SFX_BANK_NOTE, (uint8_t)bank, (uint8_t)program,
+                                         (uint8_t)note, (uint8_t)velocity});
+}
+
+/* A bounded one-shot renderer. Audio remains in the user's original bank. */
+#define SFX_MAX_SAMPLES 48000u
+
+static unsigned read_be16(const uint8_t *p) {
+    return ((unsigned)p[0] << 8) | p[1];
+}
+
+static uint32_t read_be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8) | p[3];
+}
+
+static int tone_sample(const snd1_tone *tone, size_t sample) {
+    if (tone->pcm8) return (int8_t)tone->data[sample] * 256;
+    return (int16_t)read_be16(tone->data + sample * 2u);
+}
+
+static const snd1_span *tone_bank(const snd1_span *spans, unsigned bank) {
+    if (spans[4u + bank].size) return &spans[4u + bank];
+    /* A zero-sized area can alias another tone bank at the same sound RAM address. */
+    const snd1_span *map = &spans[2];
+    const uint8_t *area = NULL;
+    for (size_t i = 0; i + 8u <= map->size; i += 8u)
+        if (map->data[i] == bank) area = map->data + i;
+    if (area)
+        for (size_t i = 0; i + 8u <= map->size; i += 8u) {
+            unsigned alias = map->data[i];
+            if (alias < 4u && spans[4u + alias].size &&
+                !memcmp(area + 1u, map->data + i + 1u, 3u))
+                return &spans[4u + alias];
+        }
+    return &spans[4u + bank];
+}
+
+static void mix_layer(runway_sfx *sfx, snd1_tone tone, unsigned note,
+                      unsigned velocity, size_t start, size_t gate, size_t *used) {
+    double semitones = (int)note - (int)tone.root_note + tone.fine_tune / 100.0;
+    double step = (44100.0 / RUNWAY_SFX_RATE) * (1.0 + tone.fine_step / 1024.0) *
+                  pow(2.0, tone.octave + semitones / 12.0);
+    size_t limit = SFX_MAX_SAMPLES - start;
+    if (gate < limit) limit = gate;
+    double position = 0.0;
+    size_t written = 0;
+    for (; written < limit; ++written) {
+        if (position >= (double)tone.samples) {
+            if (!tone.loop_mode || gate == SIZE_MAX || tone.loop_start >= tone.samples)
+                break;
+            position = tone.loop_start + fmod(position - tone.loop_start,
+                                              (double)(tone.samples - tone.loop_start));
+        }
+        size_t i = (size_t)position;
+        int a = tone_sample(&tone, i);
+        int b = i + 1u < tone.samples ? tone_sample(&tone, i + 1u) : a;
+        double pcm = a + (b-a) * (position - (double)i);
+        sfx->event_mix[start + written] += (int32_t)(pcm * velocity / 127.0);
+        position += step;
+    }
+    if (written && start + written > *used) *used = start + written;
+}
+
+static void mix_note(runway_sfx *sfx, const snd1_span *spans, unsigned bank,
+                     unsigned program, unsigned note, unsigned velocity,
+                     size_t start, size_t gate, size_t *used) {
+    if (bank >= 4u || note >= 128u || !velocity || start >= SFX_MAX_SAMPLES)
+        return;
+    const snd1_span *span = tone_bank(spans, bank);
+    unsigned next_layer = 0;
+    snd1_tone tone;
+    while (!snd1_ton_layer(span, program, (uint8_t)note, &next_layer, &tone))
+        mix_layer(sfx, tone, note, velocity, start, gate, used);
+}
+
+/* Saturn SEQ time is in ticks at the song's division, with tempo segments. */
+static size_t sequence_sample(uint32_t tick, const uint8_t *tempo, unsigned count,
+                              unsigned division) {
+    uint64_t microseconds = 0;
+    for (unsigned i = 0; i < count; ++i) {
+        uint32_t segment = read_be32(tempo + 8u*i);
+        uint32_t take = i + 1u == count || tick < segment ? tick : segment;
+        microseconds += (uint64_t)take * read_be32(tempo + 8u*i + 4u);
+        tick -= take;
+        if (!tick) break;
+    }
+    uint64_t scaled = microseconds / division;
+    if (scaled >= (uint64_t)SFX_MAX_SAMPLES * 1000000u / RUNWAY_SFX_RATE)
+        return SFX_MAX_SAMPLES;
+    return (size_t)(scaled * RUNWAY_SFX_RATE / 1000000u);
+}
+
+static void render_sequence(runway_sfx *sfx, const snd1_span *spans,
+                            unsigned bank, unsigned ordinal, size_t *used) {
+    if (bank >= 4u) return;
+    const snd1_span *seq = &spans[8u + bank];
+    if (seq->size < 6u) return;
+    unsigned songs = read_be16(seq->data);
+    size_t index_end = 2u + 4u * songs;
+    if (ordinal >= songs || index_end > seq->size) return;
+    size_t first = read_be32(seq->data + 2u + ordinal * 4u);
+    size_t end = ordinal + 1u < songs
+                 ? read_be32(seq->data + 6u + ordinal * 4u) : seq->size;
+    if (first < index_end || end > seq->size || end < first || end - first < 16u)
+        return;
+    const uint8_t *song = seq->data + first;
+    unsigned division = read_be16(song);
+    unsigned ntempo = read_be16(song + 2u);
+    size_t commands = first + read_be16(song + 4u);
+    if (!division || !ntempo || ntempo > 64u || commands < first + 8u + 8u * ntempo ||
+        commands >= end) return;
+    uint8_t banks[16] = {0}, programs[16] = {0};
+    uint32_t tick = 0, gate_extension = 0, step_extension = 0;
+    size_t cursor = commands, resume = 0;
+    unsigned remaining = 0;
+    static const unsigned extensions[8] = {512, 2048, 4096, 8192, 256, 512, 2048, 4096};
+    /* Bound compressed references even in a malformed cyclic stream. */
+    for (unsigned i = 0; i < 8192u && cursor < end; ++i) {
+        uint8_t status = seq->data[cursor++];
+        unsigned ch = status & 15u;
+        if (status == 0x83u) break;
+        if (status >= 0x88u && status <= 0x8fu) {
+            if (status < 0x8cu) gate_extension += extensions[status - 0x88u];
+            else step_extension += extensions[status - 0x88u];
+            continue;
+        }
+        const uint8_t *data = seq->data + cursor;
+        uint32_t delay = 0;
+        unsigned size = 0;
+        if (status < 0x80u) {
+            size = 4;
+            if (end - cursor < size) break;
+            uint32_t gate = data[2] + ((status & 0x40u) ? 256u : 0u) + gate_extension;
+            delay = data[3] + ((status & 0x20u) ? 256u : 0u);
+            size_t start = sequence_sample(tick, song + 8u, ntempo, division);
+            if (start == SFX_MAX_SAMPLES) break;
+            size_t stop = sequence_sample(tick + gate, song + 8u, ntempo, division);
+            if (stop > start)
+                mix_note(sfx, spans, banks[ch], programs[ch], data[0], data[1],
+                         start, stop - start, used);
+            gate_extension = 0;
+        } else if (status == 0x81u) {
+            if (end - cursor < 3u || remaining) break;
+            size_t target = commands + read_be16(data);
+            if (target >= end || !data[2]) break;
+            resume = cursor + 3u;
+            cursor = target;
+            remaining = data[2];
+            continue;
+        } else {
+            /* Loop markers are executed once for a one-shot, like the linear events. */
+            unsigned high = status >> 4u;
+            if (status == 0x82u) size = 1;
+            else if (high == 0xau || high == 0xbu) size = 3;
+            else if (high == 0xcu || high == 0xdu || high == 0xeu) size = 2;
+            else break;
+            if (end - cursor < size) break;
+            delay = data[size - 1u];
+            if (high == 0xbu && data[0] == 32u) banks[ch] = data[1];
+            if (high == 0xcu) programs[ch] = data[0];
+        }
+        tick += delay + step_extension;
+        step_extension = 0;
+        cursor += size;
+        if (remaining && !--remaining) cursor = resume;
+    }
+}
+
+static void render_bank_event(runway_sfx *sfx, const snd1_span *spans,
+                              unsigned id, size_t *used) {
+    mb_sound_event cursor;
+    mb_sound_event_record record;
+    if (mb_sound_event_open(&cursor, spans[0].data, spans[0].size, id) != 1)
+        return;
+    while (mb_sound_event_next(&cursor, &record) == 1) {
+        const uint32_t *word = record.words;
+        unsigned ch = word[5] & 15u;
+        if (word[1] == 1u) {
+            if (word[4] == 1u)
+                mix_note(sfx, spans, sfx->channel_banks[ch], sfx->channel_programs[ch],
+                         word[6] & 127u, word[7] & 127u, 0, SIZE_MAX, used);
+            else
+                set_midi_channel(sfx, word);
+        } else if (word[1] == 3u) {
+            render_sequence(sfx, spans, word[3], word[4], used);
+        }
+    }
+}
+
+static int render_commands(runway_sfx *sfx, const runway_sfx_frame *frame,
+                           const int8_t **pcm, size_t *length, int tally) {
+    snd1_span spans[SND1_SPAN_COUNT];
+    size_t used = 0;
+    if (!sfx || !frame || !pcm || !length ||
+        snd1_parse(sfx->blob, sfx->blob_size, spans)) return -1;
     *pcm = NULL;
     *length = 0;
-    if (snd1_parse(sfx->blob, sfx->blob_size, spans) ||
-        !spans[0].data || !spans[0].size || !spans[4].data || !spans[4].size)
-        return -1;
+    if (!frame->count) return -1;
+    if (!sfx->event_mix) sfx->event_mix = malloc(SFX_MAX_SAMPLES * sizeof *sfx->event_mix);
+    if (!sfx->event_pcm_scratch) sfx->event_pcm_scratch = malloc(SFX_MAX_SAMPLES);
+    if (!sfx->event_mix || !sfx->event_pcm_scratch) return -1;
+    memset(sfx->event_mix, 0, SFX_MAX_SAMPLES * sizeof *sfx->event_mix);
+    for (unsigned i = 0; i < frame->count; ++i) {
+        const runway_sfx_command *command = &frame->commands[i];
+        unsigned selector = command->bank;
+        if (command->kind == SFX_EVENT) {
+            if (tally) runway_sfx_sound_event(sfx, selector);
+            render_bank_event(sfx, spans, selector, &used);
+        } else {
+            unsigned bank = selector, program = command->program;
+            if (command->kind == SFX_CHANNEL_NOTE) {
+                bank = sfx->channel_banks[selector];
+                program = sfx->channel_programs[selector];
+            }
+            mix_note(sfx, spans, bank, program, command->note, command->velocity,
+                     0, SIZE_MAX, &used);
+        }
+    }
+    if (!used) return -1;
+    for (size_t i = 0; i < used; ++i) {
+        int32_t value = sfx->event_mix[i] / 256;
+        sfx->event_pcm_scratch[i] = (int8_t)(value < -128 ? -128 : value > 127 ? 127 : value);
+    }
+    *pcm = sfx->event_pcm_scratch;
+    *length = used;
+    return 0;
+}
 
-    for (unsigned i = 0; i < 16u; i++) ch_prog[i] = (uint8_t)i;
-    if (mb_sound_event_open(&ev, spans[0].data, spans[0].size, 0u) == 1) {
-        while (mb_sound_event_next(&ev, &rec) == 1) {
-            if (rec.words[1] == 1u && rec.words[4] == 4u)
-                ch_prog[rec.words[5] & 0x0Fu] = (uint8_t)(rec.words[6] & 0x7Fu);
-        }
-    }
+int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
+                         const int8_t **pcm, size_t *length) {
+    if (event_id >= 256u) return -1;
+    const runway_sfx_frame frame = {{{SFX_EVENT, (uint8_t)event_id, 0, 0, 0}}, 1};
+    return render_commands(sfx, &frame, pcm, length, 0);
+}
 
-    if (mb_sound_event_open(&ev, spans[0].data, spans[0].size, event_id) != 1)
-        return -1;
-    while (mb_sound_event_next(&ev, &rec) == 1) {
-        if (!got_note && rec.words[1] == 1u && rec.words[4] == 1u && rec.words[7] > 0u) {
-            ch = rec.words[5] & 0x0Fu;
-            note = (uint8_t)(rec.words[6] & 0x7Fu);
-            got_note = 1;
-            break;
-        }
-        if (!got_sample && rec.words[1] == 3u) {
-            sample = rec.words[4];
-            got_sample = 1;
-        }
-    }
-
-    if (got_note) {
-        const uint8_t *raw = NULL;
-        size_t raw_bytes = 0, sample_count = 0;
-        int is_pcm8b = 0;
-        if (snd1_ton_note_sample(&spans[4], ch_prog[ch], note, 1,
-                                 &raw, &raw_bytes, &sample_count, &is_pcm8b) == 0 &&
-            raw && sample_count > 0u) {
-            if (is_pcm8b) {
-                *pcm = (const int8_t *)raw;
-                *length = sample_count;
-                return 0;
-            }
-            if (sample_count > sfx->event_pcm_cap) {
-                int8_t *buf = realloc(sfx->event_pcm_scratch, sample_count);
-                if (!buf) return -1;
-                sfx->event_pcm_scratch = buf;
-                sfx->event_pcm_cap = sample_count;
-            }
-            for (size_t i = 0; i < sample_count && i * 2u < raw_bytes; i++)
-                sfx->event_pcm_scratch[i] = (int8_t)raw[i * 2u];
-            *pcm = sfx->event_pcm_scratch;
-            *length = sample_count;
-            return 0;
-        }
-    }
-
-    if (!got_sample) return -1;
-    /* Never treat an SCSP .TON bank as a raw BE16 PCM offset table (metadata noise). */
-    if (snd1_ton_is_bank(&spans[4]) || snd1_ton_is_bank(&spans[5])) {
-        const uint8_t *raw = NULL;
-        size_t raw_bytes = 0, sample_count = 0;
-        int is_pcm8b = 0;
-        int picked = -1;
-        if (snd1_ton_is_bank(&spans[4]))
-            picked = snd1_ton_pick_sfx(&spans[4], sample, 180u, 12000u,
-                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
-        if (picked != 0 && snd1_ton_is_bank(&spans[5]))
-            picked = snd1_ton_pick_sfx(&spans[5], sample, 180u, 12000u,
-                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
-        if (picked == 0 && raw && sample_count > 0u) {
-            if (is_pcm8b) {
-                *pcm = (const int8_t *)raw;
-                *length = sample_count;
-                return 0;
-            }
-            if (sample_count > sfx->event_pcm_cap) {
-                int8_t *buf = realloc(sfx->event_pcm_scratch, sample_count);
-                if (!buf) return -1;
-                sfx->event_pcm_scratch = buf;
-                sfx->event_pcm_cap = sample_count;
-            }
-            for (size_t i = 0; i < sample_count && i * 2u < raw_bytes; i++)
-                sfx->event_pcm_scratch[i] = (int8_t)raw[i * 2u];
-            *pcm = sfx->event_pcm_scratch;
-            *length = sample_count;
-            return 0;
-        }
-        return -1;
-    }
-    memset(&table, 0, sizeof table);
-    if (snd1_pcm_open(&table, &spans[4])) return -1;
-    if (snd1_pcm_sample(&table, sample, pcm, length) == 0 && *pcm && *length)
-        return 0;
-    if (sample >= table.count) {
-        const size_t span4_off = (size_t)(spans[4].data - (const uint8_t *)sfx->blob);
-        static const size_t k_rec_sizes[2] = {8, 16};
-        for (unsigned si = 5; si < SND1_SPAN_COUNT; si++) {
-            for (unsigned ri = 0; ri < 2; ri++) {
-                snd1_voice_table voices;
-                unsigned k;
-                int ok = 1;
-                if (!spans[si].size) continue;
-                if (snd1_voice_open(&voices, &spans[si], k_rec_sizes[ri], sfx->blob,
-                                    sfx->blob_size))
-                    continue;
-                if (voices.count <= sample) continue;
-                for (k = 11; k <= 13 && ok; k++)
-                    ok = k < table.count && voices.start[k] == span4_off + table.offsets[k];
-                if (!ok) continue;
-                if (snd1_voice_sample(&voices, sample, pcm, length) == 0 && *pcm && *length)
-                    return 0;
-            }
-        }
-    }
-    if (sample >= table.count &&
-        snd1_pcm_sample(&table, 15u, pcm, length) == 0 && *pcm && *length)
-        return 0;
-    return -1;
+unsigned runway_sfx_dispatch_events(runway_sfx *sfx, const runway_sfx_frame *frame,
+                                    runway_sfx_play_fn play, void *user) {
+    const int8_t *pcm;
+    size_t length;
+    if (!play || render_commands(sfx, frame, &pcm, &length, 1)) return 0;
+    play(user, pcm, length, RUNWAY_SFX_RATE);
+    return 1;
 }
 
 static uint8_t seq_cb(void *context, uint8_t slot, uint8_t a, uint8_t b, uint8_t c) {

@@ -1243,7 +1243,7 @@ static void valley_triggers_step(sidescrl_phase *phase, int32_t prev_vy) {
             abs(feet - phase->fence_keys[i].y) <= 64) {
             phase->fence_keys[i].triggered = 1;
             phase->fence_keys[i].anim_timer = 18;
-            phase->sfx_flags |= RUNWAY_SFX_FLAG_LAND;
+            runway_sfx_emit(0x38u); /* VALLEY CFenceKey::Brain at 0x2C2656. */
             for (j = 0; j < phase->fence_count; j++) {
                 if (phase->fences[j].id == phase->fence_keys[i].id) {
                     phase->fences[j].open = 1;
@@ -1285,6 +1285,7 @@ static void mauso_controller_step(sidescrl_phase *phase) {
         phase->mauso.bh_buzz = 16;
         runway_skel_add(&phase->skel, 0x20000);
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        runway_sfx_emit(0x17u);
     }
     if (phase->mauso.phase == 1 || phase->mauso.phase == 2) {
         if (!phase->mauso.lock_edges &&
@@ -1313,13 +1314,16 @@ static void mauso_controller_step(sidescrl_phase *phase) {
         phase->mauso.wave_timer++;
         k = (phase->mauso.wave_timer / 6u + phase->mauso.wave_stage * 3u) & 15u;
         phase->mauso.key_timer[k] = 8u;
-        {
+        if ((phase->mauso.wave_timer % 36u) == 0u) {
             int span = phase->mauso.arena_w > 80 ? (phase->mauso.arena_w - 80) : 480;
             int key_x = phase->mauso.arena_x + 40 + (int)(k * (unsigned)span / 16u);
-            if ((phase->mauso.wave_timer % 36u) == 0u &&
-                a->on_ground && !a->jumping && abs(cx - key_x) <= 16) {
+            runway_sfx_emit(0x2fu); /* CTopSkelKey::SlapSlap, including misses. */
+            if (a->on_ground && !a->jumping && abs(cx - key_x) <= 16) {
+                int32_t before = phase->skel.skeletism;
                 if (runway_skel_hit(&phase->skel, RUNWAY_DAMAGE_DEFAULT / 2))
                     phase->skel.died = 1;
+                if (phase->skel.died || phase->skel.skeletism < before)
+                    runway_sfx_emit(0x1bu);
             }
         }
         if (phase->mauso.wave_timer >= 90u) {
@@ -1362,6 +1366,7 @@ static void mauso_controller_step(sidescrl_phase *phase) {
             phase->mauso.bf_taken = 1;
             runway_skel_add(&phase->skel, 0x3200);
             phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+            runway_sfx_emit(0x29u); /* CButFly::CheckForBonesHit at 0x2B7BF0. */
         }
     }
 }
@@ -1387,6 +1392,7 @@ int sidescrl_village_cut_thread(sidescrl_phase *phase, int hit_x, int hit_y) {
             phase->village.spiders[si].state = 2;
             phase->village.spiders[si].timer = 45;
             phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+            runway_sfx_emit(0x35u); /* CSpider::Fall after the thread is hit. */
             return 1;
         }
     }
@@ -1405,6 +1411,7 @@ static void village_controller_step(sidescrl_phase *phase, int pulse_active) {
         phase->village.bh_active = 0;
         runway_skel_add(&phase->skel, 0x20000);
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        runway_sfx_emit(0x17u);
     }
     for (mi = 0; mi < phase->village.mushroom_count; mi++) {
         if (!phase->village.mushrooms[mi].taken &&
@@ -1479,6 +1486,8 @@ int sidescrl_laff_tell_joke(sidescrl_phase *phase, int is_bad_joke) {
     if (!is_bad_joke) {
         phase->laff.last_joke_kind = 1;
         phase->laff.good_jokes++;
+        /* JuniorLCringe/JuniorRCringe both cue 0x29 at macro entry. */
+        runway_sfx_emit(0x29u);
         return 0;
     }
     phase->laff.last_joke_kind = 2;
@@ -1564,6 +1573,7 @@ static void shadow_controller_step(sidescrl_phase *phase, int crouch, int32_t pr
         phase->shadow.bh_active = 0;
         runway_skel_add(&phase->skel, 0x20000);
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
+        runway_sfx_emit(0x17u);
     }
     phase->shadow_eye_phase = (phase->frames % 180u);
     if (phase->shadow_eye_phase >= 140u) {
@@ -1581,8 +1591,15 @@ static void shadow_controller_step(sidescrl_phase *phase, int crouch, int32_t pr
         (void)sidescrl_shadow_complete_trial(phase, phase->shadow.trials);
 }
 
+static void sidescrl_end_sound(const sidescrl_phase *phase, unsigned lost) {
+    /* EndLevel::Brain selects consecutive win/loss slots; LAFF leaves both empty. */
+    if (phase->stage_name[0] && !phase->laff.enabled)
+        runway_sfx_emit((phase->body_config ? 0x17u : 0x18u) + lost);
+}
+
 int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
     uint32_t held;
+    int32_t prev_ax;
     if (!phase || !pad || sidescrl_phase_done(phase)) return 0;
     if (!phase->body_config || (!(pad->pressed & PAD_START) && phase->state != SIDESCRL_ST_PAUSED))
         phase->frames++;
@@ -1604,6 +1621,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         return sidescrl_phase_render(phase);
 
     runway_skel_tick_cooldown(&phase->skel);
+    prev_ax = phase->actor.x;
 
     {
         /* One unified step: walk, wall clamp, jump, slope, crouch and gravity. */
@@ -1611,7 +1629,6 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         const bool is_vortex = (strcmp(phase->stage_name, "VORTEX") == 0);
         const bool was_on_ground = phase->actor.on_ground;
         SidescrlActor *a = &phase->actor;
-        int32_t prev_ax = a->x;
         int32_t prev_foot_y = a->y + ACTOR_FEET;
         int32_t prev_vy = a->vy;
         int crouch = (!is_vortex && a->on_ground && (held & PAD_DOWN)) ? 1 : 0;
@@ -1629,8 +1646,6 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         int was_tall = phase->tall;
         if (phase->hurt_timer > 0u) phase->hurt_timer--;
         phase->tall = crouch;
-        if (!was_tall && phase->tall)
-            phase->sfx_flags |= RUNWAY_SFX_FLAG_TALL;
 
         if (phase->plat_count > 0u) {
             unsigned pi;
@@ -1855,6 +1870,17 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
             if (!was_on_ground && a->on_ground)
                 phase->sfx_flags |= RUNWAY_SFX_FLAG_LAND;
         }
+        if (!was_tall && phase->tall) {
+            phase->sfx_flags |= RUNWAY_SFX_FLAG_TALL;
+            if (live_stage && !phase->laff.enabled)
+                runway_sfx_emit(0x0cu); /* Down message in Stand/BonesWalk. */
+        }
+        if ((phase->sfx_flags & RUNWAY_SFX_FLAG_JUMP) && live_stage && !phase->laff.enabled) {
+            /* Spring_Brain loads the same note at different IDs in these banks. */
+            unsigned event = phase->body_config ? 0x22u :
+                             !strcmp(phase->stage_name, "VALLEY") ? 0x2au : 0x23u;
+            runway_sfx_emit(event);
+        }
         if (phase->walk_root && was_on_ground && walk_dir && a->x != prev_ax)
             phase->walk_tick = (phase->walk_tick + 1) % VALLEY_WALK_TICKS;
         phase->walk_dist += (uint32_t)(a->x >= prev_ax ? (a->x - prev_ax) : (prev_ax - a->x)) *
@@ -1874,6 +1900,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         shadow_controller_step(phase, crouch, prev_ax);
         if (phase->skel.died) {
             phase->state = SIDESCRL_ST_LOST;
+            sidescrl_end_sound(phase, 1u);
             snprintf(phase->status, sizeof phase->status,
                      "%s lost (skel) hits=%u", phase->stage_name,
                      phase->hazard_hits);
@@ -1881,14 +1908,14 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         }
     }
 
-    if (pad->pressed & (phase->body_config ? PAD_JUMP : PAD_C)) {
+    if ((pad->pressed & (phase->body_config ? PAD_JUMP : PAD_C)) &&
         stage_enemies_fire_blues(&phase->enemies, phase->bones_x,
-                                 phase->bones_y, phase->facing, 0);
+                                 phase->bones_y, phase->facing, 0)) {
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
     }
-    if (!phase->body_config && (pad->pressed & PAD_A)) {
+    if (!phase->body_config && (pad->pressed & PAD_A) &&
         stage_enemies_fire_blues(&phase->enemies, phase->bones_x,
-                                 phase->bones_y, phase->facing, 1);
+                                 phase->bones_y, phase->facing, 1)) {
         phase->sfx_flags |= RUNWAY_SFX_FLAG_C;
     }
     glass_check_shots(phase);
@@ -1900,10 +1927,9 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
     }
 
     if (phase->anim_count > 0) {
-        if (phase->state == SIDESCRL_ST_WALK) {
-            if ((phase->frames & 3u) == 0)
-                phase->anim_index = (phase->anim_index + 1) % phase->anim_count;
-            if (phase->anim_index == 0)
+        if (phase->state == SIDESCRL_ST_WALK && (phase->frames & 3u) == 0) {
+            phase->anim_index = (phase->anim_index + 1) % phase->anim_count;
+            if (phase->anim_index == 0 && phase->actor.on_ground && phase->actor.x != prev_ax)
                 phase->sfx_flags |= RUNWAY_SFX_FLAG_WALK;
         }
         phase->sprite_rgba = phase->anim_rgba[phase->anim_index];
@@ -1916,6 +1942,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         (void)runway_skel_loose(&phase->skel, RUNWAY_SKEL_MAX + 1);
         phase->skel.died = 1;
         phase->state = SIDESCRL_ST_LOST;
+        sidescrl_end_sound(phase, 1u);
         snprintf(phase->status, sizeof phase->status,
                  "%s lost (pit) x=%u", phase->stage_name,
                  phase->bones_x / UNITS_PER_PIXEL);
@@ -1923,8 +1950,18 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
     }
     {
         int prev_skel = phase->skel.skeletism;
+        unsigned prev_hits = phase->enemies.hits_applied;
+        int could_take_hit = phase->skel.hit_cooldown == 0;
+        int bat_hp[STAGE_ENEMY_MAX] = {0};
         stage_batwood_contact contact;
         const stage_batwood_contact *bounds = NULL;
+        if (phase->body_config) {
+            for (unsigned i = 0; i < phase->enemies.count; i++) {
+                const stage_enemy *enemy = &phase->enemies.ents[i];
+                if (enemy->active && enemy->kind == STAGE_ENEMY_BAT)
+                    bat_hp[i] = enemy->hp;
+            }
+        }
         if (!strcmp(phase->stage_name, "BAT2") || !strcmp(phase->stage_name, "BAT3")) {
             int feet = phase->actor.y + ACTOR_FEET - phase->floor_delta;
             contact.player = (BoundingBox){phase->actor.x + ACTOR_HALF_W - phase->actor.hit_width / 2,
@@ -1935,11 +1972,27 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
             contact.camera_y = phase->map.camera_y;
             bounds = &contact;
         }
-        if (stage_enemies_step_player_bounded(&phase->enemies, &phase->skel, phase->bones_x,
-                                              phase->bones_y, phase->ground_y, phase->tall,
-                                              phase->airborne, NULL, 1, bounds)) {
+        int died = stage_enemies_step_player_bounded(&phase->enemies, &phase->skel, phase->bones_x,
+                                                    phase->bones_y, phase->ground_y, phase->tall,
+                                                    phase->airborne, NULL, 1, bounds);
+        if (phase->body_config) {
+            /* Player shots are resolved before contact damage, as in the BAT3 trace. */
+            for (unsigned i = 0; i < phase->enemies.count; i++) {
+                const stage_enemy *enemy = &phase->enemies.ents[i];
+                if (enemy->kind == STAGE_ENEMY_BAT && enemy->hp < bat_hp[i])
+                    runway_sfx_emit(0x29u); /* CBat::Hurt. */
+            }
+        }
+        if (could_take_hit && phase->enemies.hits_applied != prev_hits && phase->stage_name[0] &&
+            !phase->laff.enabled) {
+            /* Hit_Generic differs by overlay; VORTEX overrides it. */
+            unsigned event = phase->body_config ? 0x1au : phase->vortex.enabled ? 0x2cu : 0x1bu;
+            runway_sfx_emit(event);
+        }
+        if (died) {
             phase->hazard_hits += phase->enemies.hits_applied;
             phase->state = SIDESCRL_ST_LOST;
+            sidescrl_end_sound(phase, 1u);
             snprintf(phase->status, sizeof phase->status,
                      "%s lost (poof/skel) hits=%u enemies=%u", phase->stage_name,
                      phase->hazard_hits, phase->enemies.count);
@@ -2001,6 +2054,7 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
             }
         } else if (at_exit) {
             phase->state = SIDESCRL_ST_FINISHED;
+            sidescrl_end_sound(phase, 0u);
             snprintf(phase->status, sizeof phase->status,
                      "%s finished (EndLevel win) skel=%d seg=%d hits=%u layers=%u "
                      "planes=%u amap=%u enemies=%u",

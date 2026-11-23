@@ -254,3 +254,56 @@ A medição histórica usou a janela Win32, o caminho padrão de apresentação,
 - GUITAR e DRUM têm equivalência temporal de pontuação. BIGBNS tem a mesma recomposição e o mesmo instante de vitória. A correspondência visual varia conforme a fase. [Reaplicação emitindo só entradas do controle](../build-chatgpt/evidence/big-wave-proof.log) · [ICE2 sob controle no quadro 60](../build-chatgpt/evidence/plates/21ICE2/polled/tick60.png)
 - A revisão de FINALE por Antigravity Gemini está no parecer do quadro 486. A segunda consulta opcional sobre a família de fases retornou cota esgotada. [Revisão de FINALE](../build-chatgpt/evidence/gemini-review.txt)
 - Configuração do compilador e vinculação do CRT foram extraídas do cache e da receita Ninja do executável. [Compiladores e /MT](../build-chatgpt/evidence/toolchains.txt)
+
+## 2026-11-23 — Efeitos sonoros do menu e da campanha
+
+A correção partiu do HEAD `31f2189`. O pedido trazia um marcador no lugar do relatório. Foi adotada a auditoria da rodada anterior, baseada nos dois CUE+BIN USA. [Relatório original](F:/MrBonesAudioQA/52014441/auditoria-efeitos-sonoros.md) · [Bancos das ISOs e SHA-256](F:/MrBonesAudioQA/iso-sfx-banks.csv) · [Chamadas SH-2](F:/MrBonesAudioQA/iso-sfx-call-sites.csv)
+
+### Alterações
+
+- O executável encaminha os eventos de cada fase ao banco SND1 montado, usando os timbres TON e as sequências SEQ selecionadas pelo evento. O renderizador lê tempo, duração e mudanças de banco e programa, mistura as camadas de timbre aplicáveis e calcula o passo de reprodução a partir dos campos de afinação. DRUM usa o alias de banco do mapa de som da fase. O WinMM recebe um fluxo estéreo que mistura até 32 efeitos simultâneos em blocos de 128 quadros. FMV e CD-DA conservam suas rotas. [Comandos MIDI do Saturn](https://docs.exodusemulator.com/Archives/SSDDV1R1E/c/c08/hon/p040.htm) · [Formato SEQ 2.00](https://raw.githubusercontent.com/mistydemeo/seq2mid/master/seqformat.txt) · [Estrutura dos bancos SEQ e TON](https://raw.githubusercontent.com/jfsantos/mid2seq/main/SEQUENCES.md)
+- `03MENU` emite `0x02` quando o cursor muda e ao alternar MUSIC ou STEREO. O teste cobre uma mudança, ausência de repetição durante a tecla mantida e a alternância de MUSIC.
+- RUNWAY dispara `0x0C` na borda de Down, `0x23` na borda C do BBS (`Spring_Brain`, retorno `0x26305E`) e `0x1B` no contato. LOGS, RIDE, ICE1, ICE2 e STAING emitem eventos de seus próprios contatos, marcadores e coletas. MOAT agenda 50 eventos de seis listas de `CSparky` lidas de `03CODE` em `0x2DD100`–`0x2DD2B8`.
+- As fases side-scrolling emitem efeitos em transições de agachamento, salto aceito, dano, coleta e fim de fase. Entre as ligações verificadas estão `CFenceKey::Brain` em VALLEY (`0x2C2656`, evento `0x38`) e `CButFly::CheckForBonesHit` em BAT3 (`0x2B7BF0`, evento `0x29`).
+- GUITAR lê a nota de `LickStruct+4` (`StartLick`, `0x26127C`) e emite `0x18` no fim (`0x261F4C`). DRUM emite todos os registros simultâneos da tabela `0x26B58C` por grupo (`CCableSpark`, `0x248E68`). BIGBNS liga rebotes, avanço e retorno de ondas aos IDs de seus estados. GENRM lê a sequência de efeitos de zaps em `0x2673B0` e emite efeitos de plasma conforme cor e resultado.
+- FINALE liga tiros, bloqueios, dano, setores, desativação e vitória aos IDs do banco. A publicação do efeito vermelho usa o orçamento de oito linhas do passe de atores. A vitória reserva três dessas linhas para o caminho de `_SND_StopSeq` (`0x200BB4`) em `CEndLevel::Brain` (`0x28CCD0`). Essa reserva foi calibrada pelas fitas. O quadro do impacto, o estado da arena e a entrada do filme conservam seu calendário.
+
+### Comparação offline com Ymir 0.4.1
+
+A sonda registra `_SoundEvent` em `0x204128`, `_SoundStartSequence` em `0x2041D0` e amostras estéreo do `SCSP.SetSampleCallback`, com CD-DA substituído por silêncio na captura e sem dispositivo de saída aberto. FINALE foi recapturado com o mesmo estado e três fitas de 2.480 entradas. Nas demais fases e no menu, a sonda nativa refez as entradas dos rastros já capturados. Os horários têm as âncoras de cada ensaio e posições diferentes no jogo podem produzir eventos diferentes com o mesmo controle. [Sonda Ymir](F:/MrBonesAudioQA/52014441/probe-ymir.cpp) · [Sonda nativa](F:/MrBonesAudioQA/31f2189-fix/probe-tape.c) · [Comparativo de 03MENU e 21 fases](F:/MrBonesAudioQA/31f2189-fix/same-input/summary.csv)
+
+| Cena | Resultado observado |
+|---|---|
+| `03MENU` | 16 de 16 mudanças com ID `0x02` no intervalo em que o seletor está ativo dos dois lados. Ymir registra cada uma dois quadros depois. Durante a abertura, a sonda nativa começa com o seletor já ativo, e o total bruto da fita difere. [Movimentos comparados](F:/MrBonesAudioQA/31f2189-fix/same-input/03MENU/selector-active.csv) |
+| `07GUITAR` | 62 de 62 inícios de riff nos mesmos quadros. O comando de fim `0x18` coincide no quadro 1715. [Inícios](F:/MrBonesAudioQA/31f2189-fix/same-input/07GUITAR/notes-comparison.csv) · [Fim](F:/MrBonesAudioQA/31f2189-fix/same-input/07GUITAR/events-comparison.csv) |
+| `14DRUM` | 1.197 de 1.197 disparos de nota nos mesmos quadros, somados em 933 entregas de PCM. [Contagens por quadro](F:/MrBonesAudioQA/31f2189-fix/same-input/14DRUM/notes-comparison.csv) |
+| `27FINALE` | 53 de 53 eventos por fita coincidem em ID e quadro, excluídos os eventos de configuração `0x00` e `0x01`. Os 159 eventos produzem 157 lotes de PCM, pois duas duplas caem no mesmo quadro. [Vitória](F:/MrBonesAudioQA/31f2189-fix/victory/comparison.txt) · [Curta](F:/MrBonesAudioQA/31f2189-fix/short-pulse/comparison.txt) · [Deslocada](F:/MrBonesAudioQA/31f2189-fix/displaced/comparison.txt) |
+| Campanha nativa | A execução instrumentada completou as 22 fases, incluindo troca de disco e retorno ao menu. Foram registrados lotes de PCM com pico positivo em 21 fases. LAFF ficou sem lote na rota ensaiada. [Log](F:/MrBonesAudioQA/31f2189-fix/campaign/port.log) · [Comandos e PCM](F:/MrBonesAudioQA/31f2189-fix/campaign/port-sfx.csv) |
+
+### Diferenças restantes
+
+- LAFF ainda precisa vincular a fala ao ator original. Em um rastro, `_PickJoke` selecionou a piada 22 no quadro 538 (`0x2B6820`). As três partes usam as sequências 1, 2 e 3. `17SND2` contém as sequências Sega MIDI (`a16999aee7c8558ec88f2946fe2e31b5741b94f6524516397a1dcf1ba8ff364c`) e `18SND3` contém timbres e amostras (`83c6649789aad062c03e1caf6ffdb57fa37a7eafc49f73e364f1687557b78b5c`). A arquitetura atual do port avança pelo chefe e não percorre o mesmo carregamento de fala escolhido pelo controle. [Rastro da escolha](F:/MrBonesAudioQA/side-ref/laff-joke/calls.csv)
+- Permanecem eventos de atores sem equivalente direto, como passos dos perseguidores em RUNWAY, o objeto de fissura de ICE1, dano corporal em ICE2, tijolo e tremor em MOAT, e transições MPlay de BIGBNS. GUITAR ainda precisa de comandos de corte de nota e das reações da plateia. Os arquivos por fase registram as diferenças observadas, inclusive quando os estados divergem sob a mesma entrada. [Comparativo por fase](F:/MrBonesAudioQA/31f2189-fix/same-input/summary.csv)
+- A comparação de quadros comprova o disparo do comando. O envelope, pan, efeitos do SCSP, latência do dispositivo e a forma de onda final do mixer WinMM ainda não foram homologados. Toda a comparação usou saída de áudio muda e captura offline.
+
+### Builds e regressão
+
+Executável x64 `/MT` em `build-chatgpt/release-static/mrbones.exe`, SHA-256 `46c83e18bc8b66d9a2bb8124cf4e4f2f7d15ca47eba4fcd19c073dcb067a7e0e`. O `dumpbin /headers /dependents` mostrou cinco DLLs diretas (`KERNEL32.dll`, `USER32.dll`, `GDI32.dll`, `WINMM.dll` e `bcrypt.dll`) e tabela de imports atrasados vazia. O teste isolado `test_static_imports` passou. [SHA-256](F:/MrBonesAudioQA/31f2189-fix/release-sha256.txt) · [Dumpbin](F:/MrBonesAudioQA/31f2189-fix/release-dumpbin.txt) · [Teste de imports](F:/MrBonesAudioQA/31f2189-fix/static-imports-final.log)
+
+Comandos de verificação executados em `F:/MrBonesPort` com ambiente de compilação MSVC x64 disponível para a estática.
+
+```powershell
+$env:MB_MUTE = '1'
+cmake --build build-chatgpt/debug --parallel 8
+cmake --build build-chatgpt/release-static --parallel 8
+ctest --test-dir build-chatgpt/debug --parallel 3 -E '^test_movie_audio$' --output-on-failure
+ctest --test-dir build-chatgpt/release-static --parallel 3 -E '^test_movie_audio$' --output-on-failure
+ctest --test-dir build-chatgpt/release-static -R '^test_static_imports$' --output-on-failure
+```
+
+| Build | Avisos | Testes selecionados | Tempo CTest |
+|---|---:|---:|---:|
+| Clang Debug | 0 | 58/58 | 171,59 s |
+| MSVC Release x64 `/MT` | 0 | 60/60 | 72,70 s |
+
+As duas suítes excluíram `test_movie_audio`. `test_static_imports` também passou isoladamente (1/1). [Compilação Debug](F:/MrBonesAudioQA/31f2189-fix/build-final-debug.log) · [CTest Debug](F:/MrBonesAudioQA/31f2189-fix/ctest-final-debug.log) · [Compilação Release](F:/MrBonesAudioQA/31f2189-fix/build-final-release-static.log) · [CTest Release](F:/MrBonesAudioQA/31f2189-fix/ctest-final-release-static.log)

@@ -6,6 +6,7 @@
 #include "core/pan_palette.h"
 #include "core/resource.h"
 #include "core/runway_compose.h"
+#include "core/runway_sfx.h"
 #include "core/scrl_map.h"
 #include "core/sprite_decode.h"
 #include "core/stxtr.h"
@@ -428,8 +429,10 @@ static void activate(menu_phase *menu) {
     case MENU_SCR_OPTIONS:
         if (menu->cursor == 0) {
             menu->music_on ^= 1; /* case 4 */
+            runway_sfx_emit(2u);
         } else if (menu->cursor == 1) {
             menu->stereo_on ^= 1; /* case 5 */
+            runway_sfx_emit(2u);
         } else if (menu->cursor == 3) {
             menu->screen = MENU_SCR_START; /* BackTrak */
             menu->cursor = 1;
@@ -863,6 +866,14 @@ void menu_phase_show_levels(menu_phase *menu) {
     render_frame(menu);
 }
 
+static void move_cursor(menu_phase *menu, int direction) {
+    int previous = menu->cursor;
+    menu->cursor += direction;
+    clamp_cursor(menu);
+    /* 03MENU MoveSelectorH/V only emits SoundEvent(2) after a change. */
+    if (menu->cursor != previous) runway_sfx_emit(2u);
+}
+
 int menu_phase_step(menu_phase *menu, const saturn_pad *pad) {
     if (!menu || !pad || menu_phase_done(menu)) return 0;
     menu->frames++;
@@ -900,25 +911,27 @@ int menu_phase_step(menu_phase *menu, const saturn_pad *pad) {
     }
     /* D-pad: Brain MoveSelectorH/V stand-in. */
     if (pad->pressed & 0x1000u) { /* Up */
-        menu->cursor--;
-        clamp_cursor(menu);
+        move_cursor(menu, -1);
         render_frame(menu);
     }
     if (pad->pressed & 0x2000u) { /* Down */
-        menu->cursor++;
-        clamp_cursor(menu);
+        move_cursor(menu, 1);
         render_frame(menu);
     }
     if (pad->pressed & 0x4000u) { /* Left */
         if (menu->screen == MENU_SCR_OPTIONS && menu->cursor == 2) {
             if (menu->volume) menu->volume--;
-        } else { menu->cursor--; clamp_cursor(menu); }
+        } else {
+            move_cursor(menu, -1);
+        }
         render_frame(menu);
     }
     if (pad->pressed & 0x8000u) { /* Right */
         if (menu->screen == MENU_SCR_OPTIONS && menu->cursor == 2) {
             if (menu->volume < MENU_VOLUME_MAX) menu->volume++;
-        } else { menu->cursor++; clamp_cursor(menu); }
+        } else {
+            move_cursor(menu, 1);
+        }
         render_frame(menu);
     }
     /* A/B/C → SelectMenuEntry */

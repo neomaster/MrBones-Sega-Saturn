@@ -59,6 +59,21 @@ int snd1_ton_note_sample(const snd1_span *ton_span, unsigned voice,
                          const uint8_t **raw, size_t *raw_bytes,
                          size_t *sample_count, int *is_pcm8b);
 
+typedef struct {
+    const uint8_t *data;
+    size_t samples;
+    unsigned loop_start;
+    unsigned loop_mode;
+    unsigned pcm8;
+    unsigned root_note;
+    int fine_tune;
+    int octave;
+    unsigned fine_step;
+} snd1_tone;
+
+int snd1_ton_layer(const snd1_span *span, unsigned voice, uint8_t note,
+                   unsigned *next_layer, snd1_tone *tone);
+
 /*
  * Return non-zero if `span` begins with a valid SCSP Tone Bank (.ton) pointer
  * table (big-endian word pointers to voice/layer descriptors inside the span).

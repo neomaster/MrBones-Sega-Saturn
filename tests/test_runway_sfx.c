@@ -86,7 +86,29 @@ int main(void) {
         CHECK(log.lens[0] == sfx.live_samples[RUNWAY_SFX_WALK].length);
         CHECK(log.lens[1] == sfx.live_samples[RUNWAY_SFX_JUMP].length);
         CHECK(runway_sfx_event_pcm(&sfx, 0x0cu, &ev_pcm, &ev_len) == 0);
-        CHECK(ev_pcm != NULL && ev_len >= 180u && ev_len != 3748u && ev_len != 68u);
+        CHECK(ev_pcm != NULL && ev_len > 16u && ev_len != 3748u && ev_len != 68u);
+        runway_sfx_frame frame;
+        runway_sfx_begin_frame(&frame);
+        runway_sfx_emit(0x0cu);
+        runway_sfx_emit(0x23u);
+        runway_sfx_end_frame();
+        runway_sfx_emit(0x0cu); /* No active frame, no stale command. */
+        CHECK(frame.count == 2u && frame.commands[0].bank == 0x0cu &&
+              frame.commands[1].bank == 0x23u);
+        play_log events = {0};
+        CHECK(runway_sfx_dispatch_events(&sfx, &frame, play_cb, &events) == 1u);
+        CHECK(events.n == 1u && sfx.event_hits[0x0cu] == 3u &&
+              sfx.event_hits[0x23u] == 1u);
+    }
+
+    {
+        runway_sfx menu_sfx;
+        const int8_t *pcm;
+        size_t length;
+        CHECK(runway_sfx_load_dir(&menu_sfx, &cd, "/03MENU") == 0);
+        CHECK(runway_sfx_event_pcm(&menu_sfx, 2u, &pcm, &length) == 0);
+        CHECK(pcm != NULL && length > 16u);
+        runway_sfx_free(&menu_sfx);
     }
 
     /* Multi-stage .TON banks: /05MAUSO (span 4) and /14DRUM (span 5 only). */

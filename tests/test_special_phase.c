@@ -32,12 +32,22 @@ static int open_disc(cdimage *cd, const char *path, const char *man_path, int di
 
 static int play_rhythm(special_phase *ph) {
     saturn_pad pad = {0};
+    unsigned win_events = 0;
     int i;
     for (i = 0; i < 12000 && !special_phase_done(ph); i++) {
         saturn_pad_update_host(&pad, special_phase_autoplay_buttons(ph, (unsigned)i));
+        runway_sfx_frame effects;
+        runway_sfx_begin_frame(&effects);
         special_phase_step(ph, &pad);
+        runway_sfx_end_frame();
+        for (unsigned j = 0; j < effects.count; ++j) {
+            if (effects.commands[j].kind == 0u && effects.commands[j].bank == 0x18u) {
+                if (ph->state != SPECIAL_ST_FINISHED) return 0;
+                ++win_events;
+            }
+        }
     }
-    return ph->state == SPECIAL_ST_FINISHED;
+    return ph->state == SPECIAL_ST_FINISHED && win_events == (ph->drum_notes ? 0u : 1u);
 }
 
 static int play_action(special_phase *ph) {
@@ -377,19 +387,19 @@ int main(void) {
             const int8_t *pcm = NULL;
             size_t len = 0;
             CHECK(runway_sfx_load_dir(&sfx, &disc2, "/27FINALE") == 0);
-            /* Real /27FINALE/05SND1 span0 type-1 events → span4 Voice 0 SCSP layers:
-             * hit 0x29..0x2B (note 0x4D..0x4F, SA=0x100A0, PCM8B, 1954 B),
-             * activate 0x31..0x32 (note 0x51..0x52, SA=0x03192, 16->8-bit, 369 samples),
-             * activate 0x33 (note 0x53, SA=0x0F344, PCM8B, 2890 B). */
-            CHECK(runway_sfx_event_pcm(&sfx, 0x2Au, &pcm, &len) == 0 && len == 1954u);
-            CHECK((const uint8_t *)pcm >= (const uint8_t *)sfx.blob + 0x66a8u + 0x3192u);
-            CHECK(runway_sfx_event_pcm(&sfx, 0x29u, &pcm, &len) == 0 && len == 1954u);
-            CHECK(runway_sfx_event_pcm(&sfx, 0x2Bu, &pcm, &len) == 0 && len == 1954u);
-            CHECK(runway_sfx_event_pcm(&sfx, 0x31u, &pcm, &len) == 0 && len == 369u);
-            CHECK(runway_sfx_event_pcm(&sfx, 0x32u, &pcm, &len) == 0 && len == 369u);
-            CHECK(pcm[0] == 0x7f && pcm[2] == 0x6b);
-            CHECK(runway_sfx_event_pcm(&sfx, 0x33u, &pcm, &len) == 0 && len == 2890u);
-            printf("FINALE SCSP hit=1954B act32=369 act33=2890B OK\n");
+            static const unsigned ids[] = {0x18, 0x29, 0x2a, 0x2b, 0x2c, 0x2d,
+                                           0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33};
+            uint32_t hashes[sizeof ids / sizeof *ids];
+            for (size_t i = 0; i < sizeof ids / sizeof *ids; ++i) {
+                CHECK(runway_sfx_event_pcm(&sfx, ids[i], &pcm, &len) == 0 && len > 16u);
+                uint32_t hash = 2166136261u;
+                for (size_t j = 0; j < len; ++j) hash = (hash ^ (uint8_t)pcm[j]) * 16777619u;
+                hashes[i] = hash;
+            }
+            /* Three pitches share a source waveform but must not sound identical. */
+            CHECK(hashes[1] != hashes[2] && hashes[2] != hashes[3] && hashes[1] != hashes[3]);
+            CHECK(runway_sfx_event_pcm(&sfx, 0x15u, &pcm, &len) != 0);
+            printf("FINALE bank events and note pitch OK\n");
             runway_sfx_free(&sfx);
         }
         {

@@ -25,7 +25,6 @@ void host_audio_mono_downmix(int16_t *pcm, size_t frames) {
 static volatile LONG g_volume_level = MENU_VOLUME_MAX;
 static volatile LONG g_stereo;
 static volatile LONG g_muted = -1;
-static volatile LONG g_pcm8_active = 0;
 
 static unsigned current_volume_level(void) {
     LONG v = InterlockedCompareExchange(&g_volume_level, 0, 0);
@@ -347,97 +346,176 @@ void host_audio_fade_stop(host_audio *audio, unsigned duration_ms) {
     host_audio_stop(audio);
 }
 
-typedef struct {
-    int16_t *stereo;
-    size_t samples; /* stereo frames */
-    unsigned rate;
-} pcm8_job;
+#define SFX_OUTPUT_RATE 44100u
+#define SFX_BLOCK_FRAMES 128u
+#define SFX_MAX_VOICES 32u
 
-static DWORD WINAPI pcm8_thread(void *param) {
-    pcm8_job *job = (pcm8_job *)param;
-    if (is_muted() || current_volume_level() == 0u) {
-        free(job->stereo);
-        free(job);
-        InterlockedDecrement(&g_pcm8_active);
+typedef struct {
+    int16_t *mono;
+    size_t length;
+    uint64_t position;
+    unsigned rate;
+} sfx_voice;
+
+static SRWLOCK sfx_lock = SRWLOCK_INIT;
+static sfx_voice sfx_voices[SFX_MAX_VOICES];
+static int sfx_running;
+
+static void free_sfx_voice(sfx_voice *voice) {
+    free(voice->mono);
+    memset(voice, 0, sizeof *voice);
+}
+
+/* One stereo output stream mixes overlapping one-shots before handing them to WinMM. */
+static int fill_sfx_block(int16_t *stereo) {
+    int used = 0;
+    int zero = (is_muted() || current_volume_level() == 0u);
+    AcquireSRWLockExclusive(&sfx_lock);
+    for (unsigned i = 0; i < SFX_BLOCK_FRAMES; ++i) {
+        int sample = 0;
+        for (unsigned j = 0; j < SFX_MAX_VOICES; ++j) {
+            sfx_voice *voice = &sfx_voices[j];
+            if (!voice->mono) continue;
+            used = 1;
+            size_t index = (size_t)(voice->position / SFX_OUTPUT_RATE);
+            unsigned fraction = (unsigned)(voice->position % SFX_OUTPUT_RATE);
+            int a = voice->mono[index];
+            int b = index + 1u < voice->length ? voice->mono[index + 1u] : a;
+            sample += a + (b - a) * (int)fraction / (int)SFX_OUTPUT_RATE;
+            voice->position += voice->rate;
+            if (voice->position / SFX_OUTPUT_RATE >= voice->length)
+                free_sfx_voice(voice);
+        }
+        if (zero) sample = 0;
+        if (sample < -32768) sample = -32768;
+        if (sample > 32767) sample = 32767;
+        stereo[2u*i] = stereo[2u*i + 1u] = (int16_t)sample;
+    }
+    ReleaseSRWLockExclusive(&sfx_lock);
+    return used;
+}
+
+static int sfx_pending(void) {
+    for (unsigned i = 0; i < SFX_MAX_VOICES; ++i)
+        if (sfx_voices[i].mono) return 1;
+    return 0;
+}
+
+static DWORD WINAPI pcm8_thread(void *unused) {
+    (void)unused;
+    if (is_muted()) {
+        AcquireSRWLockExclusive(&sfx_lock);
+        for (unsigned i = 0; i < SFX_MAX_VOICES; ++i) free_sfx_voice(&sfx_voices[i]);
+        sfx_running = 0;
+        ReleaseSRWLockExclusive(&sfx_lock);
         return 0;
     }
     WAVEFORMATEX fmt = {0};
     HWAVEOUT wave = NULL;
-    WAVEHDR hdr = {0};
+    HANDLE event = CreateEventW(NULL, FALSE, FALSE, NULL);
+    int16_t pcm[2][SFX_BLOCK_FRAMES * 2u];
+    WAVEHDR headers[2] = {0};
+    unsigned prepared = 0;
+    unsigned volume = MENU_VOLUME_MAX + 1u;
+    int failed = 1;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = 2;
-    fmt.nSamplesPerSec = job->rate;
+    fmt.nSamplesPerSec = SFX_OUTPUT_RATE;
     fmt.wBitsPerSample = 16;
     fmt.nBlockAlign = 4;
-    fmt.nAvgBytesPerSec = job->rate * 4;
-    if (waveOutOpen(&wave, WAVE_MAPPER, &fmt, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
-        free(job->stereo);
-        free(job);
-        InterlockedDecrement(&g_pcm8_active);
-        return 1;
+    fmt.nAvgBytesPerSec = fmt.nBlockAlign * SFX_OUTPUT_RATE;
+    if (!event || waveOutOpen(&wave, WAVE_MAPPER, &fmt, (DWORD_PTR)event,
+                              0, CALLBACK_EVENT) != MMSYSERR_NOERROR)
+        goto done;
+    for (; prepared < 2u; ++prepared) {
+        headers[prepared].lpData = (LPSTR)pcm[prepared];
+        headers[prepared].dwBufferLength = (DWORD)sizeof pcm[prepared];
+        if (waveOutPrepareHeader(wave, &headers[prepared], sizeof headers[prepared]) != MMSYSERR_NOERROR)
+            goto done;
     }
-    apply_volume(wave);
-    hdr.lpData = (LPSTR)job->stereo;
-    hdr.dwBufferLength = (DWORD)(job->samples * sizeof(int16_t));
-    if (waveOutPrepareHeader(wave, &hdr, sizeof hdr) == MMSYSERR_NOERROR) {
-        if (waveOutWrite(wave, &hdr, sizeof hdr) == MMSYSERR_NOERROR) {
-            while (!(hdr.dwFlags & WHDR_DONE)) Sleep(5);
+
+    for (;;) {
+        if (is_muted()) goto done;
+        unsigned level = current_volume_level();
+        if (level != volume) {
+            waveOutSetVolume(wave, volume_pair(level));
+            volume = level;
         }
-        waveOutUnprepareHeader(wave, &hdr, sizeof hdr);
+        unsigned queued = 0;
+        for (unsigned i = 0; i < prepared; ++i) {
+            if (headers[i].dwFlags & WHDR_INQUEUE) {
+                ++queued;
+            } else if (fill_sfx_block(pcm[i])) {
+                if (waveOutWrite(wave, &headers[i], sizeof headers[i]) != MMSYSERR_NOERROR)
+                    goto done;
+                ++queued;
+            }
+        }
+        if (!queued) {
+            AcquireSRWLockExclusive(&sfx_lock);
+            int pending = sfx_pending();
+            if (!pending) sfx_running = 0;
+            ReleaseSRWLockExclusive(&sfx_lock);
+            if (pending) continue;
+            failed = 0;
+            break;
+        }
+        if (WaitForSingleObject(event, 250) != WAIT_OBJECT_0) goto done;
     }
-    waveOutReset(wave);
-    waveOutClose(wave);
-    free(job->stereo);
-    free(job);
-    InterlockedDecrement(&g_pcm8_active);
-    return 0;
+
+done:
+    if (wave) {
+        waveOutReset(wave);
+        for (unsigned i = 0; i < prepared; ++i)
+            waveOutUnprepareHeader(wave, &headers[i], sizeof headers[i]);
+        waveOutClose(wave);
+    }
+    if (event) CloseHandle(event);
+    if (failed) {
+        AcquireSRWLockExclusive(&sfx_lock);
+        for (unsigned i = 0; i < SFX_MAX_VOICES; ++i) free_sfx_voice(&sfx_voices[i]);
+        sfx_running = 0;
+        ReleaseSRWLockExclusive(&sfx_lock);
+    }
+    return (DWORD)failed;
 }
 
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
-    if (!pcm || !length || rate < 4000 || rate > 48000) return -1;
+    if (!pcm || !length || rate < 4000u || rate > 48000u) return -1;
     if (is_muted() || current_volume_level() == 0u) return 0;
-    /* Cap concurrent SFX threads to prevent handle flooding/clipping. */
-    if (InterlockedIncrement(&g_pcm8_active) > 3) {
-        InterlockedDecrement(&g_pcm8_active);
-        return 0;
-    }
-    /* Cap one-shot length (~2 s at 22 kHz) to avoid huge buffers. */
     if (length > 48000u) length = 48000u;
-    pcm8_job *job = (pcm8_job *)calloc(1, sizeof *job);
-    if (!job) {
-        InterlockedDecrement(&g_pcm8_active);
-        return -1;
-    }
-    job->rate = rate;
-    job->samples = length * 2; /* L+R */
-    job->stereo = (int16_t *)malloc(job->samples * sizeof(int16_t));
-    if (!job->stereo) {
-        free(job);
-        InterlockedDecrement(&g_pcm8_active);
-        return -1;
-    }
-    /* Match CD-DA headroom (~+-9200 instead of +-32768) and apply soft edge ramps. */
+    int16_t *mono = malloc(length * sizeof *mono);
+    if (!mono) return -1;
     size_t fade = length / 8u;
     if (fade > 48u) fade = 48u;
-    for (size_t i = 0; i < length; i++) {
-        int val = (int)pcm[i] * 72;
+    for (size_t i = 0; i < length; ++i) {
+        int value = (int)pcm[i] * 72;
         if (fade > 1u) {
-            if (i < fade) val = (val * (int)i) / (int)fade;
-            else if (i >= length - fade) val = (val * (int)(length - 1u - i)) / (int)fade;
+            if (i < fade) value = value * (int)i / (int)fade;
+            else if (i >= length - fade) value = value * (int)(length - 1u - i) / (int)fade;
         }
-        int16_t s = (int16_t)val;
-        job->stereo[i * 2] = s;
-        job->stereo[i * 2 + 1] = s;
+        mono[i] = (int16_t)value;
     }
-    HANDLE th = CreateThread(NULL, 0, pcm8_thread, job, 0, NULL);
-    if (!th) {
-        free(job->stereo);
-        free(job);
-        InterlockedDecrement(&g_pcm8_active);
-        return -1;
+    int result = -1;
+    AcquireSRWLockExclusive(&sfx_lock);
+    for (unsigned i = 0; i < SFX_MAX_VOICES; ++i) {
+        if (sfx_voices[i].mono) continue;
+        sfx_voices[i] = (sfx_voice){mono, length, 0, rate};
+        if (!sfx_running) {
+            HANDLE thread = CreateThread(NULL, 0, pcm8_thread, NULL, 0, NULL);
+            if (!thread) {
+                memset(&sfx_voices[i], 0, sizeof sfx_voices[i]);
+                break;
+            }
+            sfx_running = 1;
+            CloseHandle(thread);
+        }
+        result = 0;
+        break;
     }
-    CloseHandle(th); /* detach; thread frees job */
-    return 0;
+    ReleaseSRWLockExclusive(&sfx_lock);
+    if (result) free(mono);
+    return result;
 }
 #else
 struct host_audio { int dummy; };

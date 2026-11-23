@@ -45,6 +45,12 @@
 #define SFX_JUMP RUNWAY_SFX_FLAG_JUMP
 #define SFX_LAND RUNWAY_SFX_FLAG_LAND
 #define SOUND_EVENT_DOWN 0xcu /* Stand→SoundEvent(0xc); MAP _SoundEvent@0x204128 */
+
+static void phase_sound_event(runway_phase *phase, unsigned id) {
+    phase->sound_event_id = id;
+    runway_sfx_emit(id);
+}
+
 /* Descriptor banks: morph tumble @0x23204C×13; full body walk @0x253858×20. */
 #define BONES_DESC_MORPH UINT32_C(0x0023204c)
 #define BONES_DESC_FULL UINT32_C(0x00253858)
@@ -184,6 +190,33 @@ static int load_course_events(runway_phase *p, const runway_assets *assets, uint
     return -1;
 }
 
+/* CSparky::ManageSounds reads {PAN record, SoundEvent} lists selected by
+ * the attack, growl, breakout, huff and shake animation functions. */
+static int load_moat_sound_events(runway_phase *p, const runway_assets *assets) {
+    static const uint32_t lists[] = {
+        0x2dd100, 0x2dd150, 0x2dd180, 0x2dd1e0, 0x2dd258, 0x2dd1f0
+    };
+    for (unsigned list = 0; list < sizeof lists / sizeof lists[0]; ++list) {
+        unsigned previous = 0;
+        for (uint32_t va = lists[list]; ; va += 8) {
+            uint32_t frame, id;
+            if (overlay_word(assets, va, &frame) || overlay_word(assets, va+4, &id)) return -1;
+            if (!id) {
+                if (frame) return -1;
+                break;
+            }
+            if (frame <= previous || frame > UINT16_MAX || id >= 64 ||
+                p->pan_event_count >= sizeof p->pan_events / sizeof p->pan_events[0]) return -1;
+            previous = frame;
+            p->pan_events[p->pan_event_count].frame = (list << 16) | frame;
+            p->pan_events[p->pan_event_count++].mask = id;
+        }
+    }
+    /* The initial PAN has no active CSparky sound-list cursor. */
+    p->pan_event_index = p->pan_event_count;
+    return 0;
+}
+
 static int load_moat_layout(runway_phase *p, const runway_assets *assets) {
     unsigned nuts = 0, targets = 0, sparky = 0;
     for (uint32_t va = 0x2dcb48; va;) {
@@ -264,7 +297,7 @@ static int load_pan_course(runway_phase *p, runway_assets *a) {
         p->airborne=1;
         p->sparky_target=5;
         p->course = COURSE_MOAT;
-        return load_moat_layout(p, a);
+        return load_moat_layout(p, a) || load_moat_sound_events(p, a) ? -1 : 0;
     }
     if (!strcmp(p->stage_name, "RIDE")) {
         p->course = COURSE_RIDE;
@@ -529,7 +562,7 @@ typedef struct {
 
 typedef struct {
     int32_t x, y;
-    unsigned strength, health, wait, active, shape;
+    unsigned strength, health, wait, active, shape, path;
 } ice_node;
 
 typedef struct {
@@ -549,6 +582,7 @@ struct runway_ice {
     uint8_t palette[4096];
     ice_block blocks[64];
     ice_node *nodes;
+    uint8_t crack_sfx_countdown[43];
     runway_gang_shape shapes[32], floe;
     uint32_t keys[32];
     unsigned shape_count, skate, jump, line_index, line_ticks;
@@ -615,6 +649,12 @@ static int ice_load_cracks(runway_phase *p, runway_assets *assets, uint32_t row)
     ice_node *nodes = realloc(ice->nodes,(p->ice_node_count+count)*sizeof *nodes);
     if (!nodes) return -1;
     ice->nodes = nodes;
+    const unsigned path = p->ice_path_count;
+    if (ice->skate) {
+        if (path >= sizeof ice->crack_sfx_countdown / sizeof ice->crack_sfx_countdown[0]) return -1;
+        /* CCrackPath::CCrackPath, 0x29147E, initializes +0xF4 to 3. */
+        ice->crack_sfx_countdown[path] = 3;
+    }
     ++p->ice_path_count;
     for (unsigned i=0; i<count; ++i) {
         uint32_t hp, initial, wait, x, y, texture, active;
@@ -631,7 +671,7 @@ static int ice_load_cracks(runway_phase *p, runway_assets *assets, uint32_t row)
             ice->keys[id] = texture;
             ++ice->shape_count;
         }
-        nodes[p->ice_node_count++] = (ice_node){(int32_t)x,(int32_t)y,hp,initial,wait,active,id};
+        nodes[p->ice_node_count++] = (ice_node){(int32_t)x,(int32_t)y,hp,initial,wait,active,id,path};
     }
     return 0;
 }
@@ -765,13 +805,33 @@ static void ice_crack_step(runway_phase *p, int covered) {
         int close=ice_near(p->ice_x,q->x,0x19000) && ice_near(p->ice_y,q->y,0x19000);
         int32_t radius=ice->skate ? 0x6934 : 0xf000;
         int through=(ice->skate || on_floor) && ice_near(p->ice_x,q->x,radius) && ice_near(p->ice_y,q->y,radius);
-        if (ice->skate ? q->y<=ice->line : (on_floor && close)) q->active=1;
+        if (!q->active && (ice->skate ? q->y<=ice->line : (on_floor && close))) {
+            q->active = 1;
+            if (ice->skate) {
+                /* ICE2 CheckCrackLine (0x291680) counts newly activated nodes per path. */
+                uint8_t *countdown = &ice->crack_sfx_countdown[q->path];
+                if (*countdown) --*countdown;
+                else {
+                    phase_sound_event(p, 0x30);
+                    *countdown = 5;
+                }
+            } else {
+                /* ICE1 CheckForCracks calls SoundEvent(0x2E) on the inactive edge. */
+                phase_sound_event(p, 0x2e);
+            }
+        }
         if (q->active && ((ice->skate && through) || (!ice->skate && close && on_floor && !q->wait)))
             q->health = q->health>2 ? q->health-2u : 0u;
         if (q->active && q->wait) --q->wait;
         if (through && !q->health && !p->hurt_timer) {
             ++p->ice_falls;
-            if (ice->skate || runway_skel_loose(&p->skel,0x11999)) p->state=RUNWAY_ST_LOST;
+            if (ice->skate || runway_skel_loose(&p->skel,0x11999)) {
+                if (!ice->skate) phase_sound_event(p, 0x2c);
+                p->state=RUNWAY_ST_LOST;
+            } else {
+                /* ICE1 FallThroughIce queues 0x31 after a recoverable break. */
+                phase_sound_event(p, 0x31);
+            }
             p->hurt_timer=30;
             q->health=q->strength;
         }
@@ -1921,6 +1981,7 @@ static void ride_bubbles(runway_phase *p,const int32_t points[FINALE_BODY_JOINTS
         p->swim_bubbles[i].vz-=393;++p->swim_bubbles[i].age;
         if(course_obj_hit(points,x,y,z,0xf3cf)){
             ++p->swim_pickups;runway_skel_add(&p->skel,0x3200);
+            phase_sound_event(p, 0x17); /* RIDE CBluePoof::Brain pickup. */
         } else if(z>=-0x60000){++i;continue;}
         p->swim_bubbles[i]=p->swim_bubbles[--p->swim_bubble_count];
     }
@@ -1946,7 +2007,8 @@ static int step_ride(runway_phase *p, const saturn_pad *pad) {
         p->swim_wall_mask = (uint16_t)ride_wall_coverage(&p->collision, x, y);
         if (p->swim_wall_mask) {
             p->wall_tick=27;
-            p->sound_event_id=0x2a;
+            phase_sound_event(p, 0x2a); /* CCurrent::Brain. */
+            runway_sfx_emit(0x1b); /* BkgHitWhileSwimming follows in the same VBlank. */
             ++p->hazards.hits_applied;
             runway_skel_hit(&p->skel,0x3200);
             ride_eject(p,joints);
@@ -2001,6 +2063,10 @@ static int moat_start_clip(runway_phase *p, unsigned clip) {
     p->pan = next;
     p->moat_clip = clip;
     p->moat_time = 0;
+    const unsigned list = clip < 10 ? 0 : clip-9;
+    unsigned i = 0;
+    while (i < p->pan_event_count && (p->pan_events[i].frame >> 16) < list) ++i;
+    p->pan_event_index = i;
     return 0;
 }
 
@@ -2027,7 +2093,16 @@ static int moat_pan_tick(runway_phase *p) {
             p->moat_huffs=0;
         }
         if (moat_start_clip(p, next)) return -1;
-    } else if (record != p->pan.index && pan_scroll_seek(&p->pan,record)) return -1;
+    } else if (record != p->pan.index) {
+        if (pan_scroll_seek(&p->pan,record)) return -1;
+        const unsigned list = p->moat_clip < 10 ? 0 : p->moat_clip-9;
+        const unsigned key = (list << 16) | record;
+        unsigned i = p->pan_event_index;
+        if (i < p->pan_event_count && p->pan_events[i].frame == key) {
+            phase_sound_event(p, p->pan_events[i].mask);
+            ++p->pan_event_index;
+        }
+    }
     p->bg_rgba = p->pan.bg_rgba;
     p->collision = p->pan.collision;
     return 0;
@@ -2130,7 +2205,7 @@ static void flight_joint_positions(runway_phase *p,int32_t points[FINALE_BODY_JO
 static int step_staing(runway_phase *p,const saturn_pad *pad) {
     if (course_seek(p)) return -1;
     unsigned flags = p->stage_exit_wait ? 0 : next_course_event(p);
-    if (flags&1u) { ++p->section; ++p->glass_hits; p->sound_event_id=42; }
+    if (flags&1u) { ++p->section; ++p->glass_hits; phase_sound_event(p, 0x2a); }
     unsigned loss=(flags>>26)&15u;
     static const unsigned damage[4]={0x4000,0x8000,0xc000,0x10000};
     for(unsigned i=0;i<4;++i) if(loss&(1u<<i)) runway_skel_loose(&p->skel,(int32_t)damage[i]);
@@ -2159,11 +2234,11 @@ static int step_staing(runway_phase *p,const saturn_pad *pad) {
         if (contact) {
             if (p->flight_objects[i].red) {
                 ++p->red_hits;
-                p->sound_event_id=43;
+                phase_sound_event(p, 0x2b);
                 runway_skel_loose(&p->skel,0x2300);
             } else {
                 ++p->rewards;
-                p->sound_event_id=23;
+                phase_sound_event(p, 0x17);
                 runway_skel_add(&p->skel,0xa00);
             }
         } else if (band>=(red?4:7)) {++i;continue;}
@@ -2237,6 +2312,7 @@ static void log_update(runway_phase *p) {
             runway_skel_add(&p->skel,k==3?0x20000:0x6400);
             ++p->rewards;
             p->sound_event_id=k==3?23:43;
+            if (k == 3) runway_sfx_emit(0x17); /* LOGS CBlueHead::Brain. */
         } else if (k==3 ? p->log_actors[i].x<=0xa0000 :
                    age<=718 && llabs((int64_t)p->log_actors[i].x*21/65536)<=200) {
             ++i;
@@ -2268,7 +2344,7 @@ static int step_logs(runway_phase *p, const saturn_pad *pad) {
     unsigned flags = next_course_event(p);
     static const unsigned sounds[5] = {41,47,42,48,50};
     for (unsigned i = 0; i < 5; ++i)
-        if (flags & (4u << i)) p->sound_event_id = sounds[i];
+        if (flags & (4u << i)) phase_sound_event(p, sounds[i]);
     for (unsigned k=0;k<3;++k) if (flags&(0x80u<<k)) log_spawn(p,k);
     if (flags&0x1000u) log_spawn(p,3);
     if (flags & 1u) p->section = 1;
@@ -2295,7 +2371,6 @@ static int step_logs(runway_phase *p, const saturn_pad *pad) {
     p->course_y += p->moat_vy;
     if (p->moat_vy <= 0 && floor >= 0 &&
         112-(int)((int64_t)p->course_y*scale/65536)+p->hit.bot_right_y >= floor) {
-        if (p->airborne) p->sfx_flags |= SFX_LAND;
         p->course_y = (112+p->hit.bot_right_y-floor)*65536/scale;
         p->moat_vy = 0;
         p->airborne = 0;
@@ -2321,6 +2396,7 @@ static int step_moat(runway_phase *p, const saturn_pad *pad) {
     if (moat_pan_tick(p)) return -1;
     if (p->frames<=5) return runway_phase_render(p);
     if (p->moat_clip == 11 && p->pan.index >= 120) {
+        phase_sound_event(p, 0x18); /* EndLevel(0), success branch at 0x2AE82C. */
         p->state = RUNWAY_ST_FINISHED;
         snprintf(p->status,sizeof p->status,"MOAT Sparky released PAN=%u",p->pan.index);
         return runway_phase_render(p);
@@ -2449,8 +2525,10 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
     phase->sched_enqueued_0c = 0;
     if (bones_bbs_peek(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_DOWN, NULL) == 1) {
         /* Stand flag&2 path: _SoundEvent(0xc) @0x204128 then BrainSwitch_25d534. */
-        phase->sched_enqueued_0c = 1; /* legacy name: SoundEvent index 0xc fired */
-        phase->sound_event_id = SOUND_EVENT_DOWN;
+        if (!was_tall) {
+            phase->sched_enqueued_0c = 1; /* legacy name: SoundEvent index 0xc fired */
+            phase_sound_event(phase, SOUND_EVENT_DOWN);
+        }
         phase->obj_flags |= 0x20u;
         phase->last_message = MSG_DOWN;
         if (!bones_is_crouch_slot(phase->brain_slot)) {
@@ -2480,6 +2558,7 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
     if (bones_bbs_peek(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_C_B, NULL) == 1) {
         phase->last_message = MSG_C_B;
         phase->sfx_flags |= SFX_C;
+        runway_sfx_emit(0x23); /* Saturn C edge, Spring_Brain at 0x26305E. */
         stage_enemies_fire_blues(&phase->enemies, phase->bones_x,
                                  phase->bones_y, phase->facing, 0);
         bones_bbs_consume(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_C_B, NULL);
@@ -2878,11 +2957,14 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
                         ? 1
                         : 0;
         if (phase->runway_win_record) step_gang_recordings(phase);
-        if (stage_enemies_step_player(&phase->enemies, &phase->skel,
-                                      phase->bones_x, phase->bones_y,
-                                      ground_cur, phase->tall, phase->airborne,
-                                      &phase->hazards, 1) ||
-            phase->skel.died) {
+        unsigned enemy_hits = phase->enemies.hits_applied;
+        int enemy_loss = stage_enemies_step_player(&phase->enemies, &phase->skel,
+                                                   phase->bones_x, phase->bones_y,
+                                                   ground_cur, phase->tall, phase->airborne,
+                                                   &phase->hazards, 1);
+        if (phase->runway_win_record && phase->enemies.hits_applied > enemy_hits)
+            phase_sound_event(phase, 0x1b); /* RUNWAY _Hit_Generic. */
+        if (enemy_loss || phase->skel.died) {
             phase->state = RUNWAY_ST_LOST;
             snprintf(phase->status, sizeof phase->status,
                      "%s lost (enemy skel=0) hits=%u", phase->stage_name,
@@ -2891,15 +2973,19 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
         }
 
         /* §12o/§22 hazards on all pan stages → BonesLoose → EndLevel(1). */
-        if ((phase->hazards.zone_count || phase->hazards.thrown_count) &&
-            (runway_hazards_step_ex(&phase->hazards, &phase->skel,
-                                    phase->bones_x, high_jump) ||
-             phase->skel.died)) {
-            phase->state = RUNWAY_ST_LOST;
-            snprintf(phase->status, sizeof phase->status,
-                     "%s lost (EndLevel fail) skel=0 hits=%u",
-                     phase->stage_name, phase->hazards.hits_applied);
-            return runway_phase_render(phase);
+        if (phase->hazards.zone_count || phase->hazards.thrown_count) {
+            unsigned hazard_hits = phase->hazards.hits_applied;
+            int hazard_loss = runway_hazards_step_ex(&phase->hazards, &phase->skel,
+                                                    phase->bones_x, high_jump);
+            if (phase->runway_win_record && phase->hazards.hits_applied > hazard_hits)
+                phase_sound_event(phase, 0x1b);
+            if (hazard_loss || phase->skel.died) {
+                phase->state = RUNWAY_ST_LOST;
+                snprintf(phase->status, sizeof phase->status,
+                         "%s lost (EndLevel fail) skel=0 hits=%u",
+                         phase->stage_name, phase->hazards.hits_applied);
+                return runway_phase_render(phase);
+            }
         }
         if (!phase->skel.died && phase->skel.skeletism < prev_skel) {
             phase->hurt_timer = 18u;

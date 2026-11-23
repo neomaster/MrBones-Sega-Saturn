@@ -158,6 +158,35 @@ int snd1_ton_is_bank(const snd1_span *span) {
     return 1;
 }
 
+int snd1_ton_layer(const snd1_span *span, unsigned voice, uint8_t note,
+                   unsigned *next_layer, snd1_tone *tone) {
+    if (!next_layer || !tone || !snd1_ton_is_bank(span) ||
+        voice >= (unsigned)voice_be16(span->data) / 2u - 4u) return -1;
+    const uint8_t *header = span->data + voice_be16(span->data + (4u + voice) * 2u);
+    unsigned layers = (unsigned)header[2] + 1u;
+    for (unsigned i = *next_layer; i < layers; ++i) {
+        const uint8_t *layer = header + 4u + i * 32u;
+        if (note < layer[0] || note > layer[1]) continue;
+        size_t start = voice_be32(layer + 2u) & 0xfffffu;
+        unsigned pcm8 = (layer[3] >> 4u) & 1u;
+        size_t count = (size_t)voice_be16(layer + 8u) + 1u;
+        size_t bytes = count * (pcm8 ? 1u : 2u);
+        /* Samples must not point back into their own voice descriptor. */
+        if (start < (size_t)(header - span->data) + 4u + layers * 32u ||
+            start >= span->size || bytes > span->size - start)
+            continue;
+        unsigned pitch = voice_be16(layer + 0x12u);
+        int octave = (int)((pitch >> 11u) & 15u);
+        *tone = (snd1_tone){span->data + start, count, voice_be16(layer + 6u),
+                            (layer[3] >> 5u) & 3u, pcm8,
+                            layer[0x19] & 127u, (int8_t)layer[0x1a],
+                            octave < 8 ? octave : octave - 16, pitch & 1023u};
+        *next_layer = i + 1u;
+        return 0;
+    }
+    return -1;
+}
+
 static int ton_slice_is_clean(const uint8_t *raw, size_t n_samples, int pcm8) {
     size_t probe = n_samples < 320u ? n_samples : 320u;
     int prev = 0;

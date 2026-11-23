@@ -248,6 +248,50 @@ static int test_wall(void) {
     return 0;
 }
 
+static int test_side_sound_cadence(void) {
+    uint8_t floor[RIG_W];
+    sidescrl_phase phase;
+    saturn_pad pad = {0};
+    runway_sfx_frame sounds;
+    unsigned footfalls = 0;
+    rig_floor(floor, 180);
+    for (unsigned x = 200; x < RIG_W; ++x) floor[x] = 100;
+    CHECK(rig_init(&phase, floor, 40) == 0);
+    memcpy(phase.stage_name, "MAUSO", sizeof "MAUSO");
+    phase.anim_count = 1;
+    phase.anim_rgba[0] = g_rig_sprite;
+    phase.anim_w[0] = 16;
+    phase.anim_h[0] = 32;
+
+    saturn_pad_update_host(&pad, MB_PAD_DOWN);
+    runway_sfx_begin_frame(&sounds);
+    sidescrl_phase_step(&phase, &pad);
+    runway_sfx_end_frame();
+    CHECK(sounds.count == 1u && sounds.commands[0].bank == 0x0cu);
+
+    saturn_pad_update_host(&pad, MB_PAD_DOWN);
+    runway_sfx_begin_frame(&sounds);
+    sidescrl_phase_step(&phase, &pad);
+    runway_sfx_end_frame();
+    CHECK(sounds.count == 0u);
+
+    for (unsigned tick = 0; tick < 150u; ++tick) {
+        int32_t before = phase.actor.x;
+        saturn_pad_update_host(&pad, MB_PAD_RIGHT);
+        runway_sfx_begin_frame(&sounds);
+        sidescrl_phase_step(&phase, &pad);
+        runway_sfx_end_frame();
+        CHECK(sounds.count == 0u); /* The Down cue is not a walk sound. */
+        if (phase.sfx_flags & RUNWAY_SFX_FLAG_WALK) {
+            CHECK((phase.frames & 3u) == 0 && phase.actor.x != before);
+            ++footfalls;
+        }
+    }
+    CHECK(footfalls > 0 && PX(phase.bones_x) == 190);
+    rig_free(&phase);
+    return 0;
+}
+
 static int test_world_edges(void) {
     uint8_t f[RIG_W];
     sidescrl_phase ph;
@@ -427,6 +471,7 @@ static int test_integration(void) {
     CHECK(test_spawn_and_walk() == 0);
     CHECK(test_slopes() == 0);
     CHECK(test_wall() == 0);
+    CHECK(test_side_sound_cadence() == 0);
     CHECK(test_world_edges() == 0);
     CHECK(test_jump() == 0);
     CHECK(test_drop() == 0);
@@ -480,8 +525,12 @@ static int test_valley_mechanics(cdimage *disc1) {
             phase.actor.vy = phase.actor.rem_y = 0;
             phase.actor.on_ground = true;
             saturn_pad_update_host(&tp, MB_PAD_C);
+            runway_sfx_frame sounds;
+            runway_sfx_begin_frame(&sounds);
             sidescrl_phase_step(&phase, &tp);
+            runway_sfx_end_frame();
             CHECK(phase.fence_keys[i].triggered == 0 && phase.fences[i].open == 0);
+            CHECK(sounds.count == 0u);
         }
         /* Positive: downward drop onto key triggers it and opens ONLY the paired fence. */
         phase.actor.x = phase.fence_keys[i].x - SIDESCRL_ACTOR_WIDTH / 2;
@@ -489,8 +538,12 @@ static int test_valley_mechanics(cdimage *disc1) {
         phase.actor.vy = 2000;
         phase.actor.on_ground = false;
         saturn_pad_update_host(&tp, 0u);
+        runway_sfx_frame sounds;
+        runway_sfx_begin_frame(&sounds);
         sidescrl_phase_step(&phase, &tp);
+        runway_sfx_end_frame();
         CHECK(phase.fence_keys[i].triggered == 1 && phase.fences[i].open == 1);
+        CHECK(sounds.count == 1u && sounds.commands[0].bank == 0x38u);
         for (unsigned j = i + 1u; j < 3u; j++)
             CHECK(phase.fences[j].open == 0);
         /* Once open, walking past fence x succeeds on the real cave floor. */
@@ -875,7 +928,12 @@ int main(void) {
             CHECK(stage_enemies_laff_boss_hp(&phase.enemies, &bmax) == STAGE_LAFF_BOSS_HP);
             CHECK(phase.laff.enabled == 1 && phase.laff.skel_count == 80u && phase.laff.laff_meter == 0);
             /* Negative: GoodJoke enters CringeBrain with zero CLaffMeter gain. */
-            CHECK(sidescrl_laff_tell_joke(&phase, 0) == 0);
+            runway_sfx_frame sounds;
+            runway_sfx_begin_frame(&sounds);
+            int good_joke = sidescrl_laff_tell_joke(&phase, 0);
+            runway_sfx_end_frame();
+            CHECK(good_joke == 0);
+            CHECK(sounds.count == 1u && sounds.commands[0].bank == 0x29u);
             CHECK(phase.laff.last_joke_kind == 1 && phase.laff.good_jokes == 1u && phase.laff.laff_meter == 0);
             /* Positive: BadJoke enters LaffBrain and advances CLaffMeter. */
             CHECK(sidescrl_laff_tell_joke(&phase, 1) == 1);
