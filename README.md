@@ -23,8 +23,8 @@ build\mbrunway.exe "disco1\....cue" "manifest\versions.txt" --check
 - **Hotkeys (windowed):** `F5` cycle upscale filter (`nearest`/`scale2x`/`scale3x`/`xbr2x`/`xbr3x`), `F6` toggle HD sprite overlay (`ON`/`OFF`), `F11` fullscreen, `Esc` quit.
 - **Useful CLI flags:** `--upscale <mode>`, `--scale <1..4>`, `--hd-dir <dir>`, `--no-hd-bones`, `--autoplay`, `--mute`, `--capture-dir <dir>`.
 
-Controls (gameplay): arrows/WASD move, X=jump, Down/S=tall, C=Blues, Z=Pulse, Enter=pause, Esc=abort.
-MENU: arrows/WASD + Enter/Z to select Start Game / Options / Level Select (resumes last unlocked stage from `nvmshadow.bin`).
+Controls (gameplay): arrows/WASD move, X=jump, Down/S=tall, C=Blues, Z=Pulse, Enter=pause, Esc=abort (or any connected Xbox/XInput or USB/HID Saturn gamepad automatically).
+MENU: arrows/WASD + Enter/Z (or gamepad D-Pad/stick + A/Start) to select Start Game / Options / Level Select (resumes last unlocked stage from `nvmshadow.bin`).
 
 ## Build (Windows x64, MSVC + Ninja)
 
