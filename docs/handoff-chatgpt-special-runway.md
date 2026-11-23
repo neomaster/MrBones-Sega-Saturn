@@ -207,11 +207,27 @@ O executável homologado tem 1.516.544 bytes. SHA-256 `1cda6d207a9bfbc1800e50515
 
 ### Distribuição para Windows x64 limpo
 
-O pacote em `dist-windows-clean` contém o executável homologado, `mrbones.exe.sha256`, `manifest/versions.txt`, o guia e os scripts `run_tests.bat` e `run_tests.ps1`. O SHA-256 da cópia é `1cda6d207a9bfbc1800e50515cfb0582a88fee2529671cb1f4fbfc6d1fc0d91e`. O empacotador validou novamente os cinco imports esperados. Os CUEs e as faixas originais são fornecidos à parte pelo usuário. [Pacote](../dist-windows-clean/) · [SHA-256](../dist-windows-clean/mrbones.exe.sha256) · [Guia](../dist-windows-clean/clean-windows-verification.md)
+O pacote gerado em `dist-windows-clean` contém o executável homologado, `mrbones.exe.sha256`, `manifest/versions.txt`, o guia e os scripts `run_tests.bat` e `run_tests.ps1`. O SHA-256 da cópia é `1cda6d207a9bfbc1800e50515cfb0582a88fee2529671cb1f4fbfc6d1fc0d91e`. O empacotador validou novamente os cinco imports esperados. Os CUEs e as faixas originais são fornecidos à parte pelo usuário. A pasta de distribuição deixou de estar disponível na raiz durante o ensaio em VM, e a cópia usada na validação está preservada. [Pacote testado](../build-chatgpt/clean-vm/setup-media/dist-windows-clean/) · [SHA-256](../build-chatgpt/clean-vm/setup-media/dist-windows-clean/mrbones.exe.sha256) · [Guia](../build-chatgpt/clean-vm/setup-media/dist-windows-clean/clean-windows-verification.md)
 
 O modo `verify` confere a arquitetura, a presença do manifesto e o hash sem precisar dos discos. Os modos `check`, `lose`, `finale` e `campaign` aceitam caminhos externos com `-Disc1Cue` e `-Disc2Cue`. `check` e `campaign` rodam com áudio mudo. [Empacotador](../tools/package-clean-windows.ps1)
 
 Os verificadores foram executados por Windows PowerShell 5.1 a partir de uma cópia isolada fora do repositório, com caminhos de executáveis e módulos limitados aos componentes do Windows. `verify`, `check` e `campaign` retornaram 0. A campanha passou pelas 22 fases jogáveis, registrou a troca de disco e voltou ao menu de FINALE com `nvmshadow.bin` gravado. As contraprovas rejeitaram CUE ausente e checksum alterado. Essa execução foi feita no computador de compilação. [Resumo da verificação](../build-chatgpt/evidence/clean-package-smoke.log) · [Checagem estrutural](../build-chatgpt/evidence/clean-package-check.log) · [Campanha](../build-chatgpt/evidence/clean-package-campaign.log)
+
+### Validação em VM Windows x64 limpa (22/11/2026)
+
+Instalei Windows 10 Enterprise LTSC Evaluation x64, build 19044, em um disco virtual novo no QEMU 10.2.0 em modo TCG, sem rede. O PowerShell 5.1 do Windows registrou zero correspondências de Visual Studio, Git, Python e redistribuível do Visual C++ no inventário e no PATH. A mídia de instalação corresponde ao SHA-256 oficial `e4ab2e3535be5748252a8d5d57539a6e59be8d6726345ee10e7afd2cb89fefb5`. [Hashes da mídia Microsoft](https://download.microsoft.com/download/9/3/b/93bfb33f-643f-43c9-a36f-cf3611c72187/Windows10Enterprise21H2HashValues.pdf)
+
+A VM executou o `run_tests.bat` da cópia dos seis arquivos de distribuição feita antes do boot. O executável corresponde ao SHA-256 `1cda6d207a9bfbc1800e50515cfb0582a88fee2529671cb1f4fbfc6d1fc0d91e` e o manifesto a `a6b021df2f6e52be66fff70720faa6b213582f120b4ead8a84287bed3c520d94`. Ambos os CUEs americanos vieram de uma mídia separada, somente leitura, com 10 faixas BIN no disco 1 e 12 no disco 2. As execuções do port foram mudas com `MB_MUTE=1` e `--mute`. [Cópia do pacote testado](../build-chatgpt/clean-vm/setup-media/dist-windows-clean/) · [Registro do convidado](../build-chatgpt/clean-vm/guest-serial.log)
+
+| Modo | Código de saída | Evidência observada no convidado |
+| --- | ---: | --- |
+| `verify` | 0 | Conferiu arquitetura, manifesto e o SHA-256 do executável. |
+| `check` | 0 | Confirmou 13 transições FMV, a passagem de CD-DA para PCM no final de FINALE e as contraprovas de vídeo corrompido. |
+| `lose` | 0 | Reproduziu o vídeo de 203 quadros, registrou `PROGRESS LOSE -> MENU` e retornou ao menu na janela do port. |
+| `finale` | 0 | Abriu a arena do disco 2. Com o controle em repouso, registrou `FINALE -> LOSE -> MENU` na janela do port. |
+| `campaign` | 0 | Completou as 22 fases e a troca de disco. Venceu FINALE com 16 disparos e zero anéis restantes, processou os 5.658 quadros do vídeo final e retornou ao menu com `nvmshadow.bin` de 40 bytes. |
+
+O auxiliar inicial do ensaio interpretou códigos de saída em branco do Windows PowerShell 5.1 como falhas. A campanha teve código `0` confirmado diretamente pela API do Windows na mesma execução. Na segunda rodada, um script auxiliar registrou o `ERRORLEVEL` do `run_tests.bat` e confirmou código `0` nos outros quatro modos, com o mesmo pacote. [Registro dos dois ensaios](../build-chatgpt/clean-vm/guest-serial.log) · [LOSE em reprodução](../build-chatgpt/clean-vm/vm-lose-playing.png) · [Arena de FINALE](../build-chatgpt/clean-vm/vm-finale-playing.png)
 
 ### Tempo por quadro
 

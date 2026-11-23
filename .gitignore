@@ -2,6 +2,7 @@
 *.bin
 *.cue
 *.7z
+*.zip
 *.iso
 *.img
 *.sav
