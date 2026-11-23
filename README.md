@@ -1,11 +1,44 @@
-# mr-bones-port
+<p align="center">
+  <img src="docs/banner-mrbones.jpg" alt="Mr. Bones - Sega Saturn Native Windows x64 Port" width="100%" />
+</p>
 
-Native Windows port of *Mr. Bones* (Sega Saturn, USA, MK-81016 V1.000).
-No game data is included: provide your own Disc 1 and Disc 2 images.
+<h1 align="center">Mr. Bones — Sega Saturn (Native Windows x64 Port)</h1>
 
-**Status:** playable native Windows port covering the full 24-entry campaign (22 native playable stages across Disc 1 & Disc 2 plus `TROLL1`/`TROLL2` empty skips), FMV transitions, `27FINALE` ring arena and ending movie, `/28LOSE`, `nvmshadow.bin` progress save/resume, and `mrbones.ini` options — verified via `mrbones --check --autoplay` (`custom=63` HD sprites). Default video output uses `xbr3x` (`3x`, `960x672`) with auto-loaded 3x HD sprite overrides. TrueMotion and DK3 decoding are linked statically. See `LOG-DESENVOLVIMENTO.md` and `docs/coverage.md` for verification details and remaining SH-2 differences.
+<p align="center">
+  Native C Windows x64 port of <em>Mr. Bones</em> (Sega Saturn, USA, MK-81016 V1.000) — complete 24-stage campaign, FMV/audio pipeline, HD sprite overrides, and zero Saturn emulator required at runtime.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Windows%20x64-0ea5e9?style=for-the-badge&logo=windows" alt="Platform Windows x64" />
+  <img src="https://img.shields.io/badge/Builds-MSVC%20%2FMT%20%26%20Clang%200%20Warnings-22c55e?style=for-the-badge" alt="Zero Warnings" />
+  <img src="https://img.shields.io/badge/CTest-61%2F61%20Release%20%7C%2059%2F59%20Debug-38bdf8?style=for-the-badge" alt="CTest Passed" />
+  <img src="https://img.shields.io/badge/Input-Keyboard%20%2B%20XInput%20%2F%20HID%20Gamepad-a855f7?style=for-the-badge" alt="Joystick Support" />
+  <img src="https://img.shields.io/badge/Video-xBR%203x%20%2B%2063%20HD%20Sprites-f59e0b?style=for-the-badge" alt="xBR 3x HD" />
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#build-windows-x64-msvc--ninja">Build</a> •
+  <a href="#campaign-24-stages">Campaign (24 Stages)</a> •
+  <a href="#config">Config</a> •
+  <a href="#docs">Docs</a>
+</p>
+
+---
+
+> [!IMPORTANT]
+> **No retail game data is included in this repository:** supply your own extracted Disc 1 and Disc 2 US (`MK-81016`) CUE/BIN images.
+
+**Status:** playable native Windows port covering the full 24-entry campaign (22 native playable stages across Disc 1 & Disc 2 plus `TROLL1`/`TROLL2` empty skips), FMV transitions, `27FINALE` ring arena and ending movie, `/28LOSE`, `nvmshadow.bin` progress save/resume, automatic XInput & WinMM HID/Saturn joystick detection, and `mrbones.ini` options — verified via `mrbones --check --autoplay` (`custom=63` HD sprites). Default video output uses `xbr3x` (`3x`, `960x672`) with auto-loaded 3x HD sprite overrides. TrueMotion and DK3 decoding are linked statically. See `LOG-DESENVOLVIMENTO.md` and `docs/coverage.md` for verification details and remaining SH-2 differences.
 
 The commands below assume the project root is the current directory.
+
+<details>
+<summary>Showcase: 1x Original vs 3x xBR HD Sprite Overrides (<code>63</code> sprites in <code>assets/sprites_bones/hd_3x/</code>)</summary>
+<p align="center">
+  <img src="assets/sprites_bones/mr_bones_sprites_sheet.png" alt="Mr. Bones 1x vs 3x xBR HD Sprite Sheet" width="100%" />
+</p>
+</details>
 
 ## Quick start
 
