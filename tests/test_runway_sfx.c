@@ -71,6 +71,37 @@ int main(void) {
         CHECK(sfx.seq_counters[1] == 4u); /* group 1 advanced (jump) */
     }
 
+    /* Live SCSP .TON decoded PCM path: must avoid raw .TON header metadata. */
+    {
+        play_log log = {0};
+        const int8_t *ev_pcm = NULL;
+        size_t ev_len = 0;
+        CHECK(sfx.live_samples[RUNWAY_SFX_WALK].pcm != NULL);
+        CHECK(sfx.live_samples[RUNWAY_SFX_WALK].length >= 180u);
+        CHECK(sfx.live_samples[RUNWAY_SFX_WALK].length != 3748u);
+        CHECK(sfx.live_samples[RUNWAY_SFX_JUMP].length != 612u);
+        runway_sfx_dispatch_pcm(&sfx, RUNWAY_SFX_FLAG_WALK | RUNWAY_SFX_FLAG_JUMP,
+                                play_cb, &log);
+        CHECK(log.n == 2u);
+        CHECK(log.lens[0] == sfx.live_samples[RUNWAY_SFX_WALK].length);
+        CHECK(log.lens[1] == sfx.live_samples[RUNWAY_SFX_JUMP].length);
+        CHECK(runway_sfx_event_pcm(&sfx, 0x0cu, &ev_pcm, &ev_len) == 0);
+        CHECK(ev_pcm != NULL && ev_len >= 180u && ev_len != 3748u && ev_len != 68u);
+    }
+
+    /* Multi-stage .TON banks: /05MAUSO (span 4) and /14DRUM (span 5 only). */
+    {
+        runway_sfx mauso_sfx, drum_sfx;
+        CHECK(runway_sfx_load_dir(&mauso_sfx, &cd, "/05MAUSO") == 0);
+        CHECK(mauso_sfx.live_samples[RUNWAY_SFX_WALK].pcm != NULL &&
+              mauso_sfx.live_samples[RUNWAY_SFX_WALK].length >= 180u);
+        runway_sfx_free(&mauso_sfx);
+        CHECK(runway_sfx_load_dir(&drum_sfx, &cd, "/14DRUM") == 0);
+        CHECK(drum_sfx.live_samples[RUNWAY_SFX_WALK].pcm != NULL &&
+              drum_sfx.live_samples[RUNWAY_SFX_WALK].length >= 180u);
+        runway_sfx_free(&drum_sfx);
+    }
+
     /* Phase sync: crouch, footsteps in the running cycle, jump and landing. */
     CHECK(runway_phase_load(&phase, &cd) == 0);
     {

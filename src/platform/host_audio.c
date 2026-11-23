@@ -25,6 +25,14 @@ void host_audio_mono_downmix(int16_t *pcm, size_t frames) {
 static volatile LONG g_volume_level = MENU_VOLUME_MAX;
 static volatile LONG g_stereo;
 static volatile LONG g_muted = -1;
+static volatile LONG g_pcm8_active = 0;
+
+static unsigned current_volume_level(void) {
+    LONG v = InterlockedCompareExchange(&g_volume_level, 0, 0);
+    if (v <= 0) return 0u;
+    if ((unsigned)v > MENU_VOLUME_MAX) return MENU_VOLUME_MAX;
+    return (unsigned)v;
+}
 
 static int ieq(const char *a, const char *b) {
     for (; *a && *b; a++, b++)
@@ -88,6 +96,7 @@ struct host_audio {
     volatile LONG movie_paused;
 };
 
+#define BUF_POOL 4
 #define BUF_FRAMES 8
 #define BUF_SAMPLES (CDDA_SAMPLES_PER_SECTOR * BUF_FRAMES)
 
@@ -108,23 +117,23 @@ static DWORD WINAPI audio_thread(void *param) {
     if (waveOutOpen(&a->wave, WAVE_MAPPER, &fmt, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR)
         return 1;
 
-    int16_t *pcm[2] = {NULL, NULL};
-    WAVEHDR hdr[2] = {{0}, {0}};
-    int prepared[2] = {0, 0};
+    int16_t *pcm[BUF_POOL] = {0};
+    WAVEHDR hdr[BUF_POOL] = {0};
+    int prepared[BUF_POOL] = {0};
     int eof = 0;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < BUF_POOL; i++) {
         pcm[i] = malloc(BUF_SAMPLES * sizeof(int16_t));
         if (!pcm[i]) { eof = 1; break; }
         hdr[i].lpData = (LPSTR)pcm[i];
     }
     while (!a->stop && !eof) {
-        LONG level = InterlockedCompareExchange(&g_volume_level, 0, 0);
+        LONG level = (LONG)current_volume_level();
         if (!a->fading && level != applied_volume) {
             waveOutSetVolume(a->wave, volume_pair((unsigned)level));
             applied_volume = level;
         }
         int active = 0;
-        for (int i = 0; i < 2 && !a->stop; i++) {
+        for (int i = 0; i < BUF_POOL && !a->stop; i++) {
             int count = 0;
             if (prepared[i]) {
                 if (!(hdr[i].dwFlags & WHDR_DONE)) { active = 1; continue; }
@@ -140,8 +149,12 @@ static DWORD WINAPI audio_thread(void *param) {
             }
             if (count < BUF_FRAMES) eof = 1;
             if (!count) continue;
-            if (a->menu_mix) cdda_mix_menu(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
-            if (!stereo_on()) host_audio_mono_downmix(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
+            if (current_volume_level() == 0u) {
+                memset(pcm[i], 0, (size_t)count * CDDA_SAMPLES_PER_SECTOR * sizeof(int16_t));
+            } else {
+                if (a->menu_mix) cdda_mix_menu(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
+                if (!stereo_on()) host_audio_mono_downmix(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
+            }
             hdr[i].dwBufferLength = (DWORD)(count * CDDA_SAMPLES_PER_SECTOR * sizeof(int16_t));
             hdr[i].dwFlags = 0;
             if (waveOutPrepareHeader(a->wave, &hdr[i], sizeof hdr[i]) != MMSYSERR_NOERROR) { eof = 1; break; }
@@ -158,11 +171,11 @@ static DWORD WINAPI audio_thread(void *param) {
         Sleep(5);
     }
     if (eof && !a->stop) {
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < BUF_POOL; i++)
             while (prepared[i] && !(hdr[i].dwFlags & WHDR_DONE) && !a->stop) Sleep(5);
     }
     waveOutReset(a->wave);
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < BUF_POOL; i++) {
         if (prepared[i]) waveOutUnprepareHeader(a->wave, &hdr[i], sizeof hdr[i]);
         free(pcm[i]);
     }
@@ -210,7 +223,9 @@ static DWORD WINAPI movie_thread(void *param) {
         return 1;
     }
     apply_volume(a->wave);
-    applied_volume = InterlockedCompareExchange(&g_volume_level, 0, 0);
+    applied_volume = (LONG)current_volume_level();
+    if (applied_volume == 0 && a->movie_pcm && a->movie_samples)
+        memset(a->movie_pcm, 0, a->movie_samples * sizeof(int16_t));
     hdr.lpData = (LPSTR)a->movie_pcm;
     hdr.dwBufferLength = (DWORD)(a->movie_samples * sizeof(int16_t));
     if (waveOutPrepareHeader(a->wave, &hdr, sizeof hdr) == MMSYSERR_NOERROR) {
@@ -340,9 +355,10 @@ typedef struct {
 
 static DWORD WINAPI pcm8_thread(void *param) {
     pcm8_job *job = (pcm8_job *)param;
-    if (is_muted()) {
+    if (is_muted() || current_volume_level() == 0u) {
         free(job->stereo);
         free(job);
+        InterlockedDecrement(&g_pcm8_active);
         return 0;
     }
     WAVEFORMATEX fmt = {0};
@@ -357,6 +373,7 @@ static DWORD WINAPI pcm8_thread(void *param) {
     if (waveOutOpen(&wave, WAVE_MAPPER, &fmt, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
         free(job->stereo);
         free(job);
+        InterlockedDecrement(&g_pcm8_active);
         return 1;
     }
     apply_volume(wave);
@@ -372,22 +389,43 @@ static DWORD WINAPI pcm8_thread(void *param) {
     waveOutClose(wave);
     free(job->stereo);
     free(job);
+    InterlockedDecrement(&g_pcm8_active);
     return 0;
 }
 
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     if (!pcm || !length || rate < 4000 || rate > 48000) return -1;
-    if (is_muted()) return 0;
+    if (is_muted() || current_volume_level() == 0u) return 0;
+    /* Cap concurrent SFX threads to prevent handle flooding/clipping. */
+    if (InterlockedIncrement(&g_pcm8_active) > 3) {
+        InterlockedDecrement(&g_pcm8_active);
+        return 0;
+    }
     /* Cap one-shot length (~2 s at 22 kHz) to avoid huge buffers. */
     if (length > 48000u) length = 48000u;
     pcm8_job *job = (pcm8_job *)calloc(1, sizeof *job);
-    if (!job) return -1;
+    if (!job) {
+        InterlockedDecrement(&g_pcm8_active);
+        return -1;
+    }
     job->rate = rate;
     job->samples = length * 2; /* L+R */
     job->stereo = (int16_t *)malloc(job->samples * sizeof(int16_t));
-    if (!job->stereo) { free(job); return -1; }
+    if (!job->stereo) {
+        free(job);
+        InterlockedDecrement(&g_pcm8_active);
+        return -1;
+    }
+    /* Match CD-DA headroom (~+-9200 instead of +-32768) and apply soft edge ramps. */
+    size_t fade = length / 8u;
+    if (fade > 48u) fade = 48u;
     for (size_t i = 0; i < length; i++) {
-        int16_t s = (int16_t)((int)pcm[i] << 8);
+        int val = (int)pcm[i] * 72;
+        if (fade > 1u) {
+            if (i < fade) val = (val * (int)i) / (int)fade;
+            else if (i >= length - fade) val = (val * (int)(length - 1u - i)) / (int)fade;
+        }
+        int16_t s = (int16_t)val;
         job->stereo[i * 2] = s;
         job->stereo[i * 2 + 1] = s;
     }
@@ -395,6 +433,7 @@ int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     if (!th) {
         free(job->stereo);
         free(job);
+        InterlockedDecrement(&g_pcm8_active);
         return -1;
     }
     CloseHandle(th); /* detach; thread frees job */

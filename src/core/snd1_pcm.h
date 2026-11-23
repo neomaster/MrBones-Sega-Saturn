@@ -59,4 +59,21 @@ int snd1_ton_note_sample(const snd1_span *ton_span, unsigned voice,
                          const uint8_t **raw, size_t *raw_bytes,
                          size_t *sample_count, int *is_pcm8b);
 
+/*
+ * Return non-zero if `span` begins with a valid SCSP Tone Bank (.ton) pointer
+ * table (big-endian word pointers to voice/layer descriptors inside the span).
+ */
+int snd1_ton_is_bank(const snd1_span *span);
+
+/*
+ * Pick a clean, decoded waveform slice from an SCSP Tone Bank (.ton) span for
+ * general host SFX playback, filtering out descriptor headers, silent slices,
+ * and raw white-noise percussive layers. Selects the `slot`-th clean unique
+ * sample (wrapping around if `slot` >= count). Returns 0 on success.
+ */
+int snd1_ton_pick_sfx(const snd1_span *ton_span, unsigned slot,
+                      size_t min_samples, size_t max_samples,
+                      const uint8_t **raw, size_t *raw_bytes,
+                      size_t *sample_count, int *is_pcm8b);
+
 #endif

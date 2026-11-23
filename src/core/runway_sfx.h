@@ -37,6 +37,8 @@ typedef struct {
     void *blob;
     size_t blob_size;
     runway_sfx_sample samples[RUNWAY_SFX_COUNT];
+    runway_sfx_sample live_samples[RUNWAY_SFX_COUNT]; /* decoded .TON waveforms */
+    int8_t *live_scratch[RUNWAY_SFX_COUNT];
     uint32_t seq_counters[2]; /* SoundStartSequence groups */
     unsigned event_hits[64];  /* SoundEvent(index) host tally */
     int8_t *event_pcm_scratch; /* 16->8-bit converted buffer for type-1 SCSP tones */
@@ -72,5 +74,11 @@ typedef void (*runway_sfx_play_fn)(void *user, const int8_t *pcm, size_t length,
                                    unsigned rate);
 void runway_sfx_dispatch(runway_sfx *sfx, unsigned flags,
                          runway_sfx_play_fn play, void *user);
+
+/* Live playback helpers using decoded SCSP .TON waveforms when present. */
+int runway_sfx_select_pcm(runway_sfx *sfx, unsigned id,
+                          const int8_t **pcm, size_t *length);
+void runway_sfx_dispatch_pcm(runway_sfx *sfx, unsigned flags,
+                             runway_sfx_play_fn play, void *user);
 
 #endif

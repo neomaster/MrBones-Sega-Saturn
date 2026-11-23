@@ -1707,3 +1707,20 @@ Frente de integração final coordenada sobre o repositório `F:\MrBonesPort` pa
   - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, CTest completo **61/61 aprovados (100%)** em `93,34 s` (inclui `test_host_input`, `test_static_imports`, `test_msvc_dependencies`, `test_movie_audio`, `test_sidescrl_phase`, `test_full_campaign` e `test_fmv_transition`).
   - **Binário final homologado (`build-static/mrbones.exe`):** `1.529.856` bytes, SHA-256 `5201444114a36f91b84f9ffd04639dd76b01d0c59fdd5af0c0016c447dac9635` (imports: `KERNEL32.dll`, `USER32.dll`, `GDI32.dll`, `WINMM.dll`, `bcrypt.dll`).
   - **Pacote final atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `711.296` bytes, SHA-256 `a0498f0761c0041af0c6026a561ed6cfea0337219eac451a0c19a18c659e03c0`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` sob `MB_MUTE=1`.
+
+## 23/11/2026 — Correção de áudio ruidoso (`.TON`), mute do menu, rajada QPC e velocidade inicial de inimigos
+
+- **Decodificação SCSP `.TON` limpa em `05SND1` (`src/core/snd1_pcm.{h,c}`, `src/core/runway_sfx.{h,c}`, `tests/test_snd1_pcm.c`, `tests/test_runway_sfx.c`):**
+  - Identificado que `Span 4` e `Span 5` de `05SND1` são bancos SCSP `.TON` e não tabelas PCM8 brutas; o mapeamento anterior entregava cabeçalhos de camadas/vozes de `36..3748` bytes ao `waveOut` (ruído branco).
+  - Adicionados `snd1_ton_is_bank` e `snd1_ton_pick_sfx` (com filtragem de camadas silenciosas e ruído branco puro), cache `live_samples` / `runway_sfx_select_pcm` / `runway_sfx_dispatch_pcm` com conversão 16-bit BE → 8-bit quando necessário e proteção `.TON` no fallback tipo 3 de `runway_sfx_event_pcm`, mantendo `sfx->samples` compatível com `test_runway_sfx`.
+- **Qualidade de áudio e silêncio estrito no host (`src/platform/host_audio.c`, `src/tools/mrbones.c`):**
+  - Fila CD-DA ampliada (`BUF_POOL 4`, `BUF_FRAMES 8`), limite de concorrência em `pcm8_thread` (`g_pcm8_active`), ganho seguro (`* 72`), fade-in/fade-out nas extremidades contra estalos e zeragem digital em software quando `VOLUME: 0` (com bypass imediato de `pcm8` se mudo ou volume zero).
+  - `restart_stage_audio()` agora respeita `g_opt_music` (`MUSIC: OFF` no menu não reativa música de estágio), e `main()` aplica `host_audio_set_volume(cfg.volume)` após `config_load()`.
+- **Estabilidade temporal na entrada da fase e patrulha inicial (`src/tools/mrbones.c`, `src/core/stage_enemy.c`):**
+  - Adicionado `g_reset_qpc` após `enter_stage()` e retorno ao menu para evitar rajada de 3 atualizações (`steps = 3`) logo após leituras síncronas de disco.
+  - Em `stage_enemy.c`, velocidades iniciais de patrulha e perseguição genérica de fallback reduzidas de `2u` para `1u * upp` (`LILGUYS` de `3u` para `2u`), preservando a trilha `TableRead` original de `04RUNWAY`.
+- **Revalidação muda completa (`MB_MUTE=1`, exclusão `^test_movie_audio$`):**
+  - **Clang Debug (`build/`):** **0 avisos**, CTest **58/58 aprovados (100%)** em `481,70 s`.
+  - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, CTest **60/60 aprovados (100%)** em `194,91 s` (inclui `test_static_imports`), binário `1.532.928` bytes, SHA-256 `6ed41db99219bda51ea6974aee9b7412bba56c3e488ad0c03a9cb79acdb5f57b`.
+  - **MSVC Release `/MT` (`build-chatgpt/release-static/`):** **0 avisos**, CTest **60/60 aprovados (100%)** em `210,56 s` (inclui `test_static_imports` e `test_msvc_dependencies`), binário `1.532.928` bytes, SHA-256 `d71a0c28c632421efe9b48d8e2f0b1b47e1fbb89dad86847e8bbe3b1c9906d7f`, imports `bcrypt.dll`, `gdi32.dll`, `kernel32.dll`, `user32.dll`, `winmm.dll`.
+  - **Pacote limpo atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `713.275` bytes, SHA-256 `d37c35069e811b41f835863fbb25ecbd8014a304d249d0da45084fb7cc5ed4ee`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` com `MB_MUTE=1`.

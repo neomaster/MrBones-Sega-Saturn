@@ -54,15 +54,15 @@ static stage_enemy *spawn(stage_enemies *e, stage_enemy_kind kind, unsigned px,
         ent->y = 136u * upp;
     ent->patrol_lo = (px > 38u ? px - 38u : 4u) * upp;
     ent->patrol_hi = (px + 38u) * upp;
-    ent->vx = (int32_t)(2u * upp);
+    ent->vx = (int32_t)(1u * upp);
     if (kind == STAGE_ENEMY_LILGUYS)
-        ent->vx = -(int32_t)(3u * upp);
+        ent->vx = -(int32_t)(2u * upp);
     else if (kind == STAGE_ENEMY_HAND)
         ent->vx = 0;
     else if (kind == STAGE_ENEMY_POOF_BLUE || kind == STAGE_ENEMY_BLUE ||
              kind == STAGE_ENEMY_ZOMBIE || kind == STAGE_ENEMY_BAT ||
              kind == STAGE_ENEMY_WINGNUT || kind == STAGE_ENEMY_SHADOW)
-        ent->vx = -(int32_t)((kind == STAGE_ENEMY_ZOMBIE ? 1u : 2u) * upp);
+        ent->vx = -(int32_t)(1u * upp);
     return ent;
 }
 
@@ -733,7 +733,7 @@ int stage_enemies_step_player_bounded(stage_enemies *e, runway_skel *skel,
                                                 : (ent->x > u ? ent->x - u : 0u);
                 }
             } else if (runway_chaser) {
-                uint32_t chase_spd = 2u * u;
+                uint32_t chase_spd = 1u * u;
                 ent->anim++;
                 if (bones_x > ent->x + 12u * u) {
                     ent->vx = (int32_t)chase_spd;

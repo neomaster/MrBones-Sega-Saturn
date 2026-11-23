@@ -70,6 +70,48 @@ int runway_sfx_load_dir(runway_sfx *sfx, cdimage *cd, const char *iso_dir) {
             return -1;
         }
     }
+
+    /* Decode genuine SCSP .TON waveforms for live playback (never header metadata). */
+    for (i = 0; i < RUNWAY_SFX_COUNT; i++) {
+        size_t min_s = (i == RUNWAY_SFX_WALK || i == RUNWAY_SFX_LAND) ? 180u : 400u;
+        size_t max_s = (i == RUNWAY_SFX_WALK || i == RUNWAY_SFX_LAND) ? 4000u : 12000u;
+        const uint8_t *raw = NULL;
+        size_t raw_bytes = 0, sample_count = 0;
+        int is_pcm8b = 0;
+        int picked = -1;
+        if (snd1_ton_is_bank(&spans[4]))
+            picked = snd1_ton_pick_sfx(&spans[4], i, min_s, max_s,
+                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
+        if (picked != 0 && snd1_ton_is_bank(&spans[5]))
+            picked = snd1_ton_pick_sfx(&spans[5], i, min_s, max_s,
+                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
+        if (picked == 0 && raw && sample_count > 0u) {
+            if (is_pcm8b) {
+                sfx->live_samples[i].pcm = (const int8_t *)raw;
+                sfx->live_samples[i].length = sample_count;
+            } else {
+                int8_t *conv = (int8_t *)malloc(sample_count);
+                if (conv) {
+                    for (size_t k = 0; k < sample_count && k * 2u < raw_bytes; k++)
+                        conv[k] = (int8_t)raw[k * 2u];
+                    sfx->live_scratch[i] = conv;
+                    sfx->live_samples[i].pcm = conv;
+                    sfx->live_samples[i].length = sample_count;
+                }
+            }
+        } else if (!snd1_ton_is_bank(&spans[k_map[i].span]) && sfx->samples[i].pcm) {
+            sfx->live_samples[i] = sfx->samples[i];
+        }
+    }
+    if (!sfx->live_samples[RUNWAY_SFX_WALK].pcm) {
+        for (i = 0; i < RUNWAY_SFX_COUNT; i++) {
+            if (sfx->live_samples[i].pcm) {
+                sfx->live_samples[RUNWAY_SFX_WALK] = sfx->live_samples[i];
+                break;
+            }
+        }
+    }
+
     sfx->seq_counters[0] = 0;
     sfx->seq_counters[1] = 3;
     return 0;
@@ -83,6 +125,8 @@ void runway_sfx_free(runway_sfx *sfx) {
     if (!sfx) return;
     free(sfx->blob);
     free(sfx->event_pcm_scratch);
+    for (unsigned i = 0; i < RUNWAY_SFX_COUNT; i++)
+        free(sfx->live_scratch[i]);
     memset(sfx, 0, sizeof *sfx);
 }
 
@@ -159,6 +203,38 @@ int runway_sfx_event_pcm(runway_sfx *sfx, unsigned event_id,
     }
 
     if (!got_sample) return -1;
+    /* Never treat an SCSP .TON bank as a raw BE16 PCM offset table (metadata noise). */
+    if (snd1_ton_is_bank(&spans[4]) || snd1_ton_is_bank(&spans[5])) {
+        const uint8_t *raw = NULL;
+        size_t raw_bytes = 0, sample_count = 0;
+        int is_pcm8b = 0;
+        int picked = -1;
+        if (snd1_ton_is_bank(&spans[4]))
+            picked = snd1_ton_pick_sfx(&spans[4], sample, 180u, 12000u,
+                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
+        if (picked != 0 && snd1_ton_is_bank(&spans[5]))
+            picked = snd1_ton_pick_sfx(&spans[5], sample, 180u, 12000u,
+                                       &raw, &raw_bytes, &sample_count, &is_pcm8b);
+        if (picked == 0 && raw && sample_count > 0u) {
+            if (is_pcm8b) {
+                *pcm = (const int8_t *)raw;
+                *length = sample_count;
+                return 0;
+            }
+            if (sample_count > sfx->event_pcm_cap) {
+                int8_t *buf = realloc(sfx->event_pcm_scratch, sample_count);
+                if (!buf) return -1;
+                sfx->event_pcm_scratch = buf;
+                sfx->event_pcm_cap = sample_count;
+            }
+            for (size_t i = 0; i < sample_count && i * 2u < raw_bytes; i++)
+                sfx->event_pcm_scratch[i] = (int8_t)raw[i * 2u];
+            *pcm = sfx->event_pcm_scratch;
+            *length = sample_count;
+            return 0;
+        }
+        return -1;
+    }
     memset(&table, 0, sizeof table);
     if (snd1_pcm_open(&table, &spans[4])) return -1;
     if (snd1_pcm_sample(&table, sample, pcm, length) == 0 && *pcm && *length)
@@ -223,6 +299,34 @@ void runway_sfx_dispatch(runway_sfx *sfx, unsigned flags,
         size_t len = 0;
         if (!(flags & (1u << id))) continue;
         if (runway_sfx_select(sfx, id, &pcm, &len) == 0)
+            play(user, pcm, len, RUNWAY_SFX_RATE);
+    }
+}
+
+int runway_sfx_select_pcm(runway_sfx *sfx, unsigned id,
+                          const int8_t **pcm, size_t *length) {
+    uint8_t slot = 0;
+    int group;
+    if (!sfx || !pcm || !length || id >= RUNWAY_SFX_COUNT) return -1;
+    if (!sfx->live_samples[id].pcm || !sfx->live_samples[id].length) return -1;
+    group = (id == RUNWAY_SFX_WALK || id == RUNWAY_SFX_TALL) ? 0 : 1;
+    (void)mb_sound_start_sequence(sfx->seq_counters, group, (uint8_t)id, 0, 0,
+                                  seq_cb, &slot);
+    *pcm = sfx->live_samples[id].pcm;
+    *length = sfx->live_samples[id].length;
+    (void)slot;
+    return 0;
+}
+
+void runway_sfx_dispatch_pcm(runway_sfx *sfx, unsigned flags,
+                             runway_sfx_play_fn play, void *user) {
+    unsigned id;
+    if (!sfx || !play || !flags) return;
+    for (id = 0; id < RUNWAY_SFX_COUNT; id++) {
+        const int8_t *pcm = NULL;
+        size_t len = 0;
+        if (!(flags & (1u << id))) continue;
+        if (runway_sfx_select_pcm(sfx, id, &pcm, &len) == 0)
             play(user, pcm, len, RUNWAY_SFX_RATE);
     }
 }

@@ -98,6 +98,38 @@ int main(void) {
         CHECK(is8 == 0 && scount == 3u && rbytes == 6u && raw[0] == 0x7f && raw[2] == 0x40);
         CHECK(snd1_ton_note_sample(&tspan, 0, 0x60u, 1, &raw, &rbytes, &scount, &is8) != 0);
         CHECK(snd1_ton_note_sample(&tspan, 1, 0x4Eu, 1, &raw, &rbytes, &scount, &is8) != 0);
+        CHECK(snd1_ton_is_bank(&tspan) == 1);
+        /* Reject raw PCM offset table or truncated slice. */
+        CHECK(snd1_ton_is_bank(&span) == 0);
+    }
+
+    /* SCSP .TON waveform picker: skip white noise & pick clean PCM waveform. */
+    {
+        static uint8_t bank[512];
+        snd1_span bspan = { bank, sizeof bank };
+        const uint8_t *raw = NULL;
+        size_t rbytes = 0, scount = 0;
+        int is8 = 0;
+        memset(bank, 0, sizeof bank);
+        bank[0] = 0x00; bank[1] = 0x0C; /* ptr[0] = 12 -> 2 voices */
+        bank[8] = 0x00; bank[9] = 0x0C; /* voice 0 @ 12 (1 layer) */
+        bank[10] = 0x00; bank[11] = 0x30; /* voice 1 @ 48 (1 layer) */
+        /* Voice 0 layer 0 @ 16: pure high-delta +/-100 noise @ 128, 64 samples */
+        bank[16] = 0; bank[17] = 127;
+        bank[19] = 0x10; bank[21] = 128;
+        bank[24] = 0; bank[25] = 63;
+        for (size_t i = 0; i < 64u; i++)
+            bank[128u + i] = (uint8_t)(int8_t)((i & 1u) ? 100 : -100);
+        /* Voice 1 layer 0 @ 52: smooth triangle wave @ 256, 64 samples */
+        bank[52] = 0; bank[53] = 127;
+        bank[55] = 0x10; bank[56] = 0x01; bank[57] = 0x00;
+        bank[60] = 0; bank[61] = 63;
+        for (size_t i = 0; i < 64u; i++)
+            bank[256u + i] = (uint8_t)(int8_t)(((int)(i % 16u) - 8) * 6);
+
+        CHECK(snd1_ton_is_bank(&bspan) == 1);
+        CHECK(snd1_ton_pick_sfx(&bspan, 0, 32u, 256u, &raw, &rbytes, &scount, &is8) == 0);
+        CHECK(is8 == 1 && scount == 64u && rbytes == 64u && raw == bank + 256u);
     }
     return 0;
 }

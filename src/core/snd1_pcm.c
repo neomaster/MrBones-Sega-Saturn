@@ -134,3 +134,120 @@ int snd1_ton_note_sample(const snd1_span *ton_span, unsigned voice,
     return 0;
 }
 
+int snd1_ton_is_bank(const snd1_span *span) {
+    uint16_t p0;
+    unsigned ptr_count, num_voices, i;
+    if (!span || !span->data || span->size < 12u) return 0;
+    p0 = voice_be16(span->data);
+    if (p0 < 10u || (p0 & 1u) || (size_t)p0 >= span->size) return 0;
+    ptr_count = p0 / 2u;
+    if (ptr_count <= 4u) return 0;
+    num_voices = ptr_count - 4u;
+    if (num_voices > 64u) return 0;
+    for (i = 1u; i < 4u; i++) {
+        uint16_t off = voice_be16(span->data + (size_t)i * 2u);
+        if (off != 0u && (off < p0 || (size_t)off >= span->size)) return 0;
+    }
+    for (i = 4u; i < ptr_count; i++) {
+        uint16_t off = voice_be16(span->data + (size_t)i * 2u);
+        unsigned num_layers;
+        if (off < p0 || (size_t)off + 4u > span->size) return 0;
+        num_layers = (unsigned)span->data[off + 2u] + 1u;
+        if ((size_t)off + 4u + (size_t)num_layers * 32u > span->size) return 0;
+    }
+    return 1;
+}
+
+static int ton_slice_is_clean(const uint8_t *raw, size_t n_samples, int pcm8) {
+    size_t probe = n_samples < 320u ? n_samples : 320u;
+    int prev = 0;
+    unsigned peak = 0;
+    uint64_t diff_sum = 0;
+    if (!raw || probe < 16u) return 0;
+    for (size_t i = 0; i < probe; i++) {
+        int s8;
+        if (pcm8) {
+            s8 = (int)(int8_t)raw[i];
+        } else {
+            int16_t s16 = (int16_t)(((uint16_t)raw[i * 2u] << 8) | raw[i * 2u + 1u]);
+            s8 = (int)s16 >> 8;
+        }
+        unsigned mag = (unsigned)(s8 < 0 ? -s8 : s8);
+        if (mag > peak) peak = mag;
+        if (i > 0u) {
+            int d = s8 - prev;
+            diff_sum += (unsigned)(d < 0 ? -d : d);
+        }
+        prev = s8;
+    }
+    if (peak < 10u) return 0;
+    /* Filter out pure white-noise hiss / non-PCM descriptors (avg step > 24). */
+    if (diff_sum / (probe - 1u) > 24u) return 0;
+    return 1;
+}
+
+typedef struct {
+    uint32_t sa;
+    const uint8_t *raw;
+    size_t bytes;
+    size_t samples;
+    int pcm8;
+} ton_pick_entry;
+
+int snd1_ton_pick_sfx(const snd1_span *ton_span, unsigned slot,
+                      size_t min_samples, size_t max_samples,
+                      const uint8_t **raw, size_t *raw_bytes,
+                      size_t *sample_count, int *is_pcm8b) {
+    uint16_t p0;
+    unsigned num_voices, vi;
+    ton_pick_entry picks[64];
+    unsigned count = 0;
+    int pass;
+
+    if (!snd1_ton_is_bank(ton_span) || !raw || !raw_bytes || !sample_count || !is_pcm8b)
+        return -1;
+    p0 = voice_be16(ton_span->data);
+    num_voices = p0 / 2u - 4u;
+
+    /* Pass 0: bounded duration [min_samples..max_samples]; Pass 1: relax upper bound. */
+    for (pass = 0; pass < 2 && count == 0; pass++) {
+        size_t lo = min_samples > 32u ? min_samples : 32u;
+        size_t hi = (pass == 0 && max_samples >= lo) ? max_samples : 48000u;
+        for (vi = 0; vi < num_voices && count < 64u; vi++) {
+            uint16_t voff = voice_be16(ton_span->data + (4u + vi) * 2u);
+            unsigned num_layers = (unsigned)ton_span->data[voff + 2u] + 1u;
+            for (unsigned li = 0; li < num_layers && count < 64u; li++) {
+                const uint8_t *rec = ton_span->data + voff + 4u + (size_t)li * 32u;
+                uint32_t sa = voice_be32(rec + 2) & 0xFFFFFu;
+                int pcm8 = (rec[3] & 0x10u) != 0;
+                uint16_t lea = voice_be16(rec + 8);
+                size_t n_samples = (size_t)lea + 1u;
+                size_t n_bytes = n_samples * (pcm8 ? 1u : 2u);
+                int dup = 0;
+                if (n_samples < lo || n_samples > hi) continue;
+                if ((size_t)sa >= ton_span->size || n_bytes > ton_span->size - sa) continue;
+                for (unsigned k = 0; k < count; k++) {
+                    if (picks[k].sa == sa) { dup = 1; break; }
+                }
+                if (dup) continue;
+                if (!ton_slice_is_clean(ton_span->data + sa, n_samples, pcm8)) continue;
+                picks[count].sa = sa;
+                picks[count].raw = ton_span->data + sa;
+                picks[count].bytes = n_bytes;
+                picks[count].samples = n_samples;
+                picks[count].pcm8 = pcm8;
+                count++;
+            }
+        }
+    }
+    if (!count) return -1;
+    {
+        unsigned pick = slot % count;
+        *raw = picks[pick].raw;
+        *raw_bytes = picks[pick].bytes;
+        *sample_count = picks[pick].samples;
+        *is_pcm8b = picks[pick].pcm8;
+    }
+    return 0;
+}
+

@@ -88,6 +88,7 @@ static unsigned g_menu_volume = 15;
 static ULONGLONG g_menu_music_after;
 static host_audio *g_movie_audio;
 static int g_movie_audio_failed;
+static int g_reset_qpc = 0;
 /* Set only around the --check corrupt-movie negative tests: silences the
  * expected movie failure lines; status/control flow are unchanged. */
 static int g_expect_movie_error;
@@ -277,13 +278,14 @@ static void maybe_play_sfx(void) {
         }
     }
     if (flags)
-        runway_sfx_dispatch(&g_sfx, flags, host_play_pcm, NULL);
+        runway_sfx_dispatch_pcm(&g_sfx, flags, host_play_pcm, NULL);
 }
 
 static void restart_stage_audio(void) {
     int track;
     host_audio_stop(g_audio);
     g_audio = NULL;
+    if (!g_opt_music) return;
     /* Skip CD-DA only while an ending/present movie is actually playing.
      * Deferred FINALE (!movie_ok) still has pcm_samples armed — keep arena BGM. */
     if (g_stage && g_stage->special_live &&
@@ -352,6 +354,7 @@ static int enter_stage(const char *iso_dir) {
         g_sfx_ok = runway_sfx_load_dir(&g_sfx, g_cd, iso_dir) == 0;
     restart_stage_audio();
     g_mode = APP_STAGE;
+    g_reset_qpc = 1;
     return 0;
 }
 
@@ -538,6 +541,7 @@ static int advance_after_stage(void) {
             menu_phase_show_start(g_menu);
             g_mode = APP_MENU;
             g_movie_last_tick = 0;
+            g_reset_qpc = 1;
             /* Match the Ymir-observed pause after the FINALE soundtrack. */
             g_menu_music_after = finale_to_menu
                 ? GetTickCount64() + FINALE_MENU_MUSIC_DELAY_MS : 0;
@@ -1722,6 +1726,7 @@ int main(int argc, char **argv) {
     g_opt_stereo = cfg.stereo_on;
     g_opt_volume = cfg.volume;
     host_audio_set_stereo(cfg.stereo_on);
+    host_audio_set_volume(cfg.volume);
     snprintf(g_config_path, sizeof g_config_path, "%s", cfg.config_path);
     g_menu_volume = cfg.volume;
     snprintf(g_save_dir, sizeof g_save_dir, "%s", cfg.save_dir);
@@ -1987,6 +1992,10 @@ int main(int argc, char **argv) {
                     error = 1;
                 Sleep(200);
                 break;
+            }
+            if (g_reset_qpc) {
+                QueryPerformanceCounter(&qpc_last);
+                g_reset_qpc = 0;
             }
 
             QueryPerformanceCounter(&qpc_now);
