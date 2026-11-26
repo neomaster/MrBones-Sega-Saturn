@@ -85,6 +85,11 @@ int main(void) {
         ton[14] = 0x51; ton[15] = 0x52;
         ton[17] = 0x20; ton[19] = 78;
         ton[22] = 0x00; ton[23] = 2;
+        ton[24] = (uint8_t)((15u << 3u) | (9u >> 2u));
+        ton[25] = (uint8_t)(((9u & 3u) << 6u) | (1u << 5u) | 13u);
+        ton[26] = (uint8_t)((3u << 2u) | (8u >> 3u));
+        ton[27] = (uint8_t)(((8u & 7u) << 5u) | 12u);
+        ton[30] = 48u;
         /* Layer 1: note 0x4D..0x4F, 8-bit (pcm8b=1), SA=84, LEA=3 (4 bytes). */
         ton[46] = 0x4D; ton[47] = 0x4F;
         ton[49] = 0x30; ton[51] = 84;
@@ -99,6 +104,14 @@ int main(void) {
         CHECK(snd1_ton_note_sample(&tspan, 0, 0x60u, 1, &raw, &rbytes, &scount, &is8) != 0);
         CHECK(snd1_ton_note_sample(&tspan, 1, 0x4Eu, 1, &raw, &rbytes, &scount, &is8) != 0);
         CHECK(snd1_ton_is_bank(&tspan) == 1);
+        {
+            unsigned next = 0;
+            snd1_tone decoded;
+            CHECK(snd1_ton_layer(&tspan, 0, 0x52u, &next, &decoded) == 0);
+            CHECK(decoded.ar == 13u && decoded.d1r == 9u && decoded.d2r == 15u &&
+                  decoded.dl == 8u && decoded.rr == 12u && decoded.krs == 3u &&
+                  decoded.eghold == 1u && decoded.tl == 48u);
+        }
         /* Reject raw PCM offset table or truncated slice. */
         CHECK(snd1_ton_is_bank(&span) == 0);
     }

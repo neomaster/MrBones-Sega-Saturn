@@ -2551,6 +2551,8 @@ int runway_phase_step(runway_phase *phase, const saturn_pad *pad) {
     }
     if (bones_bbs_peek(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_C_A, NULL) == 1) {
         phase->last_message = MSG_C_A;
+        phase->sfx_flags |= SFX_C;
+        runway_sfx_emit(0x23);
         stage_enemies_fire_blues(&phase->enemies, phase->bones_x,
                                  phase->bones_y, phase->facing, 0);
         bones_bbs_consume(&phase->bbs, BONES_BBS_MASK_EXACT, MSG_C_A, NULL);

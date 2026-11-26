@@ -177,10 +177,20 @@ int snd1_ton_layer(const snd1_span *span, unsigned voice, uint8_t note,
             continue;
         unsigned pitch = voice_be16(layer + 0x12u);
         int octave = (int)((pitch >> 11u) & 15u);
+        uint16_t eg1 = voice_be16(layer + 0x0au);
+        uint16_t eg2 = voice_be16(layer + 0x0cu);
         *tone = (snd1_tone){span->data + start, count, voice_be16(layer + 6u),
                             (layer[3] >> 5u) & 3u, pcm8,
                             layer[0x19] & 127u, (int8_t)layer[0x1a],
-                            octave < 8 ? octave : octave - 16, pitch & 1023u};
+                            octave < 8 ? octave : octave - 16, pitch & 1023u,
+                            (uint8_t)(eg1 & 0x1fu),
+                            (uint8_t)((eg1 >> 6u) & 0x1fu),
+                            (uint8_t)((eg1 >> 11u) & 0x1fu),
+                            (uint8_t)((eg2 >> 5u) & 0x1fu),
+                            (uint8_t)(eg2 & 0x1fu),
+                            (uint8_t)((eg2 >> 10u) & 0x0fu),
+                            (uint8_t)((eg1 >> 5u) & 1u),
+                            layer[0x10]};
         *next_layer = i + 1u;
         return 0;
     }

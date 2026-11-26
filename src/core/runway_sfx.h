@@ -44,6 +44,7 @@ void runway_sfx_end_frame(void);
 void runway_sfx_emit(unsigned id);
 void runway_sfx_emit_note(unsigned channel, unsigned note, unsigned velocity);
 void runway_sfx_emit_tone(unsigned bank, unsigned program, unsigned note, unsigned velocity);
+void runway_sfx_emit_joke(unsigned joke_index, unsigned part);
 
 typedef struct {
     const int8_t *pcm;
@@ -53,12 +54,17 @@ typedef struct {
 typedef struct {
     void *blob;
     size_t blob_size;
+    void *snd2_blob;
+    size_t snd2_size;
+    void *snd3_blob;
+    size_t snd3_size;
+    unsigned laff_joke_count;
     runway_sfx_sample samples[RUNWAY_SFX_COUNT];
     runway_sfx_sample live_samples[RUNWAY_SFX_COUNT]; /* decoded .TON waveforms */
     int8_t *live_scratch[RUNWAY_SFX_COUNT];
     uint32_t seq_counters[2]; /* SoundStartSequence groups */
     unsigned event_hits[64];  /* SoundEvent(index) host tally */
-    uint8_t channel_banks[16], channel_programs[16];
+    uint8_t channel_banks[8][16], channel_programs[8][16];
     int8_t *event_pcm_scratch;
     int32_t *event_mix;
 } runway_sfx;
@@ -91,6 +97,8 @@ typedef void (*runway_sfx_play_fn)(void *user, const int8_t *pcm, size_t length,
                                    unsigned rate);
 unsigned runway_sfx_dispatch_events(runway_sfx *sfx, const runway_sfx_frame *frame,
                                     runway_sfx_play_fn play, void *user);
+unsigned runway_sfx_dispatch_frame(runway_sfx *sfx, const runway_sfx_frame *frame,
+                                   unsigned flags, runway_sfx_play_fn play, void *user);
 void runway_sfx_dispatch(runway_sfx *sfx, unsigned flags,
                          runway_sfx_play_fn play, void *user);
 

@@ -69,6 +69,7 @@ typedef struct {
     int fine_tune;
     int octave;
     unsigned fine_step;
+    uint8_t ar, d1r, d2r, dl, rr, krs, eghold, tl;
 } snd1_tone;
 
 int snd1_ton_layer(const snd1_span *span, unsigned voice, uint8_t note,

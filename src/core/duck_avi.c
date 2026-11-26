@@ -204,7 +204,11 @@ static void read_avi_header(duck_avi *avi, const uint8_t *p, size_t size) {
         if (padded > size - pos - 8) break;
         if (!memcmp(p + pos, "avih", 4) && len >= 40) {
             unsigned interval = le32(p + pos + 8);
+            unsigned w = le32(p + pos + 8 + 32);
+            unsigned h = le32(p + pos + 8 + 36);
             if (interval) avi->us_per_frame = interval;
+            if (w >= 16 && w <= 512) avi->width = w;
+            if (h >= 16 && h <= 512) avi->height = h;
         } else if (!memcmp(p + pos, "LIST", 4) && len >= 4 &&
                    !memcmp(p + pos + 8, "hdrl", 4)) {
             read_avi_header(avi, p + pos + 12, len - 4);
@@ -423,13 +427,13 @@ int duck_avi_open_with_duck(duck_avi *avi, const void *blob, size_t size,
         }
         if (!memcmp(p, "strf", 4) && szc >= 16) {
             unsigned w = le32(p + 8 + 4), h = le32(p + 8 + 8);
-            if (w >= 16 && w <= 512 && h >= 16 && h <= 512) {
+            if (szc >= 40 && w >= 16 && w <= 512 && h >= 16 && h <= 512) {
                 avi->width = w;
                 avi->height = h;
-            } else if (szc >= 16) {
+            } else {
+                unsigned ch = le16(p + 8 + 2);
                 unsigned rate = le32(p + 8 + 4);
-                unsigned ch = le16(p + 8 + 0);
-                if (rate >= 4000 && rate <= 48000) avi->pcm_rate = rate;
+                if (rate >= 4000 && rate <= 192000) avi->pcm_rate = rate;
                 if (ch == 1 || ch == 2) avi->pcm_channels = ch;
             }
         }

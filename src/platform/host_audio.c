@@ -69,22 +69,15 @@ void host_audio_set_volume(unsigned level) {
     InterlockedExchange(&g_volume_level, (LONG)level);
 }
 
-static DWORD volume_pair(unsigned level) {
-    DWORD word = host_audio_volume_word(level);
-    return word | (word << 16);
-}
-
-static void apply_volume(HWAVEOUT wave) {
-    if (wave) waveOutSetVolume(wave, volume_pair((unsigned)InterlockedCompareExchange(&g_volume_level, 0, 0)));
-}
-
 struct host_audio {
     cdimage *cd;
     int track;
     int menu_mix;
     uint32_t frame;
     volatile LONG stop;
-    volatile LONG fading;
+    volatile LONG fade_active;
+    ULONGLONG fade_start_ms;
+    unsigned fade_duration_ms;
     HANDLE thread;
     HWAVEOUT wave;
     int16_t *movie_pcm;
@@ -95,8 +88,34 @@ struct host_audio {
     volatile LONG movie_paused;
 };
 
+static uint32_t level_to_gain_q16(unsigned level) {
+    unsigned word = host_audio_volume_word(level);
+    return word ? (uint32_t)word + 1u : 0u;
+}
+
+static uint32_t stream_gain_q16(const host_audio *a) {
+    uint32_t g = level_to_gain_q16(current_volume_level());
+    if (g && a && InterlockedCompareExchange((volatile LONG *)&a->fade_active, 0, 0)) {
+        ULONGLONG now = GetTickCount64();
+        ULONGLONG elapsed = now > a->fade_start_ms ? (now - a->fade_start_ms) : 0;
+        if (!a->fade_duration_ms || elapsed >= a->fade_duration_ms) return 0u;
+        g = (uint32_t)((uint64_t)g * (a->fade_duration_ms - elapsed) / a->fade_duration_ms);
+    }
+    return g;
+}
+
+static void apply_software_gain(int16_t *pcm, size_t samples, uint32_t gain_q16) {
+    if (!gain_q16) {
+        memset(pcm, 0, samples * sizeof(int16_t));
+        return;
+    }
+    if (gain_q16 >= 65536u) return;
+    for (size_t i = 0; i < samples; ++i)
+        pcm[i] = (int16_t)(((int32_t)pcm[i] * (int32_t)gain_q16) >> 16);
+}
+
 #define BUF_POOL 4
-#define BUF_FRAMES 8
+#define BUF_FRAMES 2
 #define BUF_SAMPLES (CDDA_SAMPLES_PER_SECTOR * BUF_FRAMES)
 
 static DWORD WINAPI audio_thread(void *param) {
@@ -105,7 +124,6 @@ static DWORD WINAPI audio_thread(void *param) {
         while (!a->stop) Sleep(5);
         return 0;
     }
-    LONG applied_volume = -1;
     WAVEFORMATEX fmt = {0};
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = 2;
@@ -126,11 +144,6 @@ static DWORD WINAPI audio_thread(void *param) {
         hdr[i].lpData = (LPSTR)pcm[i];
     }
     while (!a->stop && !eof) {
-        LONG level = (LONG)current_volume_level();
-        if (!a->fading && level != applied_volume) {
-            waveOutSetVolume(a->wave, volume_pair((unsigned)level));
-            applied_volume = level;
-        }
         int active = 0;
         for (int i = 0; i < BUF_POOL && !a->stop; i++) {
             int count = 0;
@@ -148,13 +161,16 @@ static DWORD WINAPI audio_thread(void *param) {
             }
             if (count < BUF_FRAMES) eof = 1;
             if (!count) continue;
-            if (current_volume_level() == 0u) {
-                memset(pcm[i], 0, (size_t)count * CDDA_SAMPLES_PER_SECTOR * sizeof(int16_t));
+            size_t n_samples = (size_t)count * CDDA_SAMPLES_PER_SECTOR;
+            uint32_t gain = stream_gain_q16(a);
+            if (!gain) {
+                memset(pcm[i], 0, n_samples * sizeof(int16_t));
             } else {
                 if (a->menu_mix) cdda_mix_menu(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
                 if (!stereo_on()) host_audio_mono_downmix(pcm[i], count * (CDDA_SAMPLES_PER_SECTOR / 2));
+                apply_software_gain(pcm[i], n_samples, gain);
             }
-            hdr[i].dwBufferLength = (DWORD)(count * CDDA_SAMPLES_PER_SECTOR * sizeof(int16_t));
+            hdr[i].dwBufferLength = (DWORD)(n_samples * sizeof(int16_t));
             hdr[i].dwFlags = 0;
             if (waveOutPrepareHeader(a->wave, &hdr[i], sizeof hdr[i]) != MMSYSERR_NOERROR) { eof = 1; break; }
             prepared[i] = 1;
@@ -183,10 +199,13 @@ static DWORD WINAPI audio_thread(void *param) {
     return 0;
 }
 
+#define MOVIE_BUF_POOL 4
+#define MOVIE_CHUNK_FRAMES 1024u
+
 static DWORD WINAPI movie_thread(void *param) {
     host_audio *a = param;
+    uint64_t total_ms = (uint64_t)a->movie_samples * 1000u / a->movie_channels / a->movie_rate;
     if (is_muted()) {
-        uint64_t total_ms = (uint64_t)a->movie_samples * 1000u / a->movie_channels / a->movie_rate;
         ULONGLONG last = GetTickCount64();
         uint64_t pos_ms = 0;
         InterlockedExchange(&a->movie_state, 1);
@@ -206,11 +225,16 @@ static DWORD WINAPI movie_thread(void *param) {
         }
         return 0;
     }
-    LONG applied_volume = -1;
     WAVEFORMATEX fmt = {0};
-    WAVEHDR hdr = {0};
+    int16_t *pcm[MOVIE_BUF_POOL] = {0};
+    WAVEHDR hdr[MOVIE_BUF_POOL] = {0};
+    int prepared[MOVIE_BUF_POOL] = {0};
+    size_t chunk_samples = (size_t)MOVIE_CHUNK_FRAMES * a->movie_channels;
+    size_t cursor = 0;
     int paused = 0;
     int completed = 0;
+    int started = 0;
+    int alloc_fail = 0;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = (WORD)a->movie_channels;
     fmt.nSamplesPerSec = a->movie_rate;
@@ -221,50 +245,100 @@ static DWORD WINAPI movie_thread(void *param) {
         InterlockedExchange(&a->movie_state, -1);
         return 1;
     }
-    apply_volume(a->wave);
-    applied_volume = (LONG)current_volume_level();
-    if (applied_volume == 0 && a->movie_pcm && a->movie_samples)
-        memset(a->movie_pcm, 0, a->movie_samples * sizeof(int16_t));
-    hdr.lpData = (LPSTR)a->movie_pcm;
-    hdr.dwBufferLength = (DWORD)(a->movie_samples * sizeof(int16_t));
-    if (waveOutPrepareHeader(a->wave, &hdr, sizeof hdr) == MMSYSERR_NOERROR) {
-        if (waveOutWrite(a->wave, &hdr, sizeof hdr) == MMSYSERR_NOERROR) {
-            InterlockedExchange(&a->movie_state, 1);
-            while (!a->stop && !(hdr.dwFlags & WHDR_DONE)) {
-                LONG level = InterlockedCompareExchange(&g_volume_level, 0, 0);
-                if (!a->fading && level != applied_volume) {
-                    waveOutSetVolume(a->wave, volume_pair((unsigned)level));
-                    applied_volume = level;
-                }
-                MMTIME pos = {0};
-                int want_pause = InterlockedCompareExchange(&a->movie_paused, 0, 0) != 0;
-                if (want_pause != paused) {
-                    if (want_pause) waveOutPause(a->wave); else waveOutRestart(a->wave);
-                    paused = want_pause;
-                }
-                pos.wType = TIME_MS;
-                if (waveOutGetPosition(a->wave, &pos, sizeof pos) == MMSYSERR_NOERROR) {
-                    uint64_t ms;
-                    if (pos.wType == TIME_MS) ms = pos.u.ms;
-                    else if (pos.wType == TIME_SAMPLES) ms = (uint64_t)pos.u.sample * 1000u / fmt.nSamplesPerSec;
-                    else if (pos.wType == TIME_BYTES) ms = (uint64_t)pos.u.cb * 1000u / fmt.nAvgBytesPerSec;
-                    else { InterlockedExchange(&a->movie_state, -1); Sleep(5); continue; }
-                    InterlockedExchange(&a->movie_position_ms, (LONG)ms);
-                } else InterlockedExchange(&a->movie_state, -1);
-                Sleep(5);
+    for (int i = 0; i < MOVIE_BUF_POOL; i++) {
+        pcm[i] = malloc(chunk_samples * sizeof(int16_t));
+        if (!pcm[i]) { alloc_fail = 1; break; }
+        hdr[i].lpData = (LPSTR)pcm[i];
+    }
+    if (alloc_fail) {
+        InterlockedExchange(&a->movie_state, -1);
+        for (int i = 0; i < MOVIE_BUF_POOL; i++) free(pcm[i]);
+        waveOutClose(a->wave);
+        a->wave = NULL;
+        return 1;
+    }
+    while (!a->stop) {
+        int want_pause = InterlockedCompareExchange(&a->movie_paused, 0, 0) != 0;
+        if (want_pause != paused) {
+            if (want_pause) waveOutPause(a->wave); else waveOutRestart(a->wave);
+            paused = want_pause;
+        }
+        int active = 0;
+        int write_err = 0;
+        for (int i = 0; i < MOVIE_BUF_POOL && !a->stop; i++) {
+            if (prepared[i]) {
+                if (!(hdr[i].dwFlags & WHDR_DONE)) { active = 1; continue; }
+                waveOutUnprepareHeader(a->wave, &hdr[i], sizeof hdr[i]);
+                prepared[i] = 0;
             }
+            if (paused || cursor >= a->movie_samples) continue;
+            size_t take = a->movie_samples - cursor;
+            if (take > chunk_samples) take = chunk_samples;
+            memcpy(pcm[i], a->movie_pcm + cursor, take * sizeof(int16_t));
+            cursor += take;
+            uint32_t gain = stream_gain_q16(a);
+            if (!gain) {
+                memset(pcm[i], 0, take * sizeof(int16_t));
+            } else {
+                if (a->movie_channels == 2u && !stereo_on())
+                    host_audio_mono_downmix(pcm[i], take / 2u);
+                apply_software_gain(pcm[i], take, gain);
+            }
+            hdr[i].dwBufferLength = (DWORD)(take * sizeof(int16_t));
+            hdr[i].dwFlags = 0;
+            if (waveOutPrepareHeader(a->wave, &hdr[i], sizeof hdr[i]) != MMSYSERR_NOERROR) {
+                write_err = 1;
+                break;
+            }
+            prepared[i] = 1;
+            if (waveOutWrite(a->wave, &hdr[i], sizeof hdr[i]) != MMSYSERR_NOERROR) {
+                waveOutUnprepareHeader(a->wave, &hdr[i], sizeof hdr[i]);
+                prepared[i] = 0;
+                write_err = 1;
+                break;
+            }
+            active = 1;
+            if (!started) {
+                InterlockedExchange(&a->movie_state, 1);
+                started = 1;
+            }
+        }
+        if (write_err) {
+            InterlockedExchange(&a->movie_state, -1);
+            break;
+        }
+        if (started) {
+            MMTIME pos = {0};
+            pos.wType = TIME_MS;
+            if (waveOutGetPosition(a->wave, &pos, sizeof pos) == MMSYSERR_NOERROR) {
+                uint64_t ms;
+                if (pos.wType == TIME_MS) ms = pos.u.ms;
+                else if (pos.wType == TIME_SAMPLES) ms = (uint64_t)pos.u.sample * 1000u / fmt.nSamplesPerSec;
+                else if (pos.wType == TIME_BYTES) ms = (uint64_t)pos.u.cb * 1000u / fmt.nAvgBytesPerSec;
+                else { InterlockedExchange(&a->movie_state, -1); break; }
+                if (ms > total_ms) ms = total_ms;
+                InterlockedExchange(&a->movie_position_ms, (LONG)ms);
+            } else {
+                InterlockedExchange(&a->movie_state, -1);
+                break;
+            }
+        }
+        if (!active && !paused && cursor >= a->movie_samples) {
             if (!a->stop && InterlockedCompareExchange(&a->movie_state, 0, 0) == 1) {
-                InterlockedExchange(&a->movie_position_ms,
-                    (LONG)((uint64_t)a->movie_samples * 1000u / a->movie_channels / a->movie_rate));
+                InterlockedExchange(&a->movie_position_ms, (LONG)total_ms);
                 InterlockedExchange(&a->movie_state, 2);
                 completed = 1;
             }
-        } else InterlockedExchange(&a->movie_state, -1);
-        /* shortcut: 50 ms covers measured buffering; query latency for other devices. */
-        if (completed) Sleep(50);
-        else waveOutReset(a->wave);
-        waveOutUnprepareHeader(a->wave, &hdr, sizeof hdr);
-    } else InterlockedExchange(&a->movie_state, -1);
+            break;
+        }
+        Sleep(5);
+    }
+    if (completed) Sleep(50);
+    else waveOutReset(a->wave);
+    for (int i = 0; i < MOVIE_BUF_POOL; i++) {
+        if (prepared[i]) waveOutUnprepareHeader(a->wave, &hdr[i], sizeof hdr[i]);
+        free(pcm[i]);
+    }
     waveOutClose(a->wave);
     a->wave = NULL;
     return 0;
@@ -332,16 +406,11 @@ void host_audio_stop(host_audio *audio) {
 
 void host_audio_fade_stop(host_audio *audio, unsigned duration_ms) {
     if (!audio) return;
-    if (duration_ms && audio->wave) {
-        InterlockedExchange(&audio->fading, 1);
-        unsigned start = (unsigned)InterlockedCompareExchange(&g_volume_level, 0, 0);
-        const unsigned steps = 20;
-        for (unsigned i = 1; i <= steps; i++) {
-            unsigned level = (start * (steps - i) * 0xffffu) / (MENU_VOLUME_MAX * steps);
-            waveOutSetVolume(audio->wave, level | (level << 16));
-            Sleep(duration_ms / steps);
-        }
-        Sleep(50);
+    if (duration_ms && !is_muted() && audio->thread) {
+        audio->fade_start_ms = GetTickCount64();
+        audio->fade_duration_ms = duration_ms;
+        InterlockedExchange(&audio->fade_active, 1);
+        Sleep(duration_ms + 40u);
     }
     host_audio_stop(audio);
 }
@@ -369,7 +438,7 @@ static void free_sfx_voice(sfx_voice *voice) {
 /* One stereo output stream mixes overlapping one-shots before handing them to WinMM. */
 static int fill_sfx_block(int16_t *stereo) {
     int used = 0;
-    int zero = (is_muted() || current_volume_level() == 0u);
+    uint32_t gain = is_muted() ? 0u : level_to_gain_q16(current_volume_level());
     AcquireSRWLockExclusive(&sfx_lock);
     for (unsigned i = 0; i < SFX_BLOCK_FRAMES; ++i) {
         int sample = 0;
@@ -386,7 +455,7 @@ static int fill_sfx_block(int16_t *stereo) {
             if (voice->position / SFX_OUTPUT_RATE >= voice->length)
                 free_sfx_voice(voice);
         }
-        if (zero) sample = 0;
+        sample = (int)(((int64_t)sample * (int64_t)gain) >> 16);
         if (sample < -32768) sample = -32768;
         if (sample > 32767) sample = 32767;
         stereo[2u*i] = stereo[2u*i + 1u] = (int16_t)sample;
@@ -416,7 +485,6 @@ static DWORD WINAPI pcm8_thread(void *unused) {
     int16_t pcm[2][SFX_BLOCK_FRAMES * 2u];
     WAVEHDR headers[2] = {0};
     unsigned prepared = 0;
-    unsigned volume = MENU_VOLUME_MAX + 1u;
     int failed = 1;
     fmt.wFormatTag = WAVE_FORMAT_PCM;
     fmt.nChannels = 2;
@@ -436,11 +504,6 @@ static DWORD WINAPI pcm8_thread(void *unused) {
 
     for (;;) {
         if (is_muted()) goto done;
-        unsigned level = current_volume_level();
-        if (level != volume) {
-            waveOutSetVolume(wave, volume_pair(level));
-            volume = level;
-        }
         unsigned queued = 0;
         for (unsigned i = 0; i < prepared; ++i) {
             if (headers[i].dwFlags & WHDR_INQUEUE) {
@@ -483,7 +546,7 @@ done:
 int host_audio_play_pcm8(const int8_t *pcm, size_t length, unsigned rate) {
     if (!pcm || !length || rate < 4000u || rate > 48000u) return -1;
     if (is_muted() || current_volume_level() == 0u) return 0;
-    if (length > 48000u) length = 48000u;
+    if (length > 132300u) length = 132300u;
     int16_t *mono = malloc(length * sizeof *mono);
     if (!mono) return -1;
     size_t fade = length / 8u;

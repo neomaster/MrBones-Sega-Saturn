@@ -99,6 +99,19 @@ int main(void) {
         CHECK(runway_sfx_dispatch_events(&sfx, &frame, play_cb, &events) == 1u);
         CHECK(events.n == 1u && sfx.event_hits[0x0cu] == 3u &&
               sfx.event_hits[0x23u] == 1u);
+
+        /* Unified frame+flags dispatch: unemitted flags play via .TON without duplicating emitted 0x0c. */
+        play_log combined = {0};
+        runway_sfx_frame cframe;
+        runway_sfx_begin_frame(&cframe);
+        runway_sfx_emit(0x0cu);
+        runway_sfx_end_frame();
+        CHECK(runway_sfx_dispatch_frame(&sfx, &cframe,
+                                        RUNWAY_SFX_FLAG_TALL | RUNWAY_SFX_FLAG_WALK | RUNWAY_SFX_FLAG_LAND,
+                                        play_cb, &combined) >= 2u);
+        CHECK(combined.n == 3u);
+        CHECK(combined.lens[1] == sfx.live_samples[RUNWAY_SFX_WALK].length);
+        CHECK(combined.lens[2] == sfx.live_samples[RUNWAY_SFX_LAND].length);
     }
 
     {
@@ -122,6 +135,32 @@ int main(void) {
         CHECK(drum_sfx.live_samples[RUNWAY_SFX_WALK].pcm != NULL &&
               drum_sfx.live_samples[RUNWAY_SFX_WALK].length >= 180u);
         runway_sfx_free(&drum_sfx);
+    }
+
+    /* Disc 2 /26LAFF: 63 spoken jokes in 17SND2/18SND3 + MIDI block 7 SFX in 05SND1. */
+    {
+        const char *disc2 = getenv("MB_DISC2");
+        cdimage cd2;
+        if (disc2 && cd_open(&cd2, disc2, err, sizeof err) == 0) {
+            runway_sfx laff_sfx;
+            const int8_t *lpcm = NULL;
+            size_t llen = 0;
+            play_log jlog = {0};
+            runway_sfx_frame jframe;
+            CHECK(runway_sfx_load_dir(&laff_sfx, &cd2, "/26LAFF") == 0);
+            CHECK(laff_sfx.laff_joke_count == 63u);
+            CHECK(runway_sfx_event_pcm(&laff_sfx, 0x29u, &lpcm, &llen) == 0 && llen > 100u);
+            CHECK(runway_sfx_event_pcm(&laff_sfx, 0x2au, &lpcm, &llen) == 0 && llen > 100u);
+            CHECK(runway_sfx_event_pcm(&laff_sfx, 0x2du, &lpcm, &llen) == 0 && llen > 100u);
+            CHECK(runway_sfx_event_pcm(&laff_sfx, 0x30u, &lpcm, &llen) == 0 && llen > 100u);
+            runway_sfx_begin_frame(&jframe);
+            runway_sfx_emit_joke(22u, 3u);
+            runway_sfx_end_frame();
+            CHECK(runway_sfx_dispatch_events(&laff_sfx, &jframe, play_cb, &jlog) == 1u);
+            CHECK(jlog.n == 1u && jlog.lens[0] > 60000u);
+            runway_sfx_free(&laff_sfx);
+            cd_close(&cd2);
+        }
     }
 
     /* Phase sync: crouch, footsteps in the running cycle, jump and landing. */

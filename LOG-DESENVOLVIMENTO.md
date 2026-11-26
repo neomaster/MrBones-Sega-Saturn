@@ -1737,3 +1737,23 @@ Frente de integração final coordenada sobre o repositório `F:\MrBonesPort` pa
   - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `74,42 s`, binário `1.539.072` bytes, SHA-256 `ce7b99b88c974085d680134e7444679095afb1b2b9d50413334d5d6a4fcf8ee5`.
   - **MSVC Release `/MT` (`build-chatgpt/release-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `65,02 s` (+ `test_static_imports` **1/1** em `0,04 s`), binário `1.539.072` bytes, SHA-256 `4b6011eff226cbf8cd353b6477dcae44f350ec45febc43736a7d876b60b28d20`, imports diretos `bcrypt.dll`, `gdi32.dll`, `kernel32.dll`, `user32.dll`, `winmm.dll`.
   - **Pacote limpo atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `717.054` bytes, SHA-256 `19b1547e2ac351fc51092ff01b6cb5eb4f66640fa3caaec6943506f379f0a7a5`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` com `MB_MUTE=1`.
+
+## 25/11/2026 — Correção dos cinco pontos da auditoria de pipeline de áudio
+
+- **Despacho unificado de `sfx_flags` em `mrbones.exe` e migração de `mbrunway.exe` (`src/core/runway_sfx.{h,c}`, `src/core/runway_phase.c`, `src/tools/mrbones.c`, `src/tools/mbrunway.c`, `tests/test_runway_sfx.c`):**
+  - Adicionado `runway_sfx_dispatch_frame`, despachando eventos `runway_sfx_emit` e os bits remanescentes de `sfx_flags` (`SFX_WALK`, `SFX_LAND`, `SFX_JUMP`, `SFX_TALL`, `SFX_C`) via ondas SCSP `.TON` decodificadas sem duplicar eventos já emitidos no mesmo quadro (`FINALE` excluído de `special.sfx_flags` pois seus anéis já emitem `ring_sfx_event`). Também ligado `MSG_C_A` em `runway_phase.c` ao tiro agachado.
+  - `mbrunway.exe` migrado do caminho legado ruidoso (`runway_sfx_dispatch` sobre metadados `.TON`) para `runway_sfx_begin_frame` / `runway_sfx_dispatch_frame`, com suporte a `--mute` e autoplay em `--check`.
+- **Bancos de fala `17SND2`/`18SND3` e emissões de `26LAFF` (`src/core/runway_sfx.{h,c}`, `src/core/sidescrl_phase.c`, `CMakeLists.txt`, `tests/test_runway_sfx.c`):**
+  - Separados os canais MIDI por bloco `[8][16]` (`word[2] & 7`), impedindo que o bloco `0` sobrescrevesse o banco de efeitos do bloco `7` (`bank = 1`) em `26LAFF/05SND1`.
+  - `runway_sfx_load_dir` agora carrega `17SND2` (63 bancos `SEQ`) e `18SND3` (63 bancos `.TON` de voz) quando presentes e expõe `runway_sfx_emit_joke` (`SFX_MAX_SAMPLES = 132300`), acionando as partes faladas 1–3 das piadas, risadas da plateia (`0x2a..0x2c`) e efeitos de movimento/dano/fim (`0x29`, `0x2d`, `0x2e`, `0x30`) em `26LAFF`.
+- **Volume/fade em software por stream e envelope ADSR/TL do SCSP (`src/platform/host_audio.c`, `src/core/snd1_pcm.{h,c}`, `src/core/runway_sfx.c`, `tests/test_snd1_pcm.c`):**
+  - Removidas todas as chamadas a `waveOutSetVolume` em `host_audio.c` (que no WinMM afetam a sessão do processo inteiro); ganho de volume e `host_audio_fade_stop` agora operam em software de forma independente por stream (`audio_thread`, `movie_thread` em blocos de `1024` quadros preservando `waveOutGetPosition`/`waveOutPause` e `pcm8_thread` em `fill_sfx_block`).
+  - `snd1_ton_layer` decodifica `AR`, `D1R`, `D2R`, `DL`, `RR`, `KRS`, `EGHOLD` e `TL`, e `mix_layer` sintetiza ataque, decaimento duplo, atenuação `TL` e cauda de release pós-`gate` sem corte seco.
+- **Correção de `nChannels` em `duck_avi.c` (`src/core/duck_avi.c`, `tests/test_duck_avi.c`):**
+  - Corrigida a leitura de `strf` `WAVEFORMATEX` para `le16(p + 8 + 2)` (`nChannels`) em vez de `wFormatTag` (`+0`) e dimensões de `avih` em `read_avi_header`, com teste de regressão estéreo em `test_duck_avi`.
+- **Revalidação completa nas 4 builds (`MB_MUTE=1`, exclusão `^test_movie_audio$`):**
+  - **Clang Debug (`build/`):** **0 avisos**, **58/58 aprovados (100%)** em `130,83 s`.
+  - **Clang Debug (`build-chatgpt/debug/`):** **0 avisos**, **58/58 aprovados (100%)** em `136,17 s`.
+  - **MSVC Release `/MT` (`build-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `56,20 s`, binário `1.543.168` bytes, SHA-256 `33e162ebebebb1837f8e17aba741380b8a10e0066b6b64f1739a47552a9ce562`.
+  - **MSVC Release `/MT` (`build-chatgpt/release-static/`):** **0 avisos**, **60/60 aprovados (100%)** em `57,22 s` (+ `test_static_imports` **1/1** em `0,05 s`), binário `1.543.168` bytes, SHA-256 `a050ba47a121c2143b6107b59752bf32ab14f5615e056c61ed05a896363b6065`, imports diretos `bcrypt.dll`, `gdi32.dll`, `kernel32.dll`, `user32.dll`, `winmm.dll`.
+  - **Pacote limpo atualizado (`F:\MrBonesRelease\dist-windows-clean.zip`):** `719.610` bytes, SHA-256 `6dd496ceb227bd8c9b4d5d099adc5d262aeacea9eb40416b3e9cc8138625ae5b`, validado em `run_tests.ps1 -Mode verify` e `run_tests.ps1 -Mode check` com `MB_MUTE=1`.

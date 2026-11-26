@@ -252,10 +252,21 @@ static void maybe_start_movie_audio(void) {
     }
 }
 
+static unsigned current_stage_sfx_flags(void) {
+    if (!g_stage) return 0u;
+    if (g_stage->runway_live) return g_stage->runway.sfx_flags;
+    if (g_stage->sidescrl_live) return g_stage->sidescrl.sfx_flags;
+    if (g_stage->special_live && g_stage->kind != STAGE_KIND_FINALE)
+        return g_stage->special.sfx_flags;
+    return 0u;
+}
+
 static void maybe_play_sfx(void) {
     maybe_start_movie_audio();
     if (g_sfx_ok)
-        (void)runway_sfx_dispatch_events(&g_sfx, &g_sfx_frame, host_play_pcm, NULL);
+        (void)runway_sfx_dispatch_frame(&g_sfx, &g_sfx_frame,
+                                        current_stage_sfx_flags(),
+                                        host_play_pcm, NULL);
     g_sfx_frame.count = 0;
 }
 

@@ -22,6 +22,7 @@ static runway_phase *g_phase;
 static char g_title[160];
 static runway_phase_state g_prev_state = RUNWAY_ST_STAND;
 static runway_sfx g_sfx;
+static runway_sfx_frame g_sfx_frame;
 static int g_sfx_ok = 0;
 
 static void host_play_pcm(void *user, const int8_t *pcm, size_t length, unsigned rate) {
@@ -30,19 +31,26 @@ static void host_play_pcm(void *user, const int8_t *pcm, size_t length, unsigned
 }
 
 static int load_runway_sfx(cdimage *cd) {
+    g_sfx_frame.count = 0;
     if (runway_sfx_load(&g_sfx, cd)) return -1;
     g_sfx_ok = 1;
     return 0;
 }
 
 static void maybe_play_sfx(void) {
-    if (!g_phase || !g_sfx_ok) return;
-    /* §12n: multi-sample dispatch by sfx_flags (SoundStartSequence + PCM map). */
-    if (g_phase->sound_event_id)
-        runway_sfx_sound_event(&g_sfx, g_phase->sound_event_id);
-    if (g_phase->sfx_flags)
-        runway_sfx_dispatch(&g_sfx, g_phase->sfx_flags, host_play_pcm, NULL);
-    g_prev_state = g_phase->state;
+    if (g_phase && g_sfx_ok)
+        (void)runway_sfx_dispatch_frame(&g_sfx, &g_sfx_frame,
+                                        g_phase->sfx_flags,
+                                        host_play_pcm, NULL);
+    g_sfx_frame.count = 0;
+    if (g_phase) g_prev_state = g_phase->state;
+}
+
+static void step_runway_with_audio(runway_phase *phase, const saturn_pad *pad) {
+    runway_sfx_begin_frame(&g_sfx_frame);
+    runway_phase_step(phase, pad);
+    runway_sfx_end_frame();
+    maybe_play_sfx();
 }
 
 static void paint(HWND window) {
@@ -82,8 +90,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_TIMER && wp == 1 && g_phase && !runway_phase_done(g_phase)) {
         saturn_pad pad = {0};
         saturn_pad_update_host(&pad, host_input_keyboard_buttons());
-        runway_phase_step(g_phase, &pad);
-        maybe_play_sfx();
+        step_runway_with_audio(g_phase, &pad);
         snprintf(g_title, sizeof g_title, "Mr. Bones RUNWAY - %s", g_phase->status);
         SetWindowTextA(window, g_title);
         InvalidateRect(window, NULL, FALSE);
@@ -105,7 +112,7 @@ static LRESULT CALLBACK wndproc(HWND window, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 static void usage(void) {
-    fprintf(stderr, "usage: mbrunway <disc1.cue|bin> <manifest> [--check] [--dump-ppm <path>]\n");
+    fprintf(stderr, "usage: mbrunway <disc1.cue|bin> <manifest> [--check] [--mute] [--dump-ppm <path>]\n");
 }
 
 static void write_ppm(const char *path, const uint8_t *rgba, unsigned w, unsigned h) {
@@ -132,6 +139,7 @@ int main(int argc, char **argv) {
     }
     for (int i = 3; i < argc; i++) {
         if (!strcmp(argv[i], "--check")) check_only = 1;
+        else if (!strcmp(argv[i], "--mute")) host_audio_set_muted(1);
         else if (!strcmp(argv[i], "--dump-ppm") && i + 1 < argc) dump_ppm = argv[++i];
         else { usage(); return 2; }
     }
@@ -171,9 +179,8 @@ int main(int argc, char **argv) {
         saturn_pad pad = {0};
         int dumped = 0;
         for (int i = 0; (unsigned)i <= 4u * phase.runway_win_record && !runway_phase_done(&phase); i++) {
-            saturn_pad_update_host(&pad, MB_PAD_RIGHT);
-            runway_phase_step(&phase, &pad);
-            maybe_play_sfx();
+            saturn_pad_update_host(&pad, runway_phase_autoplay_buttons(&phase, phase.frames));
+            step_runway_with_audio(&phase, &pad);
             if (dump_ppm && !dumped && (phase.bones_x / 256u) >= 138u) {
                 saturn_pad idle_pad = {0};
                 runway_phase_step(&phase, &idle_pad);

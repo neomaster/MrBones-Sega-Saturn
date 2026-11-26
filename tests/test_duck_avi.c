@@ -145,6 +145,23 @@ int main(void) {
         CHECK(duck_avi_open(&movie, bad, avi_size) == 0);
         CHECK(movie.pcm_channels == 2 && movie.pcm_rate == 32000 && movie.audio_block_align == 4);
         duck_avi_free(&movie);
+        /* Top-level strf WAVEFORMATEX must read nChannels (+2), not wFormatTag (+0). */
+        {
+            size_t junk;
+            for (junk = 12; junk + 32 <= avi_size; junk++) {
+                if (!memcmp(bad + junk, "JUNK", 4) && read_le32(bad + junk + 4) >= 16u)
+                    break;
+            }
+            if (junk + 32 <= avi_size) {
+                memcpy(bad + junk, "strf", 4);
+                bad[junk + 8] = 1; bad[junk + 9] = 0;   /* wFormatTag = PCM (1) */
+                bad[junk + 10] = 2; bad[junk + 11] = 0; /* nChannels = 2 */
+                bad[junk + 12] = 0x00; bad[junk + 13] = 0x7d; bad[junk + 14] = 0; bad[junk + 15] = 0;
+                CHECK(duck_avi_open(&movie, bad, avi_size) == 0);
+                CHECK(movie.pcm_channels == 2 && movie.pcm_rate == 32000);
+                duck_avi_free(&movie);
+            }
+        }
         memcpy(bad, avi, avi_size);
         bad[off + 20] = 1; bad[off + 21] = 8; /* 2049: original chunks end mid-block */
         CHECK(duck_avi_open(&movie, bad, avi_size) != 0);

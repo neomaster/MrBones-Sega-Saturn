@@ -1490,18 +1490,27 @@ int sidescrl_laff_tell_joke(sidescrl_phase *phase, int is_bad_joke) {
         runway_sfx_emit(0x29u);
         return 0;
     }
+    unsigned idx = phase->laff.bad_jokes;
     phase->laff.last_joke_kind = 2;
     phase->laff.bad_jokes++;
     phase->laff.laff_meter += 16;
     if (phase->laff.laff_meter > 100) phase->laff.laff_meter = 100;
     runway_skel_add(&phase->skel, 0x1000);
+    /* _PickJoke (0x2B6820): 3-part spoken joke (sequences 1..3 in 17SND2/18SND3). */
+    runway_sfx_emit_joke(22u + idx / 3u, 1u + (idx % 3u));
     return 1;
 }
 
 static void laff_controller_step(sidescrl_phase *phase) {
     int cur_hp;
     if (!phase || !phase->laff.enabled) return;
-    if (phase->laff.joke_timer > 0u) phase->laff.joke_timer--;
+    if (phase->frames == 30u && phase->laff.bad_jokes == 0u)
+        runway_sfx_emit_joke(22u, 1u);
+    if (phase->laff.joke_timer > 0u) {
+        phase->laff.joke_timer--;
+        if (phase->laff.joke_timer == 1u && phase->laff.last_joke_kind == 2)
+            runway_sfx_emit(0x2au + (phase->laff.bad_jokes % 3u));
+    }
     cur_hp = stage_enemies_laff_boss_hp(&phase->enemies, NULL);
     while (cur_hp < phase->laff.last_boss_hp) {
         phase->laff.last_boss_hp--;
@@ -1592,9 +1601,12 @@ static void shadow_controller_step(sidescrl_phase *phase, int crouch, int32_t pr
 }
 
 static void sidescrl_end_sound(const sidescrl_phase *phase, unsigned lost) {
-    /* EndLevel::Brain selects consecutive win/loss slots; LAFF leaves both empty. */
-    if (phase->stage_name[0] && !phase->laff.enabled)
-        runway_sfx_emit((phase->body_config ? 0x17u : 0x18u) + lost);
+    if (!phase->stage_name[0]) return;
+    if (phase->laff.enabled) {
+        runway_sfx_emit(lost ? 0x29u : 0x2cu);
+        return;
+    }
+    runway_sfx_emit((phase->body_config ? 0x17u : 0x18u) + lost);
 }
 
 int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
@@ -1872,12 +1884,13 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
         }
         if (!was_tall && phase->tall) {
             phase->sfx_flags |= RUNWAY_SFX_FLAG_TALL;
-            if (live_stage && !phase->laff.enabled)
-                runway_sfx_emit(0x0cu); /* Down message in Stand/BonesWalk. */
+            if (live_stage)
+                runway_sfx_emit(phase->laff.enabled ? 0x2eu : 0x0cu);
         }
-        if ((phase->sfx_flags & RUNWAY_SFX_FLAG_JUMP) && live_stage && !phase->laff.enabled) {
+        if ((phase->sfx_flags & RUNWAY_SFX_FLAG_JUMP) && live_stage) {
             /* Spring_Brain loads the same note at different IDs in these banks. */
-            unsigned event = phase->body_config ? 0x22u :
+            unsigned event = phase->laff.enabled ? 0x30u :
+                             phase->body_config ? 0x22u :
                              !strcmp(phase->stage_name, "VALLEY") ? 0x2au : 0x23u;
             runway_sfx_emit(event);
         }
@@ -1929,8 +1942,11 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
     if (phase->anim_count > 0) {
         if (phase->state == SIDESCRL_ST_WALK && (phase->frames & 3u) == 0) {
             phase->anim_index = (phase->anim_index + 1) % phase->anim_count;
-            if (phase->anim_index == 0 && phase->actor.on_ground && phase->actor.x != prev_ax)
+            if (phase->anim_index == 0 && phase->actor.on_ground && phase->actor.x != prev_ax) {
                 phase->sfx_flags |= RUNWAY_SFX_FLAG_WALK;
+                if (phase->laff.enabled && phase->stage_name[0])
+                    runway_sfx_emit(0x2du);
+            }
         }
         phase->sprite_rgba = phase->anim_rgba[phase->anim_index];
         phase->sprite_w = phase->anim_w[phase->anim_index];
@@ -1983,10 +1999,11 @@ int sidescrl_phase_step(sidescrl_phase *phase, const saturn_pad *pad) {
                     runway_sfx_emit(0x29u); /* CBat::Hurt. */
             }
         }
-        if (could_take_hit && phase->enemies.hits_applied != prev_hits && phase->stage_name[0] &&
-            !phase->laff.enabled) {
-            /* Hit_Generic differs by overlay; VORTEX overrides it. */
-            unsigned event = phase->body_config ? 0x1au : phase->vortex.enabled ? 0x2cu : 0x1bu;
+        if (could_take_hit && phase->enemies.hits_applied != prev_hits && phase->stage_name[0]) {
+            /* Hit_Generic differs by overlay; VORTEX and LAFF override it. */
+            unsigned event = phase->laff.enabled ? 0x29u :
+                             phase->body_config ? 0x1au :
+                             phase->vortex.enabled ? 0x2cu : 0x1bu;
             runway_sfx_emit(event);
         }
         if (died) {

@@ -20,11 +20,21 @@ static const struct {
     {4u, 4u},  /* LAND  — span4 s04 36 B tick */
 };
 
+static unsigned read_be16(const uint8_t *p) {
+    return ((unsigned)p[0] << 8) | p[1];
+}
+
+static uint32_t read_be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8) | p[3];
+}
+
 static void set_midi_channel(runway_sfx *sfx, const uint32_t *word) {
+    unsigned block = word[2] & 7u;
     unsigned ch = word[5] & 15u;
-    if (word[4] == 4u) sfx->channel_programs[ch] = (uint8_t)(word[6] & 127u);
+    if (word[4] == 4u) sfx->channel_programs[block][ch] = (uint8_t)(word[6] & 127u);
     if (word[4] == 3u && word[6] == 32u)
-        sfx->channel_banks[ch] = (uint8_t)(word[7] & 15u);
+        sfx->channel_banks[block][ch] = (uint8_t)(word[7] & 15u);
 }
 
 int runway_sfx_load_dir(runway_sfx *sfx, cdimage *cd, const char *iso_dir) {
@@ -40,6 +50,33 @@ int runway_sfx_load_dir(runway_sfx *sfx, cdimage *cd, const char *iso_dir) {
     if (snd1_parse(sfx->blob, sfx->blob_size, spans)) {
         runway_sfx_free(sfx);
         return -1;
+    }
+    snprintf(path, sizeof path, "%s/17SND2", iso_dir);
+    if (resource_load(cd, path, &sfx->snd2_blob, &sfx->snd2_size) == 0 &&
+        sfx->snd2_size >= 0x800u) {
+        snprintf(path, sizeof path, "%s/18SND3", iso_dir);
+        if (resource_load(cd, path, &sfx->snd3_blob, &sfx->snd3_size) == 0 &&
+            sfx->snd3_size >= 0x800u) {
+            const uint8_t *s2 = (const uint8_t *)sfx->snd2_blob;
+            const uint8_t *s3 = (const uint8_t *)sfx->snd3_blob;
+            for (unsigned j = 0; j < 256u; ++j) {
+                size_t o2 = read_be32(s2 + j * 8u), l2 = read_be32(s2 + j * 8u + 4u);
+                size_t o3 = read_be32(s3 + j * 8u), l3 = read_be32(s3 + j * 8u + 4u);
+                if (!o2 || !l2 || !o3 || !l3 ||
+                    o2 > sfx->snd2_size || l2 > sfx->snd2_size - o2 ||
+                    o3 > sfx->snd3_size || l3 > sfx->snd3_size - o3)
+                    break;
+                sfx->laff_joke_count = j + 1u;
+            }
+        }
+    }
+    if (!sfx->laff_joke_count) {
+        free(sfx->snd2_blob);
+        sfx->snd2_blob = NULL;
+        sfx->snd2_size = 0;
+        free(sfx->snd3_blob);
+        sfx->snd3_blob = NULL;
+        sfx->snd3_size = 0;
     }
     memset(tables, 0, sizeof tables);
     for (i = 0; i < SND1_SPAN_COUNT; i++)
@@ -110,6 +147,8 @@ int runway_sfx_load(runway_sfx *sfx, cdimage *cd) {
 void runway_sfx_free(runway_sfx *sfx) {
     if (!sfx) return;
     free(sfx->blob);
+    free(sfx->snd2_blob);
+    free(sfx->snd3_blob);
     free(sfx->event_pcm_scratch);
     free(sfx->event_mix);
     for (unsigned i = 0; i < RUNWAY_SFX_COUNT; i++)
@@ -142,7 +181,7 @@ static void emit_command(runway_sfx_command command) {
         active_sfx_frame->commands[active_sfx_frame->count++] = command;
 }
 
-enum { SFX_EVENT, SFX_CHANNEL_NOTE, SFX_BANK_NOTE };
+enum { SFX_EVENT, SFX_CHANNEL_NOTE, SFX_BANK_NOTE, SFX_LAFF_JOKE };
 
 void runway_sfx_emit(unsigned id) {
     if (id < 256u)
@@ -161,17 +200,13 @@ void runway_sfx_emit_tone(unsigned bank, unsigned program, unsigned note, unsign
                                          (uint8_t)note, (uint8_t)velocity});
 }
 
-/* A bounded one-shot renderer. Audio remains in the user's original bank. */
-#define SFX_MAX_SAMPLES 48000u
-
-static unsigned read_be16(const uint8_t *p) {
-    return ((unsigned)p[0] << 8) | p[1];
+void runway_sfx_emit_joke(unsigned joke_index, unsigned part) {
+    emit_command((runway_sfx_command){SFX_LAFF_JOKE, (uint8_t)(joke_index & 0xffu),
+                                     (uint8_t)(part & 0xffu), 0, 0});
 }
 
-static uint32_t read_be32(const uint8_t *p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
-           ((uint32_t)p[2] << 8) | p[3];
-}
+/* A bounded one-shot renderer (6 s @ 22050 Hz covers multi-second LAFF speech). */
+#define SFX_MAX_SAMPLES 132300u
 
 static int tone_sample(const snd1_tone *tone, size_t sample) {
     if (tone->pcm8) return (int8_t)tone->data[sample] * 256;
@@ -195,16 +230,43 @@ static const snd1_span *tone_bank(const snd1_span *spans, unsigned bank) {
     return &spans[4u + bank];
 }
 
+static double scsp_decay_step_22k(unsigned rate) {
+    if (!rate) return 0.0;
+    unsigned eff = rate * 2u;
+    if (eff > 60u) eff = 60u;
+    return 16.0 * pow(2.0, -((double)(60u - eff)) / 4.0);
+}
+
 static void mix_layer(runway_sfx *sfx, snd1_tone tone, unsigned note,
                       unsigned velocity, size_t start, size_t gate, size_t *used) {
+    enum { EG_ATTACK, EG_DECAY1, EG_DECAY2, EG_RELEASE };
+    if (!tone.ar || tone.tl >= 255u) return;
     double semitones = (int)note - (int)tone.root_note + tone.fine_tune / 100.0;
     double step = (44100.0 / RUNWAY_SFX_RATE) * (1.0 + tone.fine_step / 1024.0) *
                   pow(2.0, tone.octave + semitones / 12.0);
-    size_t limit = SFX_MAX_SAMPLES - start;
-    if (gate < limit) limit = gate;
+    double tl_gain = tone.tl ? pow(2.0, -(double)tone.tl / 16.0) : 1.0;
+    double vel_gain = (velocity / 127.0) * tl_gain;
+    double dl_target = (tone.dl == 31u) ? 1023.0 : (double)(tone.dl * 32u);
+    double d1_step = scsp_decay_step_22k(tone.d1r);
+    double d2_step = scsp_decay_step_22k(tone.d2r);
+    double rr_step = scsp_decay_step_22k(tone.rr ? tone.rr : 14u);
+    double ar_step = (tone.ar >= 30u) ? 1024.0
+                                      : 48.0 * pow(2.0, -((double)(60u - tone.ar * 2u)) / 4.0);
+    int eg_state = (tone.ar >= 30u) ? (dl_target > 0.0 ? EG_DECAY1 : EG_DECAY2) : EG_ATTACK;
+    double atten = (eg_state == EG_ATTACK) ? 960.0 : 0.0;
+
+    size_t max_avail = SFX_MAX_SAMPLES - start;
+    size_t release_cap = RUNWAY_SFX_RATE / 2u;
+    size_t limit = max_avail;
+    if (gate < SIZE_MAX) {
+        size_t with_rel = (gate > max_avail - release_cap) ? max_avail : (gate + release_cap);
+        if (with_rel < limit) limit = with_rel;
+    }
     double position = 0.0;
     size_t written = 0;
     for (; written < limit; ++written) {
+        if (written >= gate) eg_state = EG_RELEASE;
+        if (eg_state != EG_ATTACK && atten >= 960.0) break;
         if (position >= (double)tone.samples) {
             if (!tone.loop_mode || gate == SIZE_MAX || tone.loop_start >= tone.samples)
                 break;
@@ -214,9 +276,34 @@ static void mix_layer(runway_sfx *sfx, snd1_tone tone, unsigned note,
         size_t i = (size_t)position;
         int a = tone_sample(&tone, i);
         int b = i + 1u < tone.samples ? tone_sample(&tone, i + 1u) : a;
-        double pcm = a + (b-a) * (position - (double)i);
-        sfx->event_mix[start + written] += (int32_t)(pcm * velocity / 127.0);
+        double pcm = a + (b - a) * (position - (double)i);
+        double eg_gain = (atten <= 0.0) ? 1.0 : pow(2.0, -atten / 64.0);
+        if (gate < SIZE_MAX && limit > gate && written + 64u > limit)
+            eg_gain *= (double)(limit - written) / 64.0;
+        sfx->event_mix[start + written] += (int32_t)(pcm * vel_gain * eg_gain);
         position += step;
+
+        if (eg_state == EG_ATTACK) {
+            atten -= (1024.0 - atten) * ar_step / 256.0 + ar_step * 0.5;
+            if (atten <= 0.0) {
+                atten = 0.0;
+                eg_state = (dl_target > 0.0) ? EG_DECAY1 : EG_DECAY2;
+            }
+        } else if (eg_state == EG_DECAY1) {
+            if (d1_step <= 0.0) {
+                /* D1R=0 holds peak amplitude until key-off. */
+            } else {
+                atten += d1_step;
+                if (atten >= dl_target) {
+                    atten = dl_target;
+                    eg_state = EG_DECAY2;
+                }
+            }
+        } else if (eg_state == EG_DECAY2) {
+            atten += d2_step;
+        } else {
+            atten += rr_step;
+        }
     }
     if (written && start + written > *used) *used = start + written;
 }
@@ -334,10 +421,12 @@ static void render_bank_event(runway_sfx *sfx, const snd1_span *spans,
         return;
     while (mb_sound_event_next(&cursor, &record) == 1) {
         const uint32_t *word = record.words;
+        unsigned block = word[2] & 7u;
         unsigned ch = word[5] & 15u;
         if (word[1] == 1u) {
             if (word[4] == 1u)
-                mix_note(sfx, spans, sfx->channel_banks[ch], sfx->channel_programs[ch],
+                mix_note(sfx, spans, sfx->channel_banks[block][ch],
+                         sfx->channel_programs[block][ch],
                          word[6] & 127u, word[7] & 127u, 0, SIZE_MAX, used);
             else
                 set_midi_channel(sfx, word);
@@ -345,6 +434,26 @@ static void render_bank_event(runway_sfx *sfx, const snd1_span *spans,
             render_sequence(sfx, spans, word[3], word[4], used);
         }
     }
+}
+
+static void render_laff_joke(runway_sfx *sfx, const snd1_span *spans,
+                             unsigned joke_index, unsigned part, size_t *used) {
+    if (!sfx->laff_joke_count || !sfx->snd2_blob || !sfx->snd3_blob) return;
+    unsigned j = joke_index % sfx->laff_joke_count;
+    const uint8_t *s2 = (const uint8_t *)sfx->snd2_blob;
+    const uint8_t *s3 = (const uint8_t *)sfx->snd3_blob;
+    size_t o2 = read_be32(s2 + j * 8u), l2 = read_be32(s2 + j * 8u + 4u);
+    size_t o3 = read_be32(s3 + j * 8u), l3 = read_be32(s3 + j * 8u + 4u);
+    if (!o2 || !l2 || !o3 || !l3 ||
+        o2 > sfx->snd2_size || l2 > sfx->snd2_size - o2 ||
+        o3 > sfx->snd3_size || l3 > sfx->snd3_size - o3)
+        return;
+    snd1_span joke_spans[SND1_SPAN_COUNT];
+    memcpy(joke_spans, spans, sizeof joke_spans);
+    joke_spans[4] = (snd1_span){s3 + o3, l3};
+    joke_spans[8] = (snd1_span){s2 + o2, l2};
+    if (part < 1u || part > 3u) part = 1u;
+    render_sequence(sfx, joke_spans, 0u, part, used);
 }
 
 static int render_commands(runway_sfx *sfx, const runway_sfx_frame *frame,
@@ -366,11 +475,14 @@ static int render_commands(runway_sfx *sfx, const runway_sfx_frame *frame,
         if (command->kind == SFX_EVENT) {
             if (tally) runway_sfx_sound_event(sfx, selector);
             render_bank_event(sfx, spans, selector, &used);
+        } else if (command->kind == SFX_LAFF_JOKE) {
+            render_laff_joke(sfx, spans, selector, command->program, &used);
         } else {
             unsigned bank = selector, program = command->program;
             if (command->kind == SFX_CHANNEL_NOTE) {
-                bank = sfx->channel_banks[selector];
-                program = sfx->channel_programs[selector];
+                unsigned ch = selector & 15u;
+                bank = sfx->channel_banks[0][ch];
+                program = sfx->channel_programs[0][ch];
             }
             mix_note(sfx, spans, bank, program, command->note, command->velocity,
                      0, SIZE_MAX, &used);
@@ -400,6 +512,54 @@ unsigned runway_sfx_dispatch_events(runway_sfx *sfx, const runway_sfx_frame *fra
     if (!play || render_commands(sfx, frame, &pcm, &length, 1)) return 0;
     play(user, pcm, length, RUNWAY_SFX_RATE);
     return 1;
+}
+
+static unsigned unemitted_sfx_flags(const runway_sfx_frame *frame, unsigned flags) {
+    if (!frame || !flags) return flags;
+    for (unsigned i = 0; i < frame->count; ++i) {
+        const runway_sfx_command *cmd = &frame->commands[i];
+        if (cmd->kind != SFX_EVENT) continue;
+        switch (cmd->bank) {
+        case 0x0cu:
+        case 0x2eu:
+            flags &= ~RUNWAY_SFX_FLAG_TALL;
+            break;
+        case 0x22u:
+        case 0x2au:
+        case 0x30u:
+            flags &= ~RUNWAY_SFX_FLAG_JUMP;
+            break;
+        case 0x23u:
+            if (flags & RUNWAY_SFX_FLAG_JUMP) flags &= ~RUNWAY_SFX_FLAG_JUMP;
+            else flags &= ~RUNWAY_SFX_FLAG_C;
+            break;
+        case 0x17u:
+        case 0x29u:
+        case 0x35u:
+            flags &= ~RUNWAY_SFX_FLAG_C;
+            break;
+        case 0x2du:
+            flags &= ~RUNWAY_SFX_FLAG_WALK;
+            break;
+        default:
+            break;
+        }
+    }
+    return flags;
+}
+
+unsigned runway_sfx_dispatch_frame(runway_sfx *sfx, const runway_sfx_frame *frame,
+                                   unsigned flags, runway_sfx_play_fn play, void *user) {
+    unsigned sent = 0;
+    if (!sfx || !play) return 0;
+    if (frame && frame->count)
+        sent = runway_sfx_dispatch_events(sfx, frame, play, user);
+    unsigned rem = sent ? unemitted_sfx_flags(frame, flags) : flags;
+    if (rem) {
+        runway_sfx_dispatch_pcm(sfx, rem, play, user);
+        sent++;
+    }
+    return sent;
 }
 
 static uint8_t seq_cb(void *context, uint8_t slot, uint8_t a, uint8_t b, uint8_t c) {

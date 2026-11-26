@@ -209,7 +209,7 @@ endforeach()
 set_tests_properties(test_runway_phase PROPERTIES
     ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_runway_sfx PROPERTIES
-    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
+    ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_DISC2=${CMAKE_SOURCE_DIR}/disco2/Mr. Bones (USA) (Disc 2).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_menu_phase PROPERTIES
     ENVIRONMENT "MB_DISC1=${CMAKE_SOURCE_DIR}/disco1/Mr. Bones (USA) (Disc 1).cue;MB_MANIFEST=${CMAKE_SOURCE_DIR}/manifest/versions.txt")
 set_tests_properties(test_stage_catalog PROPERTIES

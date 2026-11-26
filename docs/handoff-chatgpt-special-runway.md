@@ -307,3 +307,11 @@ ctest --test-dir build-chatgpt/release-static -R '^test_static_imports$' --outpu
 | MSVC Release x64 `/MT` | 0 | 60/60 | 72,70 s |
 
 As duas suítes excluíram `test_movie_audio`. `test_static_imports` também passou isoladamente (1/1). [Compilação Debug](F:/MrBonesAudioQA/31f2189-fix/build-final-debug.log) · [CTest Debug](F:/MrBonesAudioQA/31f2189-fix/ctest-final-debug.log) · [Compilação Release](F:/MrBonesAudioQA/31f2189-fix/build-final-release-static.log) · [CTest Release](F:/MrBonesAudioQA/31f2189-fix/ctest-final-release-static.log)
+
+## 2026-11-25 — Fechamento dos cinco pontos de auditoria de áudio
+
+- `mrbones.exe` e `mbrunway.exe` passaram a usar `runway_sfx_dispatch_frame`, combinando comandos `runway_sfx_emit` com o despacho `.TON` decodificado para flags não emitidas (`SFX_WALK`, `SFX_LAND`, `SFX_JUMP`, `SFX_TALL`, `SFX_C`) sem duplicidade e eliminando o caminho legado de cabeçalhos brutos em `mbrunway.exe`.
+- `runway_sfx` separou os canais MIDI por bloco (`[8][16]`), passou a carregar os 63 bancos de sequências `17SND2` e timbres/vozes `18SND3` em `/26LAFF` (`runway_sfx_emit_joke`, limite de 6 s a 22.050 Hz) e reativou falas, risadas da plateia (`0x2a..0x2c`) e efeitos de movimento/dano em `sidescrl_phase.c`.
+- `host_audio.c` removeu todas as chamadas globais a `waveOutSetVolume`, aplicando volume e fade-out em software por stream (`CD-DA`, `FMV` segmentado em 1.024 quadros e `SFX`), enquanto `snd1_ton_layer` / `mix_layer` incorporaram `AR/D1R/D2R/DL/RR/TL` do SCSP com cauda de release pós-`gate`.
+- `duck_avi.c` corrigiu a leitura de `nChannels` (`+2` em `WAVEFORMATEX`) no parser `strf`.
+- Executável estático atualizado em `build-chatgpt/release-static/mrbones.exe` (`1.543.168` B, SHA-256 `a050ba47a121c2143b6107b59752bf32ab14f5615e056c61ed05a896363b6065`), Debug `58/58` e Release `/MT` `60/60` com zero avisos sob `MB_MUTE=1`.
